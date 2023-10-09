@@ -95,7 +95,7 @@ export class Class extends TemplateDeclaration {
 
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
 		writer.write("class");
-		writer.writeSpace();
+		this.writeAttributesOrSpace(writer);
 		writer.write(this.getPath(namespace));
 
 		if (state === State.Complete) {
@@ -105,7 +105,6 @@ export class Class extends TemplateDeclaration {
 			for (const base of this.bases) {
 				writer.write(first ? ":" : ",");
 				writer.writeSpace(false);
-
 				const baseVisibility = base.getVisibility();
 
 				if (baseVisibility !== Visibility.Private) {
@@ -113,7 +112,8 @@ export class Class extends TemplateDeclaration {
 					writer.writeSpace();
 				}
 
-				writer.write(base.getType().getPath(this.getParent()));
+				writer.write(base.getType().getPath(namespace));
+				first = false;
 			}
 
 			writer.writeBlockOpen();

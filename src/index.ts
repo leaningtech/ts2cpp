@@ -23,12 +23,18 @@ class Global implements Target {
 
 const writer = new Writer("clientlib.h", { pretty: true });
 const clientNamespace = new Namespace("client");
+const objectClass = new Class("Object", clientNamespace);
 const fooClass = new Class("Foo", clientNamespace);
 const barClass = new Class("Bar");
 const bazClass = new Class("Baz");
 
+clientNamespace.addAttribute("cheerp::genericjs");
+objectClass.addAttribute("cheerp::client_layout");
+
 fooClass.addMember(barClass, Visibility.Public);
 fooClass.addMember(bazClass, Visibility.Public);
+fooClass.addBase(new DeclaredType(objectClass), Visibility.Public);
+barClass.addBase(new DeclaredType(objectClass), Visibility.Public);
 bazClass.addBase(new DeclaredType(barClass), Visibility.Public);
 
 fooClass.computeParents();
@@ -37,6 +43,7 @@ fooClass.computeReferences();
 // bazClass.setReferenced(fooClass);
 
 const globals = [
+	new Global(objectClass),
 	new Global(fooClass),
 	new Global(barClass),
 	new Global(bazClass),

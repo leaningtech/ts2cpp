@@ -3,6 +3,7 @@ import { Writer } from "./writer.js";
 export class Namespace {
 	private readonly name: string;
 	private parent?: Namespace;
+	private attributes: Array<string> = new Array;
 	
 	public constructor(name: string, parent?: Namespace) {
 		this.name = name;
@@ -31,6 +32,41 @@ export class Namespace {
 
 	public setParent(parent?: Namespace): void {
 		this.parent = parent;
+	}
+
+	public getAttributes(): ReadonlyArray<string> {
+		return this.attributes;
+	}
+
+	public addAttribute(attribute: string): void {
+		this.attributes.push(attribute);
+	}
+
+	public writeAttributes(writer: Writer): void {
+		let first = true;
+		writer.write("[[");
+
+		for (const attribute of this.attributes) {
+			if (!first) {
+				writer.write(",");
+				writer.writeSpace(false);
+			}
+
+			writer.write(attribute);
+			first = false;
+		}
+
+		writer.write("]]");
+	}
+
+	public writeAttributesOrSpace(writer: Writer): void {
+		if (this.attributes.length > 0) {
+			writer.writeSpace(false);
+			this.writeAttributes(writer);
+			writer.writeSpace(false);
+		} else {
+			writer.writeSpace();
+		}
 	}
 
 	public static getDepth(namespace?: Namespace): number {
@@ -63,7 +99,7 @@ export class Namespace {
 		if (to && to !== from) {
 			Namespace.writeOpen(writer, from, to.parent);
 			writer.write("namespace");
-			writer.writeSpace();
+			to.writeAttributesOrSpace(writer);
 			writer.write(to.name);
 			writer.writeBlockOpen();
 		}

@@ -24,13 +24,6 @@ export abstract class Declaration extends Namespace {
 		return parent instanceof Declaration ? parent : undefined;
 	}
 
-	public computeParents(): void {
-		for (const child of this.getChildren()) {
-			child.setParent(this);
-			child.computeParents();
-		}
-	}
-
 	public isReferenced(): boolean {
 		return this.referenced;
 	}

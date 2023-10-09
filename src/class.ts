@@ -66,6 +66,7 @@ export class Class extends TemplateDeclaration {
 
 	public addMember(declaration: Declaration, visibility: Visibility): void {
 		this.members.push(new Member(declaration, visibility));
+		declaration.setParent(this);
 	}
 
 	public getBases(): ReadonlyArray<Base> {

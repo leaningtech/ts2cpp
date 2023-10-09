@@ -85,6 +85,7 @@ export abstract class Declaration extends Namespace {
 		}
 	}
 
+	public abstract maxState(): State;
 	public abstract getChildren(): ReadonlyArray<Declaration>;
 	public abstract getDirectDependencies(state: State): Dependencies;
 	public abstract write(writer: Writer, state: State, namespace?: Namespace): void;

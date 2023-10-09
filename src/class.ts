@@ -76,6 +76,10 @@ export class Class extends TemplateDeclaration {
 		this.bases.push(new Base(type, visibility));
 	}
 
+	public maxState(): State {
+		return State.Complete;
+	}
+
 	public getChildren(): ReadonlyArray<Declaration> {
 		return this.members.map(member => member.getDeclaration());
 	}
@@ -104,6 +108,7 @@ export class Class extends TemplateDeclaration {
 
 			for (const base of this.bases) {
 				writer.write(first ? ":" : ",");
+				first = false;
 				writer.writeSpace(false);
 				const baseVisibility = base.getVisibility();
 
@@ -112,8 +117,7 @@ export class Class extends TemplateDeclaration {
 					writer.writeSpace();
 				}
 
-				writer.write(base.getType().getPath(namespace));
-				first = false;
+				writer.write(base.getType().getPath(this.getParent()));
 			}
 
 			writer.writeBlockOpen();

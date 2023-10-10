@@ -106,7 +106,16 @@ function findTypeReference(node: Node, sourceFile: ts.SourceFile, type: ts.TypeN
 	if (ts.isTypeReferenceNode(type)) {
 		const name = type.typeName.getText(sourceFile);
 		return node.find(name);
+	} else if (ts.isExpressionWithTypeArguments(type)) {
+		const name = type.expression.getText(sourceFile);
+		return node.find(name);
 	}
+}
+
+function getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode): Type {
+	const typeReference = findTypeReference(node, sourceFile, type);
+	const classObject = typeReference?.getClassObject();
+	return classObject ? new DeclaredType(classObject) : new FakeType("client::Object");
 }
 
 class Parser {
@@ -123,9 +132,22 @@ class Parser {
 			for (const member of interfaceDecl.members) {
 				if (ts.isMethodSignature(member)) {
 					const name = member.name.getText(sourceFile);
-					const type = new FakeType("client::Object");
+					const type = getType(node, sourceFile, member.type!);
 					const functionObject = new Function(name, type.pointer());
 					classObject.addMember(functionObject, Visibility.Public);
+				}
+			}
+
+			if (interfaceDecl.heritageClauses) {
+				for (const heritageClause of interfaceDecl.heritageClauses) {
+					for (const type of heritageClause.types) {
+						const typeReference = findTypeReference(node, sourceFile, type);
+						const baseClassObject = typeReference?.getClassObject();
+
+						if (baseClassObject) {
+							classObject.addBase(new DeclaredType(baseClassObject), Visibility.Public);
+						}
+					}
 				}
 			}
 		}
@@ -141,13 +163,13 @@ class Parser {
 				classObject.addMember(childClassObject, Visibility.Public);
 			} else if (functionDeclaration) {
 				const [sourceFile, functionDecl] = functionDeclaration;
-				const type = new FakeType("client::Object");
+				const type = getType(node, sourceFile, functionDecl.type!);
 				const functionObject = new Function(name, type.pointer());
 				functionObject.addFlags(Flags.Static);
 				classObject.addMember(functionObject, Visibility.Public);
 			} else if (variableDeclaration) {
 				const [sourceFile, variableDecl] = variableDeclaration;
-				const type = new FakeType("client::Object");
+				const type = getType(node, sourceFile, variableDecl.type!);
 				const variableObject = new Variable(name, type.pointer());
 				variableObject.addFlags(Flags.Static);
 				classObject.addMember(variableObject, Visibility.Public);
@@ -172,7 +194,7 @@ class Parser {
 					for (const member of interfaceDecl.members) {
 						if (ts.isMethodSignature(member)) {
 							const name = member.name.getText(sourceFile);
-							const type = new FakeType("client::Object");
+							const type = getType(node, sourceFile, member.type!);
 							const functionObject = new Function(name, type.pointer());
 							functionObject.addFlags(Flags.Static);
 							classObject.addMember(functionObject, Visibility.Public);
@@ -196,12 +218,12 @@ class Parser {
 			classObject.computeReferences();
 		} else if (functionDeclaration) {
 			const [sourceFile, functionDecl] = functionDeclaration;
-			const type = new FakeType("client::Object");
+			const type = getType(node, sourceFile, functionDecl.type!);
 			const functionObject = new Function(name, type.pointer(), namespace);
 			this.file.addGlobal(functionObject);
 		} else if (variableDeclaration) {
 			const [sourceFile, variableDecl] = variableDeclaration;
-			const type = new FakeType("client::Object");
+			const type = getType(node, sourceFile, variableDecl.type!);
 			const variableObject = new Variable(name, type.pointer(), namespace);
 			variableObject.addFlags(Flags.Extern);
 			this.file.addGlobal(variableObject);

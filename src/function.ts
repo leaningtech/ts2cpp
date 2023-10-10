@@ -1,6 +1,6 @@
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { Namespace, Flags } from "./namespace.js";
-import { State, Dependencies } from "./target.js";
+import { State, Dependency, Dependencies, ReasonKind } from "./target.js";
 import { Writer } from "./writer.js";
 import { Type } from "./type.js";
 
@@ -54,10 +54,10 @@ export class Function extends TemplateDeclaration {
 	public getDirectDependencies(state: State): Dependencies {
 		return new Dependencies(
 			this.arguments
-				.map(argument => argument.getType().getDeclaration())
-				.concat([this.type.getDeclaration()])
-				.filter((declaration): declaration is Declaration => !!declaration)
-				.map(declaration => [declaration, State.Partial])
+				.map(argument => [argument.getType().getDeclaration(), ReasonKind.ArgumentType])
+				.concat([[this.type.getDeclaration(), ReasonKind.ReturnType]])
+				.filter((declaration): declaration is [Declaration, ReasonKind] => !!declaration[0])
+				.map(([declaration, reasonKind]) => [declaration, new Dependency(State.Partial, this, reasonKind)])
 		);
 	}
 

@@ -5,32 +5,96 @@ export enum State {
 	Complete,
 }
 
+export enum ReasonKind {
+	BaseClass,
+	VariableType,
+	ReturnType,
+	ArgumentType,
+	Root,
+	Inner,
+	Member,
+}
+
 export interface Target {
 	getDeclaration(): Declaration;
 	getTargetState(): State;
 }
 
-export class Dependencies {
-	private readonly map: Map<Declaration, State> = new Map;
+export class Dependency {
+	private readonly state: State;
+	private readonly reasonDeclaration: Declaration;
+	private readonly reasonKind: ReasonKind;
 
-	public constructor(entries?: ReadonlyArray<[Declaration, State]>) {
+	public constructor(state: State, reasonDeclaration: Declaration, reasonKind: ReasonKind) {
+		this.state = state;
+		this.reasonDeclaration = reasonDeclaration;
+		this.reasonKind = reasonKind;
+	}
+
+	public getState(): State {
+		return this.state;
+	}
+
+	public getReasonDeclaration(): Declaration {
+		return this.reasonDeclaration;
+	}
+
+	public getReasonKind(): ReasonKind {
+		return this.reasonKind;
+	}
+}
+
+export class Dependencies {
+	private readonly map: Map<Declaration, Dependency> = new Map;
+
+	public constructor(entries?: ReadonlyArray<[Declaration, Dependency]>) {
 		if (entries) {
-			for (const [declaration, state] of entries) {
-				this.add(declaration, state);
+			for (const [declaration, dependency] of entries) {
+				this.add(declaration, dependency);
 			}
 		}
 	}
 
-	public add(declaration: Declaration, state: State): void {
-		const oldState = this.map.get(declaration);
+	public add(declaration: Declaration, dependency: Dependency): void {
+		const oldDependency = this.map.get(declaration);
 
-		if (!oldState || state > oldState) {
-			this.map.set(declaration, state);
+		if (!oldDependency || dependency.getState() > oldDependency.getState()) {
+			this.map.set(declaration, dependency);
 		}
 	}
 
-	public [Symbol.iterator](): IterableIterator<[Declaration, State]> {
+	public [Symbol.iterator](): IterableIterator<[Declaration, Dependency]> {
 		return this.map[Symbol.iterator]();
+	}
+}
+
+export class Reason {
+	private readonly declaration: Declaration;
+	private readonly state: State;
+	private readonly kind: ReasonKind;
+	private readonly next?: Reason;
+
+	public constructor(declaration: Declaration, state: State, kind: ReasonKind, next?: Reason) {
+		this.declaration = declaration;
+		this.state = state;
+		this.kind = kind;
+		this.next = next;
+	}
+
+	public getDeclaration(): Declaration {
+		return this.declaration;
+	}
+
+	public getState(): State {
+		return this.state;
+	}
+
+	public getKind(): ReasonKind {
+		return this.kind;
+	}
+
+	public getNext(): Reason | undefined {
+		return this.next;
 	}
 }
 
@@ -38,6 +102,7 @@ export type ResolveFunction<T> = (dependency: T, state: State) => void;
 
 class DependencyResolver<T extends Target> {
 	private readonly targets: Map<Declaration, T>;
+	private readonly pending: Map<Declaration, Array<State>> = new Map;
 	private readonly resolve: ResolveFunction<T>;
 
 	public constructor(targets: ReadonlyArray<T>, resolve: ResolveFunction<T>) {
@@ -45,17 +110,44 @@ class DependencyResolver<T extends Target> {
 		this.resolve = resolve;
 	}
 
-	private resolveDependency(declaration: Declaration, target: T, state: State): void {
+	private resolveDependency(declaration: Declaration, target: T, state: State, kind: ReasonKind, reason?: Reason): void {
+		const parentDeclaration = declaration.getParentDeclaration();
+		const newReason = new Reason(declaration, state, kind, reason);
+
+		if (parentDeclaration) {
+			const parentTarget = this.targets.get(parentDeclaration);
+
+			if (parentTarget) {
+				this.resolveDependency(parentDeclaration, parentTarget, State.Complete, ReasonKind.Inner, newReason);
+			}
+		}
+
 		if (!declaration.isResolved(state)) {
-			for (const [dependencyDeclaration, dependencyState] of declaration.getDependencies(state)) {
+			let pendingStates = this.pending.get(declaration);
+
+			if (!pendingStates) {
+				pendingStates = new Array;
+				this.pending.set(declaration, pendingStates);
+			}
+
+			const pendingState = pendingStates[pendingStates.length - 1];
+
+			if (pendingState !== undefined && state >= pendingState) {
+				throw newReason;
+			}
+
+			pendingStates.push(state);
+
+			for (const [dependencyDeclaration, dependency] of declaration.getDependencies(state)) {
 				let declaration: Declaration | undefined = dependencyDeclaration;
-				let state = dependencyState;
+				let state = dependency.getState();
+				const dependencyReason = new Reason(dependency.getReasonDeclaration(), state, ReasonKind.Member, newReason);
 
 				while (declaration) {
 					const target = this.targets.get(declaration);
 
 					if (target) {
-						this.resolveDependency(declaration, target, state);
+						this.resolveDependency(declaration, target, state, dependency.getReasonKind(), dependencyReason);
 						break;
 					}
 
@@ -64,14 +156,18 @@ class DependencyResolver<T extends Target> {
 				}
 			}
 
-			this.resolve(target, state);
-			declaration.setState(state);
+			if (!declaration.isResolved(state)) {
+				this.resolve(target, state);
+				declaration.setState(state);
+			}
+
+			pendingStates.pop();
 		}
 	}
 
 	public resolveDependencies(): void {
 		for (const [declaration, target] of this.targets) {
-			this.resolveDependency(declaration, target, target.getTargetState())
+			this.resolveDependency(declaration, target, target.getTargetState(), ReasonKind.Root)
 		}
 	}
 }

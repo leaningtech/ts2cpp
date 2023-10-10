@@ -33,7 +33,7 @@ export class Namespace {
 	}
 
 	public isDescendantOf(ancestor: Namespace): boolean {
-		return this === ancestor || (!!this.parent && this.parent.isDescendantOf(ancestor));
+		return !!this.parent && (this.parent === ancestor || this.parent.isDescendantOf(ancestor));
 	}
 
 	public getParent(): Namespace | undefined {

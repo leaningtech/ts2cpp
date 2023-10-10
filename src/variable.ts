@@ -1,6 +1,6 @@
 import { Declaration } from "./declaration.js";
 import { Namespace, Flags } from "./namespace.js";
-import { State, Dependencies } from "./target.js";
+import { State, Dependency, Dependencies, ReasonKind } from "./target.js";
 import { Type } from "./type.js";
 import { Writer } from "./writer.js";
 
@@ -28,7 +28,7 @@ export class Variable extends Declaration {
 		return new Dependencies(
 			[this.type.getDeclaration()]
 				.filter((declaration): declaration is Declaration => !!declaration)
-				.map(declaration => [declaration, State.Partial])
+				.map(declaration => [declaration, new Dependency(State.Partial, this, ReasonKind.VariableType)])
 		);
 	}
 

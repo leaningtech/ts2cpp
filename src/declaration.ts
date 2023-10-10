@@ -7,7 +7,11 @@ export abstract class Declaration extends Namespace {
 	private referenced: boolean = false;
 
 	public isResolved(state: State): boolean {
-		return !!this.state && this.state >= state;
+		return this.state !== undefined && this.state >= state;
+	}
+
+	public getState(): State | undefined {
+		return this.state;
 	}
 
 	public setState(state: State): void {
@@ -50,13 +54,13 @@ export abstract class Declaration extends Namespace {
 			parent.setReferenced(root);
 		}
 
-		for (const [declaration, state] of this.getDirectDependencies(State.Complete)) {
-			declaration.setReferencedDependency(root, state);
+		for (const [declaration, dependency] of this.getDirectDependencies(State.Complete)) {
+			declaration.setReferencedDependency(root, dependency.getState());
 		}
 
 		for (const child of this.getChildren()) {
-			for (const [declaration, state] of child.getDirectDependencies(State.Partial)) {
-				declaration.setReferencedDependency(root, state);
+			for (const [declaration, dependency] of child.getDirectDependencies(State.Partial)) {
+				declaration.setReferencedDependency(root, dependency.getState());
 			}
 		}
 	}

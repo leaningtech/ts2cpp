@@ -1,6 +1,6 @@
 import { Namespace } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { State, Target, Dependencies, resolveDependencies } from "./target.js";
+import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies } from "./target.js";
 import { Type } from "./type.js";
 import { Writer } from "./writer.js";
 
@@ -91,7 +91,7 @@ export class Class extends TemplateDeclaration {
 				this.bases
 					.map(base => base.getType().getDeclaration())
 					.filter((declaration): declaration is Declaration => !!declaration)
-					.map(declaration => [declaration, State.Complete])
+					.map(declaration => [declaration, new Dependency(State.Complete, this, ReasonKind.BaseClass)])
 			);
 		} else {
 			return new Dependencies;

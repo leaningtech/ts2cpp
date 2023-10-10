@@ -10,16 +10,6 @@ export abstract class Type {
 	}
 }
 
-export class VoidType extends Type {
-	public getDeclaration(): undefined {
-		return undefined;
-	}
-
-	public getPath(namespace?: Namespace): string {
-		return "void";
-	}
-}
-
 export class PointerType extends Type {
 	private readonly inner: Type;
 
@@ -51,5 +41,22 @@ export class DeclaredType extends Type {
 
 	public getPath(namespace?: Namespace): string {
 		return this.declaration.getPath(namespace);
+	}
+}
+
+export class FakeType extends Type {
+	private readonly name: string;
+
+	public constructor(name: string) {
+		super();
+		this.name = name;
+	}
+
+	public getDeclaration(): undefined {
+		return undefined;
+	}
+
+	public getPath(namespace?: Namespace): string {
+		return this.name;
 	}
 }

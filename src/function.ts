@@ -1,5 +1,5 @@
 import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { Namespace } from "./namespace.js";
+import { Namespace, Flags } from "./namespace.js";
 import { State, Dependencies } from "./target.js";
 import { Writer } from "./writer.js";
 import { Type } from "./type.js";
@@ -62,7 +62,14 @@ export class Function extends TemplateDeclaration {
 	}
 
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
+		const flags = this.getFlags();
 		let first = true;
+
+		if (flags & Flags.Static) {
+			writer.write("static");
+			writer.writeSpace();
+		}
+
 		writer.write(this.type.getPath(namespace));
 		writer.writeSpace();
 		writer.write(this.getName());

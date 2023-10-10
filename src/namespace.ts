@@ -1,7 +1,13 @@
 import { Writer } from "./writer.js";
 
+export enum Flags {
+	Static = 1,
+	Extern = 2,
+}
+
 export class Namespace {
 	private readonly name: string;
+	private flags: Flags = 0 as Flags;
 	private parent?: Namespace;
 	private attributes: Array<string> = new Array;
 	
@@ -12,6 +18,14 @@ export class Namespace {
 
 	public getName(): string {
 		return this.name;
+	}
+
+	public getFlags(): Flags {
+		return this.flags;
+	}
+
+	public addFlags(flags: Flags): void {
+		this.flags |= flags;
 	}
 
 	public getPath(namespace?: Namespace): string {

@@ -79,12 +79,12 @@ export class Function extends TemplateDeclaration {
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
-				first = false;
 			}
 
 			writer.write(argument.getType().getPath(namespace));
 			writer.writeSpace();
 			writer.write(argument.getName());
+			first = false;
 		}
 
 		writer.write(")");

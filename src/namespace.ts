@@ -64,10 +64,10 @@ export class Namespace {
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
-				first = false;
 			}
 
 			writer.write(attribute);
+			first = false;
 		}
 
 		writer.write("]]");

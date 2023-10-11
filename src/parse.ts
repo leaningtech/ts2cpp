@@ -53,7 +53,7 @@ class Node {
 		return this.classObject;
 	}
 
-	public find(name: string): Node | undefined {
+	private findForward(name: string): Node | undefined {
 		const index = name.indexOf(".");
 		const head = index < 0 ? name : name.substr(0, index);
 		const child = this.children.get(head);
@@ -62,15 +62,17 @@ class Node {
 			if (index < 0) {
 				return child;
 			} else {
-				const result = child.find(name.substr(index + 1));
+				const result = child.findForward(name.substr(index + 1));
 
 				if (result) {
 					return result;
 				}
 			}
 		}
+	}
 
-		return this.parent?.find(name);
+	public find(name: string): Node | undefined {
+		return this.findForward(name) || this.parent?.find(name);
 	}
 
 	public addNodes(sourceFile: ts.SourceFile, parent: ts.Node): void {
@@ -100,40 +102,100 @@ class Node {
 			}
 		});
 	}
-}
 
-function findTypeReference(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode): Node | undefined {
-	if (ts.isTypeReferenceNode(type)) {
-		const name = type.typeName.getText(sourceFile);
-		return node.find(name);
-	} else if (ts.isExpressionWithTypeArguments(type)) {
-		const name = type.expression.getText(sourceFile);
-		return node.find(name);
+	public getTypeReference(sourceFile: ts.SourceFile, type: ts.TypeNode): Node | undefined {
+		if (ts.isTypeReferenceNode(type)) {
+			return this.find(type.typeName.getText(sourceFile));
+		} else if (ts.isExpressionWithTypeArguments(type)) {
+			return this.find(type.expression.getText(sourceFile));
+		}
 	}
-}
-
-function getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode): Type {
-	const typeReference = findTypeReference(node, sourceFile, type);
-	const classObject = typeReference?.getClassObject();
-	return classObject ? new DeclaredType(classObject) : new FakeType("client::Object");
 }
 
 class Parser {
 	private readonly file: File = new File;
+	private readonly objectType: Type;
+	private readonly stringType: Type;
+	private readonly bigintType: Type;
+	private readonly symbolType: Type;
+	private readonly arrayType: Type;
+
+	public constructor(root: Node) {
+		const objectClass = root.find("Object")?.getClassObject();
+		const stringClass = root.find("String")?.getClassObject();
+		const bigintClass = root.find("BigInt")?.getClassObject();
+		const symbolClass = root.find("Symbol")?.getClassObject();
+		const arrayClass = root.find("Array")?.getClassObject();
+
+		this.objectType = objectClass ? new DeclaredType(objectClass) : new FakeType("client::Object");
+		this.stringType = stringClass ? new DeclaredType(stringClass) : new FakeType("client::String");
+		this.bigintType = bigintClass ? new DeclaredType(bigintClass) : new FakeType("client::BigInt");
+		this.symbolType = symbolClass ? new DeclaredType(symbolClass) : new FakeType("client::Symbol");
+		this.arrayType = arrayClass ? new DeclaredType(arrayClass) : new FakeType("client::Array");
+
+		if (objectClass) {
+			objectClass.addAttribute("cheerp::client_layout");
+		}
+	}
+
+	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode): Type {
+		switch (type.kind) {
+		case ts.SyntaxKind.VoidKeyword:
+			return new FakeType("void");
+		case ts.SyntaxKind.BooleanKeyword:
+		case ts.SyntaxKind.TypePredicate:
+			return new FakeType("bool");
+		case ts.SyntaxKind.NumberKeyword:
+			return new FakeType("double");
+		case ts.SyntaxKind.ObjectKeyword:
+			return this.objectType.pointer();
+		case ts.SyntaxKind.StringKeyword:
+			return this.stringType.pointer();
+		case ts.SyntaxKind.BigIntKeyword:
+			return this.bigintType.pointer();
+		case ts.SyntaxKind.SymbolKeyword:
+			return this.symbolType.pointer();
+		case ts.SyntaxKind.ArrayType:
+		case ts.SyntaxKind.TupleType:
+			return this.arrayType.pointer();
+		default:
+			const classObject = node.getTypeReference(sourceFile, type)?.getClassObject();
+			return (classObject ? new DeclaredType(classObject) : this.objectType).pointer();
+		}
+	}
+
+	private createFunction(name: string, node: Node, declaration: [ts.SourceFile, ts.SignatureDeclarationBase], namespace?: Namespace): Function {
+		const [sourceFile, decl] = declaration;
+		const type = this.getType(node, sourceFile, decl.type!);
+		const result = new Function(name, type, namespace);
+
+		for (const parameter of decl.parameters) {
+			const type = this.getType(node, sourceFile, parameter.type!);
+			const name = parameter.name.getText(sourceFile);
+			result.addArgument(type, name);
+		}
+
+		return result;
+	}
+
+	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration], namespace?: Namespace): Variable {
+		const [sourceFile, decl] = declaration;
+		const type = this.getType(node, sourceFile, decl.type!);
+		const result = new Variable(name, type, namespace);
+		return result;
+	}
 
 	public addClass(name: string, node: Node, classObject: Class): void {
 		const interfaceDeclarations = node.getInterfaceDeclarations();
 		const functionDeclaration = node.getFunctionDeclaration();
 		const variableDeclaration = node.getVariableDeclaration();
-		
 		this.file.addGlobal(classObject);
 
 		for (const [sourceFile, interfaceDecl] of interfaceDeclarations) {
 			for (const member of interfaceDecl.members) {
 				if (ts.isMethodSignature(member)) {
 					const name = member.name.getText(sourceFile);
-					const type = getType(node, sourceFile, member.type!);
-					const functionObject = new Function(name, type.pointer());
+					const functionObject = this.createFunction(name, node, [sourceFile, member]);
 					classObject.addMember(functionObject, Visibility.Public);
 				}
 			}
@@ -141,7 +203,7 @@ class Parser {
 			if (interfaceDecl.heritageClauses) {
 				for (const heritageClause of interfaceDecl.heritageClauses) {
 					for (const type of heritageClause.types) {
-						const typeReference = findTypeReference(node, sourceFile, type);
+						const typeReference = node.getTypeReference(sourceFile, type);
 						const baseClassObject = typeReference?.getClassObject();
 
 						if (baseClassObject) {
@@ -150,6 +212,10 @@ class Parser {
 					}
 				}
 			}
+		}
+
+		if (classObject.getBases().length === 0 && classObject !== this.objectType.getDeclaration()) {
+			classObject.addBase(this.objectType, Visibility.Public);
 		}
 
 		for (const [name, child] of node.getChildren()) {
@@ -162,15 +228,11 @@ class Parser {
 				this.addClass(name, child, childClassObject);
 				classObject.addMember(childClassObject, Visibility.Public);
 			} else if (functionDeclaration) {
-				const [sourceFile, functionDecl] = functionDeclaration;
-				const type = getType(node, sourceFile, functionDecl.type!);
-				const functionObject = new Function(name, type.pointer());
+				const functionObject = this.createFunction(name, node, functionDeclaration);
 				functionObject.addFlags(Flags.Static);
 				classObject.addMember(functionObject, Visibility.Public);
 			} else if (variableDeclaration) {
-				const [sourceFile, variableDecl] = variableDeclaration;
-				const type = getType(node, sourceFile, variableDecl.type!);
-				const variableObject = new Variable(name, type.pointer());
+				const variableObject = this.createVariable(name, node, variableDeclaration);
 				variableObject.addFlags(Flags.Static);
 				classObject.addMember(variableObject, Visibility.Public);
 			} else {
@@ -182,7 +244,7 @@ class Parser {
 
 		if (variableDeclaration) {
 			const [sourceFile, variableDecl] = variableDeclaration;
-			const type = findTypeReference(node, sourceFile, variableDecl.type!);
+			const type = node.getTypeReference(sourceFile, variableDecl.type!);
 
 			if (type) {
 				const interfaceDeclarations = type.getInterfaceDeclarations();
@@ -191,8 +253,7 @@ class Parser {
 					for (const member of interfaceDecl.members) {
 						if (ts.isMethodSignature(member)) {
 							const name = member.name.getText(sourceFile);
-							const type = getType(node, sourceFile, member.type!);
-							const functionObject = new Function(name, type.pointer());
+							const functionObject = this.createFunction(name, node, [sourceFile, member]);
 							functionObject.addFlags(Flags.Static);
 							classObject.addMember(functionObject, Visibility.Public);
 						}
@@ -214,14 +275,10 @@ class Parser {
 			classObject.setParent(namespace);
 			classObject.computeReferences();
 		} else if (functionDeclaration) {
-			const [sourceFile, functionDecl] = functionDeclaration;
-			const type = getType(node, sourceFile, functionDecl.type!);
-			const functionObject = new Function(name, type.pointer(), namespace);
+			const functionObject = this.createFunction(name, node, functionDeclaration, namespace);
 			this.file.addGlobal(functionObject);
 		} else if (variableDeclaration) {
-			const [sourceFile, variableDecl] = variableDeclaration;
-			const type = getType(node, sourceFile, variableDecl.type!);
-			const variableObject = new Variable(name, type.pointer(), namespace);
+			const variableObject = this.createVariable(name, node, variableDeclaration, namespace);
 			variableObject.addFlags(Flags.Extern);
 			this.file.addGlobal(variableObject);
 		} else {
@@ -250,7 +307,7 @@ export function parseNode(names: ReadonlyArray<string>): Node {
 }
 
 export function parseFile(root: Node): File {
-	const parser = new Parser;
+	const parser = new Parser(root);
 	const namespace = new Namespace("client");
 	namespace.addAttribute("cheerp::genericjs");
 

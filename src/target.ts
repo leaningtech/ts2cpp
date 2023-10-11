@@ -1,5 +1,7 @@
 import { Declaration } from "./declaration.js";
 
+const IGNORE_ERRORS = false;
+
 export enum State {
 	Partial,
 	Complete,
@@ -133,7 +135,13 @@ class DependencyResolver<T extends Target> {
 			const pendingState = pendingStates[pendingStates.length - 1];
 
 			if (pendingState !== undefined && state >= pendingState) {
-				throw newReason;
+				if (IGNORE_ERRORS) {
+					this.resolve(target, state);
+					declaration.setState(state);
+					return;
+				} else {
+					throw newReason;
+				}
 			}
 
 			pendingStates.push(state);

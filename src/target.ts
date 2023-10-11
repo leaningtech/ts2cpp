@@ -11,7 +11,7 @@ export enum ReasonKind {
 	BaseClass,
 	VariableType,
 	ReturnType,
-	ArgumentType,
+	ParameterType,
 	Root,
 	Inner,
 	Member,

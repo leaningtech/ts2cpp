@@ -172,7 +172,7 @@ class Parser {
 		for (const parameter of decl.parameters) {
 			const type = this.getType(node, sourceFile, parameter.type!);
 			const name = parameter.name.getText(sourceFile);
-			result.addArgument(type, name);
+			result.addParameter(type, name);
 		}
 
 		return result;

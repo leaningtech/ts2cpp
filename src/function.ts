@@ -4,7 +4,7 @@ import { State, Dependency, Dependencies, ReasonKind } from "./target.js";
 import { Writer } from "./writer.js";
 import { Type } from "./type.js";
 
-export class Argument {
+export class Parameter {
 	private readonly type: Type;
 	private readonly name: string;
 
@@ -23,7 +23,7 @@ export class Argument {
 }
 
 export class Function extends TemplateDeclaration {
-	private readonly arguments: Array<Argument> = new Array;
+	private readonly parameters: Array<Parameter> = new Array;
 	private readonly type: Type;
 
 	public constructor(name: string, type: Type, namespace?: Namespace) {
@@ -31,12 +31,12 @@ export class Function extends TemplateDeclaration {
 		this.type = type;
 	}
 
-	public getArguments(): ReadonlyArray<Argument> {
-		return this.arguments;
+	public getParameters(): ReadonlyArray<Parameter> {
+		return this.parameters;
 	}
 
-	public addArgument(type: Type, name: string): void {
-		this.arguments.push(new Argument(type, name));
+	public addParameter(type: Type, name: string): void {
+		this.parameters.push(new Parameter(type, name));
 	}
 
 	public getType(): Type {
@@ -53,8 +53,8 @@ export class Function extends TemplateDeclaration {
 
 	public getDirectDependencies(state: State): Dependencies {
 		return new Dependencies(
-			this.arguments
-				.map(argument => [argument.getType().getDeclaration(), ReasonKind.ArgumentType])
+			this.parameters
+				.map(parameter => [parameter.getType().getDeclaration(), ReasonKind.ParameterType])
 				.concat([[this.type.getDeclaration(), ReasonKind.ReturnType]])
 				.filter((declaration): declaration is [Declaration, ReasonKind] => !!declaration[0])
 				.map(([declaration, reasonKind]) => [declaration, new Dependency(State.Partial, this, reasonKind)])
@@ -75,15 +75,15 @@ export class Function extends TemplateDeclaration {
 		writer.write(this.getName());
 		writer.write("(");
 
-		for (const argument of this.arguments) {
+		for (const parameter of this.parameters) {
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
 			}
 
-			writer.write(argument.getType().getPath(namespace));
+			writer.write(parameter.getType().getPath(namespace));
 			writer.writeSpace();
-			writer.write(argument.getName());
+			writer.write(parameter.getName());
 			first = false;
 		}
 

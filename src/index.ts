@@ -43,8 +43,8 @@ try {
 					case ReasonKind.ReturnType:
 						console.error(`  because [${prevPath}] is referenced as the *return type* of [${referencedByPath}]`);
 						break;
-					case ReasonKind.ArgumentType:
-						console.error(`  because [${prevPath}] is referenced as an *argument type* of [${referencedByPath}]`);
+					case ReasonKind.ParameterType:
+						console.error(`  because [${prevPath}] is referenced as an *parameter type* of [${referencedByPath}]`);
 						break;
 					default:
 						console.error(`  because [${prevPath}] is referenced by [${referencedByPath}]`);
@@ -65,8 +65,8 @@ try {
 			case ReasonKind.ReturnType:
 				console.error(`required as the *return type* of [${path}]`);
 				break;
-			case ReasonKind.ArgumentType:
-				console.error(`required as an *argument type* of [${path}]`);
+			case ReasonKind.ParameterType:
+				console.error(`required as an *parameter type* of [${path}]`);
 				break;
 			default:
 				console.error(`required by ${path}`);

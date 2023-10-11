@@ -138,30 +138,32 @@ class DependencyResolver<T extends Target> {
 
 			pendingStates.push(state);
 
-			for (const [dependencyDeclaration, dependency] of declaration.getDependencies(state)) {
-				let declaration: Declaration | undefined = dependencyDeclaration;
-				let state = dependency.getState();
-				const dependencyReason = new Reason(dependency.getReasonDeclaration(), state, ReasonKind.Member, newReason);
+			try {
+				for (const [dependencyDeclaration, dependency] of declaration.getDependencies(state)) {
+					let declaration: Declaration | undefined = dependencyDeclaration;
+					let state = dependency.getState();
+					const dependencyReason = new Reason(dependency.getReasonDeclaration(), state, ReasonKind.Member, newReason);
 
-				while (declaration) {
-					const target = this.targets.get(declaration);
+					while (declaration) {
+						const target = this.targets.get(declaration);
 
-					if (target) {
-						this.resolveDependency(declaration, target, state, dependency.getReasonKind(), dependencyReason);
-						break;
+						if (target) {
+							this.resolveDependency(declaration, target, state, dependency.getReasonKind(), dependencyReason);
+							break;
+						}
+
+						declaration = declaration.getParentDeclaration();
+						state = State.Complete;
 					}
-
-					declaration = declaration.getParentDeclaration();
-					state = State.Complete;
 				}
-			}
 
-			if (!declaration.isResolved(state)) {
-				this.resolve(target, state);
-				declaration.setState(state);
+				if (!declaration.isResolved(state)) {
+					this.resolve(target, state);
+					declaration.setState(state);
+				}
+			} finally {
+				pendingStates.pop();
 			}
-
-			pendingStates.pop();
 		}
 	}
 

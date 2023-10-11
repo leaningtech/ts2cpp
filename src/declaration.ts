@@ -1,10 +1,35 @@
-import { State, Dependencies } from "./target.js";
+import { State, Dependencies, ReasonKind } from "./target.js";
 import { Namespace } from "./namespace.js";
 import { Writer } from "./writer.js";
+
+export class ReferenceData {
+	private readonly referencedBy: Declaration;
+	private readonly referencedIn: Declaration;
+	private readonly reasonKind: ReasonKind;
+
+	public constructor(referencedBy: Declaration, referencedIn: Declaration, reasonKind: ReasonKind) {
+		this.referencedBy = referencedBy;
+		this.referencedIn = referencedIn;
+		this.reasonKind = reasonKind;
+	}
+
+	public getReferencedBy(): Declaration {
+		return this.referencedBy;
+	}
+
+	public getReferencedIn(): Declaration {
+		return this.referencedIn;
+	}
+
+	public getReasonKind(): ReasonKind {
+		return this.reasonKind;
+	}
+}
 
 export abstract class Declaration extends Namespace {
 	private state?: State;
 	private referenced: boolean = false;
+	private referenceData?: ReferenceData;
 
 	public isResolved(state: State): boolean {
 		return this.state !== undefined && this.state >= state;
@@ -32,35 +57,42 @@ export abstract class Declaration extends Namespace {
 		return this.referenced;
 	}
 
-	private setReferencedDependency(root: Declaration, state: State): void {
+	public getReferenceData(): ReferenceData | undefined {
+		return this.referenceData;
+	}
+
+	private setReferencedDependency(root: Declaration, state: State, data: ReferenceData): void {
 		if (state === State.Complete) {
 			if (!this.referenced && this.isDescendantOf(root)) {
-				this.setReferenced(root);
+				this.setReferenced(root, data);
 			}
 		} else {
 			const parent = this.getParentDeclaration();
 
 			if (parent && !parent.referenced && parent.isDescendantOf(root)) {
-				parent.setReferenced(root);
+				parent.setReferenced(root, data);
 			}
 		}
 	}
 
-	public setReferenced(root: Declaration): void {
+	public setReferenced(root: Declaration, data?: ReferenceData): void {
 		const parent = this.getParentDeclaration();
 		this.referenced = true;
+		this.referenceData = data;
 
 		if (parent && !parent.referenced) {
-			parent.setReferenced(root);
+			parent.setReferenced(root, data);
 		}
 
 		for (const [declaration, dependency] of this.getDirectDependencies(State.Complete)) {
-			declaration.setReferencedDependency(root, dependency.getState());
+			const data = new ReferenceData(this, this, dependency.getReasonKind());
+			declaration.setReferencedDependency(root, dependency.getState(), data);
 		}
 
 		for (const child of this.getChildren()) {
 			for (const [declaration, dependency] of child.getDirectDependencies(State.Partial)) {
-				declaration.setReferencedDependency(root, dependency.getState());
+				const data = new ReferenceData(child, this, dependency.getReasonKind());
+				declaration.setReferencedDependency(root, dependency.getState(), data);
 			}
 		}
 	}

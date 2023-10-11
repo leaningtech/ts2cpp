@@ -176,10 +176,7 @@ class Parser {
 			} else {
 				const newClassObject = new Class(name);
 				classObject.addMember(newClassObject, Visibility.Public);
-
-				for (const [name, child] of node.getChildren()) {
-					this.addClass(name, child, newClassObject);
-				}
+				this.addClass(name, child, newClassObject);
 			}
 		}
 

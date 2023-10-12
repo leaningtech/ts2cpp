@@ -138,7 +138,19 @@ class Parser {
 		}
 	}
 
-	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode): Type {
+	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, typeParameters?: ReadonlyArray<string>): Type {
+		let name;
+
+		if (ts.isTypeReferenceNode(type)) {
+			name = type.typeName.getText(sourceFile);
+		} else if (ts.isExpressionWithTypeArguments(type)) {
+			name = type.expression.getText(sourceFile);
+		}
+
+		if (name && typeParameters && typeParameters.includes(name)) {
+			return new FakeType(name);
+		}
+
 		switch (type.kind) {
 		case ts.SyntaxKind.VoidKeyword:
 			return new FakeType("void");
@@ -166,11 +178,16 @@ class Parser {
 
 	private createFunction(name: string, node: Node, declaration: [ts.SourceFile, ts.SignatureDeclarationBase], namespace?: Namespace): Function {
 		const [sourceFile, decl] = declaration;
-		const type = this.getType(node, sourceFile, decl.type!);
+		const typeParameters = decl.typeParameters?.map(typeParameter => typeParameter.name.getText(sourceFile)) ?? new Array<string>;
+		const type = this.getType(node, sourceFile, decl.type!, typeParameters);
 		const result = new Function(name, type, namespace);
 
+		for (const typeParameter of typeParameters) {
+			result.addTypeParameter(typeParameter);
+		}
+
 		for (const parameter of decl.parameters) {
-			const type = this.getType(node, sourceFile, parameter.type!);
+			const type = this.getType(node, sourceFile, parameter.type!, typeParameters);
 			const name = parameter.name.getText(sourceFile);
 			result.addParameter(type, name);
 		}
@@ -214,7 +231,8 @@ class Parser {
 			}
 		}
 
-		if (classObject.getBases().length === 0 && classObject !== this.objectType.getDeclaration()) {
+
+		if (classObject.getBases().length === 0 && this.objectType instanceof DeclaredType && classObject !== this.objectType.getDeclaration()) {
 			classObject.addBase(this.objectType, Visibility.Public);
 		}
 

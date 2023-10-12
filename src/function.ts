@@ -54,8 +54,8 @@ export class Function extends TemplateDeclaration {
 	public getDirectDependencies(state: State): Dependencies {
 		return new Dependencies(
 			this.parameters
-				.map(parameter => [parameter.getType().getDeclaration(), ReasonKind.ParameterType])
-				.concat([[this.type.getDeclaration(), ReasonKind.ReturnType]])
+				.flatMap(parameter => parameter.getType().getDeclarations().map(declaration => [declaration, ReasonKind.ParameterType]))
+				.concat(this.type.getDeclarations().map(declaration => [declaration, ReasonKind.ReturnType]))
 				.filter((declaration): declaration is [Declaration, ReasonKind] => !!declaration[0])
 				.map(([declaration, reasonKind]) => [declaration, new Dependency(State.Partial, this, reasonKind)])
 		);
@@ -64,13 +64,14 @@ export class Function extends TemplateDeclaration {
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
 		const flags = this.getFlags();
 		let first = true;
+		this.writeTemplate(writer);
 
 		if (flags & Flags.Static) {
 			writer.write("static");
 			writer.writeSpace();
 		}
 
-		writer.write(this.type.getPath(namespace));
+		this.type.write(writer, namespace);
 		writer.writeSpace();
 		writer.write(this.getName());
 		writer.write("(");
@@ -81,7 +82,7 @@ export class Function extends TemplateDeclaration {
 				writer.writeSpace(false);
 			}
 
-			writer.write(parameter.getType().getPath(namespace));
+			parameter.getType().write(writer, namespace);
 			writer.writeSpace();
 			writer.write(parameter.getName());
 			first = false;

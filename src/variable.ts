@@ -26,7 +26,7 @@ export class Variable extends Declaration {
 
 	public getDirectDependencies(state: State): Dependencies {
 		return new Dependencies(
-			[this.type.getDeclaration()]
+			this.type.getDeclarations()
 				.filter((declaration): declaration is Declaration => !!declaration)
 				.map(declaration => [declaration, new Dependency(State.Partial, this, ReasonKind.VariableType)])
 		);
@@ -45,7 +45,7 @@ export class Variable extends Declaration {
 			writer.writeSpace();
 		}
 
-		writer.write(this.type.getPath(namespace));
+		this.type.write(writer, namespace);
 		writer.writeSpace();
 		writer.write(this.getName());
 		writer.write(";");

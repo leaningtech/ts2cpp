@@ -121,4 +121,35 @@ export abstract class Declaration extends Namespace {
 }
 
 export abstract class TemplateDeclaration extends Declaration {
+	private readonly typeParameters: Array<string> = new Array;
+
+	public getTypeParameters(): ReadonlyArray<string> {
+		return this.typeParameters;
+	}
+
+	public addTypeParameter(name: string): void {
+		this.typeParameters.push(name);
+	}
+
+	public writeTemplate(writer: Writer): void {
+		if (this.typeParameters.length > 0) {
+			let first = true;
+			writer.write("template<");
+
+			for (const typeParameter of this.typeParameters) {
+				if (!first) {
+					writer.write(",");
+					writer.writeSpace(false);
+				}
+
+				writer.write("class");
+				writer.writeSpace();
+				writer.write(typeParameter);
+				first = false;
+			}
+
+			writer.write(">");
+			writer.writeLine(false);
+		}
+	}
 }

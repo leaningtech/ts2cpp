@@ -89,7 +89,7 @@ export class Class extends TemplateDeclaration {
 		if (state === State.Complete) {
 			return new Dependencies(
 				this.bases
-					.map(base => base.getType().getDeclaration())
+					.flatMap(base => base.getType().getDeclarations())
 					.filter((declaration): declaration is Declaration => !!declaration)
 					.map(declaration => [declaration, new Dependency(State.Complete, this, ReasonKind.BaseClass)])
 			);
@@ -99,6 +99,7 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
+		this.writeTemplate(writer);
 		writer.write("class");
 		this.writeAttributesOrSpace(writer);
 		writer.write(this.getPath(namespace));
@@ -118,7 +119,7 @@ export class Class extends TemplateDeclaration {
 					writer.writeSpace();
 				}
 
-				writer.write(base.getType().getPath(this.getParent()));
+				base.getType().write(writer, this.getParent());
 			}
 
 			writer.writeBlockOpen();

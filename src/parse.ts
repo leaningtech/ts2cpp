@@ -244,7 +244,7 @@ class Parser {
 		return result;
 	}
 
-	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Variable {
+	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration | ts.PropertySignature], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Variable {
 		const [sourceFile, decl] = declaration;
 		const type = this.getType(node, sourceFile, decl.type!, overrides);
 		const result = new Variable(name, type, namespace);
@@ -327,6 +327,11 @@ class Parser {
 							const functionObject = this.createFunction(name, type, [sourceFile, member], newOverrides);
 							functionObject.addFlags(Flags.Static);
 							classObject.addMember(functionObject, Visibility.Public);
+						} else if (ts.isPropertySignature(member)) {
+							const name = member.name.getText(sourceFile);
+							const variableObject = this.createVariable(name, type, [sourceFile, member], newOverrides);
+							variableObject.addFlags(Flags.Static);
+							classObject.addMember(variableObject, Visibility.Public);
 						}
 					}
 				}

@@ -189,7 +189,13 @@ class Parser {
 		for (const parameter of decl.parameters) {
 			const type = this.getType(node, sourceFile, parameter.type!, typeParameters);
 			const name = parameter.name.getText(sourceFile);
-			result.addParameter(type, name);
+
+			if (parameter.dotDotDotToken) {
+				result.addVariadicTypeParameter("__Args");
+				result.addParameter(new FakeType("__Args").expand(), name);
+			} else if (name !== "this") {
+				result.addParameter(type, name);
+			}
 		}
 
 		return result;

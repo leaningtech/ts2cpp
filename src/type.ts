@@ -106,6 +106,10 @@ export abstract class Type extends Expression {
 	public pointer(): PointerType {
 		return new PointerType(this);
 	}
+
+	public expand(): VariadicExpansionType {
+		return new VariadicExpansionType(this);
+	}
 }
 
 export abstract class UnqualifiedType extends Type {
@@ -153,7 +157,7 @@ export class FakeType extends UnqualifiedType {
 	}
 }
 
-export class PointerType extends Type {
+export abstract class WrapperType extends Type {
 	private readonly inner: Type;
 
 	public constructor(inner: Type) {
@@ -168,9 +172,18 @@ export class PointerType extends Type {
 	public getDeclarations(): ReadonlyArray<Declaration> {
 		return this.inner.getDeclarations();
 	}
+}
 
+export class VariadicExpansionType extends WrapperType {
 	public write(writer: Writer, namespace?: Namespace): void {
-		this.inner.write(writer, namespace);
+		this.getInner().write(writer, namespace);
+		writer.write("...");
+	}
+}
+
+export class PointerType extends WrapperType {
+	public write(writer: Writer, namespace?: Namespace): void {
+		this.getInner().write(writer, namespace);
 		writer.write("*");
 	}
 }

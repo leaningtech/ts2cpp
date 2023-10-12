@@ -120,15 +120,37 @@ export abstract class Declaration extends Namespace {
 	public abstract write(writer: Writer, state: State, namespace?: Namespace): void;
 }
 
-export abstract class TemplateDeclaration extends Declaration {
-	private readonly typeParameters: Array<string> = new Array;
+export class TypeParameter {
+	private readonly name: string;
+	private readonly variadic: boolean;
 
-	public getTypeParameters(): ReadonlyArray<string> {
+	public constructor(name: string, variadic: boolean) {
+		this.name = name;
+		this.variadic = variadic;
+	}
+
+	public getName(): string {
+		return this.name;
+	}
+
+	public isVariadic(): boolean {
+		return this.variadic;
+	}
+}
+
+export abstract class TemplateDeclaration extends Declaration {
+	private readonly typeParameters: Array<TypeParameter> = new Array;
+
+	public getTypeParameters(): ReadonlyArray<TypeParameter> {
 		return this.typeParameters;
 	}
 
 	public addTypeParameter(name: string): void {
-		this.typeParameters.push(name);
+		this.typeParameters.push(new TypeParameter(name, false));
+	}
+
+	public addVariadicTypeParameter(name: string): void {
+		this.typeParameters.push(new TypeParameter(name, true));
 	}
 
 	public writeTemplate(writer: Writer): void {
@@ -142,9 +164,14 @@ export abstract class TemplateDeclaration extends Declaration {
 					writer.writeSpace(false);
 				}
 
-				writer.write("class");
+				if (typeParameter.isVariadic()) {
+					writer.write("class...");
+				} else {
+					writer.write("class");
+				}
+
 				writer.writeSpace();
-				writer.write(typeParameter);
+				writer.write(typeParameter.getName());
 				first = false;
 			}
 

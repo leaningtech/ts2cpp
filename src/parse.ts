@@ -5,6 +5,7 @@ import { Namespace, Flags } from "./namespace.js";
 import { Variable } from "./variable.js";
 import { Function } from "./function.js";
 import { Type, FakeType, DeclaredType } from "./type.js";
+import { TemplateDeclaration } from "./declaration.js";
 
 class Node {
 	private readonly parent?: Node;
@@ -138,17 +139,23 @@ class Parser {
 		}
 	}
 
-	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, typeParameters?: ReadonlyArray<string>): Type {
-		let name;
+	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides?: ReadonlyMap<string, Type>): Type {
+		if (overrides) {
+			let name;
 
-		if (ts.isTypeReferenceNode(type)) {
-			name = type.typeName.getText(sourceFile);
-		} else if (ts.isExpressionWithTypeArguments(type)) {
-			name = type.expression.getText(sourceFile);
-		}
+			if (ts.isTypeReferenceNode(type)) {
+				name = type.typeName.getText(sourceFile);
+			} else if (ts.isExpressionWithTypeArguments(type)) {
+				name = type.expression.getText(sourceFile);
+			}
 
-		if (name && typeParameters && typeParameters.includes(name)) {
-			return new FakeType(name);
+			if (name) {
+				const type = overrides.get(name);
+
+				if (type) {
+					return type;
+				}
+			}
 		}
 
 		switch (type.kind) {
@@ -176,18 +183,54 @@ class Parser {
 		}
 	}
 
-	private createFunction(name: string, node: Node, declaration: [ts.SourceFile, ts.SignatureDeclarationBase], namespace?: Namespace): Function {
-		const [sourceFile, decl] = declaration;
-		const typeParameters = decl.typeParameters?.map(typeParameter => typeParameter.name.getText(sourceFile)) ?? new Array<string>;
-		const type = this.getType(node, sourceFile, decl.type!, typeParameters);
-		const result = new Function(name, type, namespace);
+	private setOverrides(sourceFile: ts.SourceFile, overrides: ReadonlyMap<string, Type>, typeParameters?: ts.NodeArray<ts.TypeParameterDeclaration>): ReadonlyMap<string, Type> {
+		if (typeParameters) {
+			const result = new Map(overrides);
 
-		for (const typeParameter of typeParameters) {
-			result.addTypeParameter(typeParameter);
+			for (const typeParameter of typeParameters) {
+				const name = typeParameter.name.getText(sourceFile);
+				result.set(name, new FakeType(name));
+			}
+
+			return result;
+		} else {
+			return overrides;
 		}
+	}
+
+	private setErasedOverrides(sourceFile: ts.SourceFile, overrides: ReadonlyMap<string, Type>, typeParameters?: ts.NodeArray<ts.TypeParameterDeclaration>): ReadonlyMap<string, Type> {
+		if (typeParameters) {
+			const result = new Map(overrides);
+
+			for (const typeParameter of typeParameters) {
+				const name = typeParameter.name.getText(sourceFile);
+				result.set(name, this.objectType.pointer());
+			}
+
+			return result;
+		} else {
+			return overrides;
+		}
+	}
+
+	private addTypeParameters(sourceFile: ts.SourceFile, declaration: TemplateDeclaration, typeParameters?: ts.NodeArray<ts.TypeParameterDeclaration>): void {
+		if (typeParameters) {
+			for (const typeParameter of typeParameters) {
+				const name = typeParameter.name.getText(sourceFile);
+				declaration.addTypeParameter(name);
+			}
+		}
+	}
+
+	private createFunction(name: string, node: Node, declaration: [ts.SourceFile, ts.SignatureDeclarationBase], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Function {
+		const [sourceFile, decl] = declaration;
+		overrides = this.setOverrides(sourceFile, overrides, decl.typeParameters);
+		const type = this.getType(node, sourceFile, decl.type!, overrides);
+		const result = new Function(name, type, namespace);
+		this.addTypeParameters(sourceFile, result, decl.typeParameters);
 
 		for (const parameter of decl.parameters) {
-			const type = this.getType(node, sourceFile, parameter.type!, typeParameters);
+			const type = this.getType(node, sourceFile, parameter.type!, overrides);
 			const name = parameter.name.getText(sourceFile);
 
 			if (parameter.dotDotDotToken) {
@@ -201,24 +244,26 @@ class Parser {
 		return result;
 	}
 
-	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration], namespace?: Namespace): Variable {
+	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Variable {
 		const [sourceFile, decl] = declaration;
-		const type = this.getType(node, sourceFile, decl.type!);
+		const type = this.getType(node, sourceFile, decl.type!, overrides);
 		const result = new Variable(name, type, namespace);
 		return result;
 	}
 
-	public addClass(name: string, node: Node, classObject: Class): void {
+	public addClass(name: string, node: Node, classObject: Class, overrides: ReadonlyMap<string, Type>): void {
 		const interfaceDeclarations = node.getInterfaceDeclarations();
 		const functionDeclaration = node.getFunctionDeclaration();
 		const variableDeclaration = node.getVariableDeclaration();
 		this.file.addGlobal(classObject);
 
 		for (const [sourceFile, interfaceDecl] of interfaceDeclarations) {
+			const newOverrides = this.setErasedOverrides(sourceFile, overrides, interfaceDecl.typeParameters);
+
 			for (const member of interfaceDecl.members) {
 				if (ts.isMethodSignature(member)) {
 					const name = member.name.getText(sourceFile);
-					const functionObject = this.createFunction(name, node, [sourceFile, member]);
+					const functionObject = this.createFunction(name, node, [sourceFile, member], newOverrides);
 					classObject.addMember(functionObject, Visibility.Public);
 				}
 			}
@@ -249,20 +294,20 @@ class Parser {
 			const childClassObject = child.getClassObject();
 			
 			if (childClassObject) {
-				this.addClass(name, child, childClassObject);
+				this.addClass(name, child, childClassObject, overrides);
 				classObject.addMember(childClassObject, Visibility.Public);
 			} else if (functionDeclaration) {
-				const functionObject = this.createFunction(name, node, functionDeclaration);
+				const functionObject = this.createFunction(name, node, functionDeclaration, overrides);
 				functionObject.addFlags(Flags.Static);
 				classObject.addMember(functionObject, Visibility.Public);
 			} else if (variableDeclaration) {
-				const variableObject = this.createVariable(name, node, variableDeclaration);
+				const variableObject = this.createVariable(name, node, variableDeclaration, overrides);
 				variableObject.addFlags(Flags.Static);
 				classObject.addMember(variableObject, Visibility.Public);
 			} else {
 				const newClassObject = new Class(name);
 				classObject.addMember(newClassObject, Visibility.Public);
-				this.addClass(name, child, newClassObject);
+				this.addClass(name, child, newClassObject, overrides);
 			}
 		}
 
@@ -274,10 +319,12 @@ class Parser {
 				const interfaceDeclarations = type.getInterfaceDeclarations();
 
 				for (const [sourceFile, interfaceDecl] of interfaceDeclarations) {
+					const newOverrides = this.setErasedOverrides(sourceFile, overrides, interfaceDecl.typeParameters);
+
 					for (const member of interfaceDecl.members) {
 						if (ts.isMethodSignature(member)) {
 							const name = member.name.getText(sourceFile);
-							const functionObject = this.createFunction(name, node, [sourceFile, member]);
+							const functionObject = this.createFunction(name, type, [sourceFile, member], newOverrides);
 							functionObject.addFlags(Flags.Static);
 							classObject.addMember(functionObject, Visibility.Public);
 						}
@@ -295,14 +342,14 @@ class Parser {
 		const classObject = node.getClassObject();
 
 		if (classObject) {
-			this.addClass(name, node, classObject);
+			this.addClass(name, node, classObject, new Map);
 			classObject.setParent(namespace);
 			classObject.computeReferences();
 		} else if (functionDeclaration) {
-			const functionObject = this.createFunction(name, node, functionDeclaration, namespace);
+			const functionObject = this.createFunction(name, node, functionDeclaration, new Map, namespace);
 			this.file.addGlobal(functionObject);
 		} else if (variableDeclaration) {
-			const variableObject = this.createVariable(name, node, variableDeclaration, namespace);
+			const variableObject = this.createVariable(name, node, variableDeclaration, new Map, namespace);
 			variableObject.addFlags(Flags.Extern);
 			this.file.addGlobal(variableObject);
 		} else {

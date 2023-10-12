@@ -77,6 +77,38 @@ export class Class extends TemplateDeclaration {
 		this.bases.push(new Base(type, visibility));
 	}
 
+	public removeDuplicates(): void {
+		const memberMap = new Map<string, Array<Member>>;
+		const newMembers = new Array<Member>;
+
+		for (const member of this.members) {
+			const declaration = member.getDeclaration();
+			const name = declaration.getName();
+			let memberList = memberMap.get(name);
+			let duplicate = false;
+
+			if (!memberList) {
+				memberList = new Array;
+				memberMap.set(name, memberList);
+			}
+
+			for (const other of memberList) {
+				if (declaration.equals(other.getDeclaration())) {
+					duplicate = true;
+					declaration.setParent(undefined);
+					break;
+				}
+			}
+
+			if (!duplicate) {
+				memberList.push(member);
+				newMembers.push(member);
+			}
+		}
+
+		this.members.splice(0, this.members.length, ...newMembers);
+	}
+
 	public maxState(): State {
 		return State.Complete;
 	}
@@ -142,5 +174,9 @@ export class Class extends TemplateDeclaration {
 			writer.write(";");
 			writer.writeLine(false);
 		}
+	}
+
+	public equals(other: Declaration): boolean {
+		return other instanceof Class && this.getName() === other.getName();
 	}
 }

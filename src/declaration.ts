@@ -118,6 +118,7 @@ export abstract class Declaration extends Namespace {
 	public abstract getChildren(): ReadonlyArray<Declaration>;
 	public abstract getDirectDependencies(state: State): Dependencies;
 	public abstract write(writer: Writer, state: State, namespace?: Namespace): void;
+	public abstract equals(other: Declaration): boolean;
 }
 
 export class TypeParameter {
@@ -178,5 +179,19 @@ export abstract class TemplateDeclaration extends Declaration {
 			writer.write(">");
 			writer.writeLine(false);
 		}
+	}
+
+	public typeParametersEquals(other: TemplateDeclaration): boolean {
+		if (this.typeParameters.length !== other.typeParameters.length) {
+			return false;
+		}
+
+		for (let i = 0; i < this.typeParameters.length; i++) {
+			if (this.typeParameters[i].isVariadic() != other.typeParameters[i].isVariadic()) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

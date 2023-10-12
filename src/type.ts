@@ -5,9 +5,10 @@ import { Writer } from "./writer.js";
 export abstract class Expression {
 	public abstract getDeclarations(): ReadonlyArray<Declaration>;
 	public abstract write(writer: Writer, namespace?: Namespace): void;
+	public abstract equals(other: Expression): boolean;
 
 	public static enableIf(condition: Expression, type?: Type): TemplateType {
-		const result = new TemplateType(new FakeType("std::enable_if_t"));
+		const result = new TemplateType(new ExternType("std::enable_if_t"));
 		result.addTypeParameter(condition);
 
 		if (type) {
@@ -18,14 +19,14 @@ export abstract class Expression {
 	}
 
 	public static isSame(lhs: Type, rhs: Type): TemplateType {
-		const result = new TemplateType(new FakeType("std::is_same_v"));
+		const result = new TemplateType(new ExternType("std::is_same_v"));
 		result.addTypeParameter(lhs);
 		result.addTypeParameter(rhs);
 		return result;
 	}
 
 	public static isConvertible(from: Type, to: Type): TemplateType {
-		const result = new TemplateType(new FakeType("std::is_convertible_v"));
+		const result = new TemplateType(new ExternType("std::is_convertible_v"));
 		result.addTypeParameter(from);
 		result.addTypeParameter(to);
 		return result;
@@ -68,7 +69,7 @@ export abstract class Value extends Expression {
 	}
 
 	public writeDelim(writer: Writer, delim: string, namespace?: Namespace): void {
-		if (this.children.length == 1) {
+		if (this.children.length === 1) {
 			this.children[0].write(writer, namespace);
 		} else {
 			let first = true;
@@ -88,17 +89,39 @@ export abstract class Value extends Expression {
 			writer.write(")");
 		}
 	}
+
+	public childrenEquals(other: Value): boolean {
+		if (this.children.length !== other.children.length) {
+			return false;
+		}
+
+		for (let i = 0; i < this.children.length; i++) {
+			if (!this.children[i].equals(other.children[i])) {
+				return false;
+			}
+		}
+
+		return true;
+	}
 }
 
 export class OrExpression extends Value {
 	public write(writer: Writer, namespace?: Namespace): void {
 		this.writeDelim(writer, "||", namespace);
 	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof OrExpression && this.childrenEquals(other);
+	}
 }
 
 export class AndExpression extends Value {
 	public write(writer: Writer, namespace?: Namespace): void {
 		this.writeDelim(writer, "&&", namespace);
+	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof AndExpression && this.childrenEquals(other);
 	}
 }
 
@@ -109,6 +132,10 @@ export abstract class Type extends Expression {
 
 	public expand(): VariadicExpansionType {
 		return new VariadicExpansionType(this);
+	}
+
+	public isVoid(): boolean {
+		return false;
 	}
 }
 
@@ -134,9 +161,13 @@ export class DeclaredType extends UnqualifiedType {
 	public write(writer: Writer, namespace?: Namespace): void {
 		writer.write(this.declaration.getPath(namespace));
 	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof DeclaredType && this.declaration === other.declaration;
+	}
 }
 
-export class FakeType extends UnqualifiedType {
+export abstract class NamedType extends UnqualifiedType {
 	private readonly name: string;
 
 	public constructor(name: string) {
@@ -144,16 +175,39 @@ export class FakeType extends UnqualifiedType {
 		this.name = name;
 	}
 
-	public getDeclarations(): ReadonlyArray<Declaration> {
-		return [];
-	}
-
 	public getName(): string {
 		return this.name;
 	}
 
+	public getDeclarations(): ReadonlyArray<Declaration> {
+		return new Array;
+	}
+
 	public write(writer: Writer, namespace?: Namespace): void {
 		writer.write(this.name);
+	}
+}
+
+export class ExternType extends NamedType {
+	public equals(other: Expression): boolean {
+		return other instanceof ExternType && this.getName() === other.getName();
+	}
+
+	public isVoid(): boolean {
+		return this.getName() === "void";
+	}
+}
+
+export class ParameterType extends NamedType {
+	private readonly id: number;
+
+	public constructor(name: string, id: number) {
+		super(name);
+		this.id = id;
+	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof ParameterType && this.id == other.id;
 	}
 }
 
@@ -179,12 +233,20 @@ export class VariadicExpansionType extends WrapperType {
 		this.getInner().write(writer, namespace);
 		writer.write("...");
 	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof VariadicExpansionType && this.getInner().equals(other.getInner());
+	}
 }
 
 export class PointerType extends WrapperType {
 	public write(writer: Writer, namespace?: Namespace): void {
 		this.getInner().write(writer, namespace);
 		writer.write("*");
+	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof PointerType && this.getInner().equals(other.getInner());
 	}
 }
 
@@ -231,5 +293,27 @@ export class TemplateType extends Type {
 		}
 
 		writer.write(">");
+	}
+
+	public equals(other: Expression): boolean {
+		if (!(other instanceof TemplateType)) {
+			return false;
+		}
+
+		if (!this.inner.equals(other.inner)) {
+			return false;
+		}
+
+		if (this.typeParameters.length !== other.typeParameters.length) {
+			return false;
+		}
+
+		for (let i = 0; i < this.typeParameters.length; i++) {
+			if (!this.typeParameters[i].equals(other.typeParameters[i])) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

@@ -51,4 +51,8 @@ export class Variable extends Declaration {
 		writer.write(";");
 		writer.writeLine(false);
 	}
+
+	public equals(other: Declaration): boolean {
+		return other instanceof Variable && this.getName() === other.getName();
+	}
 }

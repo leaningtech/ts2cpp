@@ -24,9 +24,9 @@ export class Parameter {
 
 export class Function extends TemplateDeclaration {
 	private readonly parameters: Array<Parameter> = new Array;
-	private readonly type: Type;
+	private readonly type?: Type;
 
-	public constructor(name: string, type: Type, namespace?: Namespace) {
+	public constructor(name: string, type?: Type, namespace?: Namespace) {
 		super(name, namespace);
 		this.type = type;
 	}
@@ -39,7 +39,7 @@ export class Function extends TemplateDeclaration {
 		this.parameters.push(new Parameter(type, name));
 	}
 
-	public getType(): Type {
+	public getType(): Type | undefined {
 		return this.type;
 	}
 
@@ -55,7 +55,7 @@ export class Function extends TemplateDeclaration {
 		return new Dependencies(
 			this.parameters
 				.flatMap(parameter => parameter.getType().getDeclarations().map(declaration => [declaration, ReasonKind.ParameterType]))
-				.concat(this.type.getDeclarations().map(declaration => [declaration, ReasonKind.ReturnType]))
+				.concat(this.type?.getDeclarations()?.map(declaration => [declaration, ReasonKind.ReturnType]) ?? [])
 				.filter((declaration): declaration is [Declaration, ReasonKind] => !!declaration[0])
 				.map(([declaration, reasonKind]) => [declaration, new Dependency(State.Partial, this, reasonKind)])
 		);
@@ -71,8 +71,11 @@ export class Function extends TemplateDeclaration {
 			writer.writeSpace();
 		}
 
-		this.type.write(writer, namespace);
-		writer.writeSpace();
+		if (this.type) {
+			this.type.write(writer, namespace);
+			writer.writeSpace();
+		}
+
 		writer.write(this.getName());
 		writer.write("(");
 
@@ -97,5 +100,31 @@ export class Function extends TemplateDeclaration {
 
 		writer.write(";");
 		writer.writeLine(false);
+	}
+
+	public equals(other: Declaration): boolean {
+		if (!(other instanceof Function)) {
+			return false;
+		}
+
+		if (this.getName() !== other.getName()) {
+			return false;
+		}
+
+		if (!this.typeParametersEquals(other)) {
+			return false;
+		}
+
+		if (this.parameters.length !== other.parameters.length) {
+			return false;
+		}
+
+		for (let i = 0; i < this.parameters.length; i++) {
+			if (!this.parameters[i].getType().equals(other.parameters[i].getType())) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

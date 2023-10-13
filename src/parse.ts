@@ -304,6 +304,14 @@ class Parser {
 		}
 	}
 
+	private getUnionTypes(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides: ReadonlyMap<string, Type>): ReadonlyArray<Type> {
+		if (ts.isUnionTypeNode(type)) {
+			return type.types.flatMap(type => this.getUnionTypes(node, sourceFile, type, overrides));
+		} else {
+			return [this.getType(node, sourceFile, type, overrides)];
+		}
+	}
+
 	private setOverrides(sourceFile: ts.SourceFile, overrides: ReadonlyMap<string, Type>, typeParameters?: ts.NodeArray<ts.TypeParameterDeclaration>): ReadonlyMap<string, Type> {
 		if (typeParameters) {
 			const result = new Map(overrides);
@@ -343,26 +351,50 @@ class Parser {
 		}
 	}
 
-	private createFunction(name: string, node: Node, declaration: [ts.SourceFile, ts.SignatureDeclarationBase], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Function {
-		const [sourceFile, decl] = declaration;
-		overrides = this.setOverrides(sourceFile, overrides, decl.typeParameters);
-		const type = ts.isConstructSignatureDeclaration(decl) ? undefined : this.getType(node, sourceFile, decl.type!, overrides);
-		const result = new Function(name, type, namespace);
-		this.addTypeParameters(sourceFile, result, decl.typeParameters);
+	private createFunctionParameters(node: Node, sourceFile: ts.SourceFile, decl: ts.SignatureDeclarationBase, overrides: ReadonlyMap<string, Type>): ReadonlyArray<ReadonlyArray<[ts.ParameterDeclaration, Type]>> {
+		let result: Array<Array<[ts.ParameterDeclaration, Type]>> = [[]];
 
 		for (const parameter of decl.parameters) {
-			const type = this.getType(node, sourceFile, parameter.type!, overrides);
-			const [realName, name] = getName(sourceFile, parameter.name);
+			const types = this.getUnionTypes(node, sourceFile, parameter.type!, overrides);
+			const newResult = new Array;
 
-			if (parameter.dotDotDotToken) {
-				result.addVariadicTypeParameter("__Args");
-				result.addParameter(new ParameterType("__Args", -1).expand(), name);
-			} else if (name !== "this") {
-				result.addParameter(type, name);
+			for (const type of types) {
+				for (const parameters of result) {
+					newResult.push(parameters.concat([[parameter, type]]));
+				}
 			}
+
+			result = newResult;
 		}
 
 		return result;
+	}
+
+	private createFunctions(name: string, node: Node, declaration: [ts.SourceFile, ts.SignatureDeclarationBase], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): ReadonlyArray<Function> {
+		const [sourceFile, decl] = declaration;
+		overrides = this.setOverrides(sourceFile, overrides, decl.typeParameters);
+		const type = ts.isConstructSignatureDeclaration(decl) ? undefined : this.getType(node, sourceFile, decl.type!, overrides);
+		const functions = new Array;
+
+		for (const parameters of this.createFunctionParameters(node, sourceFile, decl, overrides)) {
+			const result = new Function(name, type, namespace);
+			this.addTypeParameters(sourceFile, result, decl.typeParameters);
+
+			for (const [parameter, type] of parameters) {
+				const [realName, name] = getName(sourceFile, parameter.name);
+
+				if (parameter.dotDotDotToken) {
+					result.addVariadicTypeParameter("__Args");
+					result.addParameter(new ParameterType("__Args", -1).expand(), name);
+				} else if (name !== "this") {
+					result.addParameter(type, name);
+				}
+			}
+
+			functions.push(result);
+		}
+
+		return functions;
 	}
 
 	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration | ts.PropertySignature], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Variable {
@@ -384,8 +416,9 @@ class Parser {
 			for (const member of interfaceDecl.members) {
 				if (ts.isMethodSignature(member)) {
 					const [realName, name] = getName(sourceFile, member.name);
-					const functionObject = this.createFunction(name, node, [sourceFile, member], newOverrides);
-					classObject.addMember(functionObject, Visibility.Public);
+					for (const functionObject of this.createFunctions(name, node, [sourceFile, member], newOverrides)) {
+						classObject.addMember(functionObject, Visibility.Public);
+					}
 				}
 			}
 
@@ -413,14 +446,15 @@ class Parser {
 			const functionDeclaration = child.getFunctionDeclaration();
 			const variableDeclaration = child.getVariableDeclaration();
 			const childClassObject = child.getClassObject();
-			
+
 			if (childClassObject) {
 				this.addClass(name, child, childClassObject, overrides);
 				classObject.addMember(childClassObject, Visibility.Public);
 			} else if (functionDeclaration) {
-				const functionObject = this.createFunction(name, node, functionDeclaration, overrides);
-				functionObject.addFlags(Flags.Static);
-				classObject.addMember(functionObject, Visibility.Public);
+				for (const functionObject of this.createFunctions(name, node, functionDeclaration, overrides)) {
+					functionObject.addFlags(Flags.Static);
+					classObject.addMember(functionObject, Visibility.Public);
+				}
 			} else if (variableDeclaration) {
 				const variableObject = this.createVariable(name, node, variableDeclaration, overrides);
 				variableObject.addFlags(Flags.Static);
@@ -445,17 +479,19 @@ class Parser {
 					for (const member of interfaceDecl.members) {
 						if (ts.isMethodSignature(member)) {
 							const [realName, name] = getName(sourceFile, member.name);
-							const functionObject = this.createFunction(name, type, [sourceFile, member], newOverrides);
-							functionObject.addFlags(Flags.Static);
-							classObject.addMember(functionObject, Visibility.Public);
+							for (const functionObject of this.createFunctions(name, type, [sourceFile, member], newOverrides)) {
+								functionObject.addFlags(Flags.Static);
+								classObject.addMember(functionObject, Visibility.Public);
+							}
 						} else if (ts.isPropertySignature(member)) {
 							const [realName, name] = getName(sourceFile, member.name);
 							const variableObject = this.createVariable(name, type, [sourceFile, member], newOverrides);
 							variableObject.addFlags(Flags.Static);
 							classObject.addMember(variableObject, Visibility.Public);
 						} else if (ts.isConstructSignatureDeclaration(member)) {
-							const functionObject = this.createFunction(name, type, [sourceFile, member], newOverrides);
-							classObject.addMember(functionObject, Visibility.Public);
+							for (const functionObject of this.createFunctions(name, type, [sourceFile, member], newOverrides)) {
+								classObject.addMember(functionObject, Visibility.Public);
+							}
 						}
 					}
 				}
@@ -476,8 +512,9 @@ class Parser {
 			classObject.setParent(namespace);
 			classObject.computeReferences();
 		} else if (functionDeclaration) {
-			const functionObject = this.createFunction(name, node, functionDeclaration, new Map, namespace);
-			this.file.addGlobal(functionObject);
+			for (const functionObject of this.createFunctions(name, node, functionDeclaration, new Map, namespace)) {
+				this.file.addGlobal(functionObject);
+			}
 		} else if (variableDeclaration) {
 			const variableObject = this.createVariable(name, node, variableDeclaration, new Map, namespace);
 			variableObject.addFlags(Flags.Extern);

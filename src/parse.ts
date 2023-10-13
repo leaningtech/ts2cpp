@@ -4,8 +4,9 @@ import { Class, Visibility } from "./class.js";
 import { Namespace, Flags } from "./namespace.js";
 import { Variable } from "./variable.js";
 import { Function } from "./function.js";
-import { Type, ExternType, DeclaredType, ParameterType } from "./type.js";
-import { TemplateDeclaration } from "./declaration.js";
+import { Type, ExternType, DeclaredType, ParameterType, TemplateType, UnqualifiedType } from "./type.js";
+import { Declaration, TemplateDeclaration } from "./declaration.js";
+import { Alias } from "./alias.js";
 
 function getName(sourceFile: ts.SourceFile, identifier?: ts.Node) {
 	const CHARSET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
@@ -134,6 +135,8 @@ class Node {
 	private readonly interfaceDeclarations: Array<[ts.SourceFile, ts.InterfaceDeclaration]> = new Array;
 	private functionDeclaration?: [ts.SourceFile, ts.FunctionDeclaration];
 	private variableDeclaration?: [ts.SourceFile, ts.VariableDeclaration];
+	private typeAliasDeclaration?: [ts.SourceFile, ts.TypeAliasDeclaration];
+	private typeAliasObject?: Alias;
 	private classObject?: Class;
 
 	public constructor(parent?: Node) {
@@ -169,6 +172,14 @@ class Node {
 
 	public getVariableDeclaration(): [ts.SourceFile, ts.VariableDeclaration] | undefined {
 		return this.variableDeclaration;
+	}
+
+	public getTypeAliasDeclaration(): [ts.SourceFile, ts.TypeAliasDeclaration] | undefined {
+		return this.typeAliasDeclaration;
+	}
+
+	public getTypeAliasObject(): Alias | undefined {
+		return this.typeAliasObject;
 	}
 
 	public getClassObject(): Class | undefined {
@@ -221,6 +232,11 @@ class Node {
 				const [realName, name] = getName(sourceFile, node.name);
 				const child = this.getChild(name);
 				child.addNodes(sourceFile, node.body!);
+			} else if (ts.isTypeAliasDeclaration(node)) {
+				const [realName, name] = getName(sourceFile, node.name);
+				const child = this.getChild(name);
+				child.typeAliasDeclaration = [sourceFile, node];
+				child.typeAliasObject = new Alias(name, new ExternType("void"));
 			}
 		});
 	}
@@ -260,22 +276,37 @@ class Parser {
 		}
 	}
 
-	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides?: ReadonlyMap<string, Type>): Type {
-		if (overrides) {
-			let realName, name;
+	private createTemplateType(node: Node, sourceFile: ts.SourceFile, type: UnqualifiedType, typeArguments?: ts.NodeArray<ts.TypeNode>, overrides?: ReadonlyMap<string, Type>): Type {
+		if (typeArguments && type instanceof DeclaredType && type.getDeclaration() instanceof Alias) {
+			const templateType = new TemplateType(type);
 
-			if (ts.isTypeReferenceNode(type)) {
-				[realName, name] = getName(sourceFile, type.typeName);
-			} else if (ts.isExpressionWithTypeArguments(type)) {
-				[realName, name] = getName(sourceFile, type.expression);
+			for (const typeArgument of typeArguments) {
+				templateType.addTypeParameter(this.getType(node, sourceFile, typeArgument, overrides));
 			}
 
-			if (name) {
-				const type = overrides.get(name);
+			return templateType;
+		}
 
-				if (type) {
-					return type;
-				}
+		return type;
+	}
+
+	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides?: ReadonlyMap<string, Type>): Type {
+		let realName, name;
+		let typeArguments;
+
+		if (ts.isTypeReferenceNode(type)) {
+			[realName, name] = getName(sourceFile, type.typeName);
+			typeArguments = type.typeArguments;
+		} else if (ts.isExpressionWithTypeArguments(type)) {
+			[realName, name] = getName(sourceFile, type.expression);
+			typeArguments = type.typeArguments;
+		}
+
+		if (overrides && name) {
+			const type = overrides.get(name);
+
+			if (type) {
+				return type;
 			}
 		}
 
@@ -295,18 +326,43 @@ class Parser {
 			return this.bigintType.pointer();
 		case ts.SyntaxKind.SymbolKeyword:
 			return this.symbolType.pointer();
+		/*
+		case ts.SyntaxKind.ArrayType:
+			const arrayType = new TemplateType(this.arrayType);
+			arrayType.addTypeParameter(this.getType(node, sourceFile, (type as ts.ArrayTypeNode).elementType, overrides));
+			return arrayType.pointer();
+		case ts.SyntaxKind.TupleType:
+			const tupleType = new TemplateType(this.arrayType);
+			tupleType.addTypeParameter(this.objectType.pointer());
+			return tupleType.pointer();
+		*/
 		case ts.SyntaxKind.ArrayType:
 		case ts.SyntaxKind.TupleType:
 			return this.arrayType.pointer();
 		default:
-			const classObject = node.getTypeReference(sourceFile, type)?.getClassObject();
-			return (classObject ? new DeclaredType(classObject) : this.objectType).pointer();
+			if (name) {
+				const typeReference = node.find(name);
+				const classObject = typeReference?.getClassObject();
+				const typeAliasObject = typeReference?.getTypeAliasObject();
+
+				if (classObject) {
+					return this.createTemplateType(node, sourceFile, new DeclaredType(classObject), typeArguments, overrides).pointer();
+				} else if (typeAliasObject) {
+					return this.createTemplateType(node, sourceFile, new DeclaredType(typeAliasObject), typeArguments, overrides);
+				}
+			}
+
+			return this.objectType.pointer();
 		}
 	}
 
 	private getUnionTypes(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides: ReadonlyMap<string, Type>): ReadonlyArray<Type> {
 		if (ts.isUnionTypeNode(type)) {
 			return type.types.flatMap(type => this.getUnionTypes(node, sourceFile, type, overrides));
+		} else if (type.kind === ts.SyntaxKind.UndefinedKeyword) {
+			return [];
+		} else if (ts.isLiteralTypeNode(type) && type.literal.kind === ts.SyntaxKind.NullKeyword) {
+			return [];
 		} else {
 			return [this.getType(node, sourceFile, type, overrides)];
 		}
@@ -404,9 +460,15 @@ class Parser {
 		return result;
 	}
 
-	public addClass(name: string, node: Node, classObject: Class, overrides: ReadonlyMap<string, Type>): void {
+	private addTypeAlias(node: Node, declaration: [ts.SourceFile, ts.TypeAliasDeclaration], typeAliasObject: Alias, overrides: ReadonlyMap<string, Type>): void {
+		const [sourceFile, decl] = declaration;
+		overrides = this.setOverrides(sourceFile, overrides, decl.typeParameters);
+		typeAliasObject.setType(this.getType(node, sourceFile, decl.type!, overrides));
+		this.addTypeParameters(sourceFile, typeAliasObject, decl.typeParameters);
+	}
+
+	public addClass(node: Node, classObject: Class, overrides: ReadonlyMap<string, Type>): void {
 		const interfaceDeclarations = node.getInterfaceDeclarations();
-		const functionDeclaration = node.getFunctionDeclaration();
 		const variableDeclaration = node.getVariableDeclaration();
 		this.file.addGlobal(classObject);
 
@@ -436,7 +498,6 @@ class Parser {
 			}
 		}
 
-
 		if (classObject.getBases().length === 0 && this.objectType instanceof DeclaredType && classObject !== this.objectType.getDeclaration()) {
 			classObject.addBase(this.objectType, Visibility.Public);
 		}
@@ -445,30 +506,48 @@ class Parser {
 			const interfaceDeclarations = child.getInterfaceDeclarations();
 			const functionDeclaration = child.getFunctionDeclaration();
 			const variableDeclaration = child.getVariableDeclaration();
+			const typeAliasDeclaration = child.getTypeAliasDeclaration();
+			const typeAliasObject = child.getTypeAliasObject();
 			const childClassObject = child.getClassObject();
 
 			if (childClassObject) {
-				this.addClass(name, child, childClassObject, overrides);
+				this.addClass(child, childClassObject, overrides);
 				classObject.addMember(childClassObject, Visibility.Public);
 			} else if (functionDeclaration) {
-				for (const functionObject of this.createFunctions(name, node, functionDeclaration, overrides)) {
+				for (const functionObject of this.createFunctions(name, child, functionDeclaration, overrides)) {
 					functionObject.addFlags(Flags.Static);
 					classObject.addMember(functionObject, Visibility.Public);
 				}
 			} else if (variableDeclaration) {
-				const variableObject = this.createVariable(name, node, variableDeclaration, overrides);
+				const variableObject = this.createVariable(name, child, variableDeclaration, overrides);
 				variableObject.addFlags(Flags.Static);
 				classObject.addMember(variableObject, Visibility.Public);
+			} else if (typeAliasDeclaration && typeAliasObject) {
+				this.addTypeAlias(child, typeAliasDeclaration, typeAliasObject, overrides);
+				classObject.addMember(typeAliasObject, Visibility.Public);
 			} else {
 				const newClassObject = new Class(name);
 				classObject.addMember(newClassObject, Visibility.Public);
-				this.addClass(name, child, newClassObject, overrides);
+				this.addClass(child, newClassObject, overrides);
 			}
 		}
 
 		if (variableDeclaration) {
 			const [sourceFile, variableDecl] = variableDeclaration;
-			const type = node.getTypeReference(sourceFile, variableDecl.type!);
+			let type = node.getTypeReference(sourceFile, variableDecl.type!);
+
+			/*
+			while (type) {
+				const typeAliasDeclaration = type.getTypeAliasDeclaration();
+
+				if (!typeAliasDeclaration) {
+					break;
+				}
+
+				const [sourceFile, typeAliasDecl] = typeAliasDeclaration;
+				type = node.getTypeReference(sourceFile, typeAliasDecl.type);
+			}
+			*/
 
 			if (type) {
 				const interfaceDeclarations = type.getInterfaceDeclarations();
@@ -489,7 +568,7 @@ class Parser {
 							variableObject.addFlags(Flags.Static);
 							classObject.addMember(variableObject, Visibility.Public);
 						} else if (ts.isConstructSignatureDeclaration(member)) {
-							for (const functionObject of this.createFunctions(name, type, [sourceFile, member], newOverrides)) {
+							for (const functionObject of this.createFunctions(classObject.getName(), type, [sourceFile, member], newOverrides)) {
 								classObject.addMember(functionObject, Visibility.Public);
 							}
 						}
@@ -505,10 +584,12 @@ class Parser {
 		const interfaceDeclarations = node.getInterfaceDeclarations();
 		const functionDeclaration = node.getFunctionDeclaration();
 		const variableDeclaration = node.getVariableDeclaration();
+		const typeAliasDeclaration = node.getTypeAliasDeclaration();
+		const typeAliasObject = node.getTypeAliasObject();
 		const classObject = node.getClassObject();
 
 		if (classObject) {
-			this.addClass(name, node, classObject, new Map);
+			this.addClass(node, classObject, new Map);
 			classObject.setParent(namespace);
 			classObject.computeReferences();
 		} else if (functionDeclaration) {
@@ -522,6 +603,10 @@ class Parser {
 			if (!variableObject.getType().isVoid()) {
 				this.file.addGlobal(variableObject);
 			}
+		} else if (typeAliasDeclaration && typeAliasObject) {
+			this.addTypeAlias(node, typeAliasDeclaration, typeAliasObject, new Map);
+			typeAliasObject.setParent(namespace);
+			this.file.addGlobal(typeAliasObject);
 		} else {
 			const newNamespace = new Namespace(name, namespace);
 

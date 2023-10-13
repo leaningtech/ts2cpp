@@ -24,7 +24,7 @@ export class Parameter {
 
 export class Function extends TemplateDeclaration {
 	private readonly parameters: Array<Parameter> = new Array;
-	private readonly type?: Type;
+	private type?: Type;
 
 	public constructor(name: string, type?: Type, namespace?: Namespace) {
 		super(name, namespace);
@@ -41,6 +41,10 @@ export class Function extends TemplateDeclaration {
 
 	public getType(): Type | undefined {
 		return this.type;
+	}
+
+	public setType(type?: Type): void {
+		this.type = type;
 	}
 
 	public maxState(): State {

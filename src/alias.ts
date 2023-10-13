@@ -1,10 +1,10 @@
-import { Declaration } from "./declaration.js";
-import { Namespace, Flags } from "./namespace.js";
-import { State, Dependency, Dependencies, ReasonKind } from "./target.js";
+import { Declaration, TemplateDeclaration } from "./declaration.js";
+import { Namespace } from "./namespace.js";
 import { Type } from "./type.js";
+import { State, Dependencies, ReasonKind, Dependency } from "./target.js";
 import { Writer } from "./writer.js";
 
-export class Variable extends Declaration {
+export class Alias extends TemplateDeclaration {
 	private type: Type;
 
 	public constructor(name: string, type: Type, namespace?: Namespace) {
@@ -37,26 +37,19 @@ export class Variable extends Declaration {
 	}
 
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
-		const flags = this.getFlags();
-
-		if (flags & Flags.Extern) {
-			writer.write("extern");
-			writer.writeSpace();
-		}
-
-		if (flags & Flags.Static) {
-			writer.write("static");
-			writer.writeSpace();
-		}
-
-		this.type.write(writer, namespace);
+		this.writeTemplate(writer);
+		writer.write("using");
 		writer.writeSpace();
 		writer.write(this.getName());
+		writer.writeSpace(false);
+		writer.write("=");
+		writer.writeSpace(false);
+		this.type.write(writer, namespace);
 		writer.write(";");
 		writer.writeLine(false);
 	}
 
 	public equals(other: Declaration): boolean {
-		return other instanceof Variable && this.getName() === other.getName();
+		return other instanceof Alias && this.getName() === other.getName();
 	}
 }

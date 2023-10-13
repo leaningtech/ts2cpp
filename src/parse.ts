@@ -8,7 +8,7 @@ import { Type, ExternType, DeclaredType, ParameterType } from "./type.js";
 import { TemplateDeclaration } from "./declaration.js";
 
 function getName(sourceFile: ts.SourceFile, identifier?: ts.Node) {
-	const CHARSET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
+	const CHARSET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
 	const RESERVED = [
 		"alignas",

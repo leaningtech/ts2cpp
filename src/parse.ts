@@ -4,7 +4,7 @@ import { Class, Visibility } from "./class.js";
 import { Namespace, Flags } from "./namespace.js";
 import { Variable } from "./variable.js";
 import { Function } from "./function.js";
-import { Type, ExternType, DeclaredType, ParameterType, TemplateType, UnqualifiedType } from "./type.js";
+import { Type, ExternType, DeclaredType, ParameterType, TemplateType, UnqualifiedType, TypeQualifier } from "./type.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { Alias } from "./alias.js";
 
@@ -281,7 +281,7 @@ class Parser {
 			const templateType = new TemplateType(type);
 
 			for (const typeArgument of typeArguments) {
-				templateType.addTypeParameter(this.getType(node, sourceFile, typeArgument, overrides));
+				templateType.addTypeParameter(this.getType(node, sourceFile, typeArgument, TypeQualifier.Pointer, overrides));
 			}
 
 			return templateType;
@@ -290,7 +290,7 @@ class Parser {
 		return type;
 	}
 
-	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides?: ReadonlyMap<string, Type>): Type {
+	private getType(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, qualifier: TypeQualifier, overrides?: ReadonlyMap<string, Type>): Type {
 		let realName, name;
 		let typeArguments;
 
@@ -319,26 +319,26 @@ class Parser {
 		case ts.SyntaxKind.NumberKeyword:
 			return new ExternType("double");
 		case ts.SyntaxKind.ObjectKeyword:
-			return this.objectType.pointer();
+			return this.objectType.qualify(qualifier);
 		case ts.SyntaxKind.StringKeyword:
-			return this.stringType.pointer();
+			return this.stringType.qualify(qualifier);
 		case ts.SyntaxKind.BigIntKeyword:
-			return this.bigintType.pointer();
+			return this.bigintType.qualify(qualifier);
 		case ts.SyntaxKind.SymbolKeyword:
-			return this.symbolType.pointer();
+			return this.symbolType.qualify(qualifier);
 		/*
 		case ts.SyntaxKind.ArrayType:
 			const arrayType = new TemplateType(this.arrayType);
 			arrayType.addTypeParameter(this.getType(node, sourceFile, (type as ts.ArrayTypeNode).elementType, overrides));
-			return arrayType.pointer();
+			return arrayType.qualify(qualifier);
 		case ts.SyntaxKind.TupleType:
 			const tupleType = new TemplateType(this.arrayType);
-			tupleType.addTypeParameter(this.objectType.pointer());
-			return tupleType.pointer();
+			tupleType.addTypeParameter(this.objectType.qualify(qualifier));
+			return tupleType.qualify(qualifier);
 		*/
 		case ts.SyntaxKind.ArrayType:
 		case ts.SyntaxKind.TupleType:
-			return this.arrayType.pointer();
+			return this.arrayType.qualify(qualifier);
 		default:
 			if (name) {
 				const typeReference = node.find(name);
@@ -346,25 +346,47 @@ class Parser {
 				const typeAliasObject = typeReference?.getTypeAliasObject();
 
 				if (classObject) {
-					return this.createTemplateType(node, sourceFile, new DeclaredType(classObject), typeArguments, overrides).pointer();
+					return this.createTemplateType(node, sourceFile, new DeclaredType(classObject), typeArguments, overrides).qualify(qualifier);
 				} else if (typeAliasObject) {
 					return this.createTemplateType(node, sourceFile, new DeclaredType(typeAliasObject), typeArguments, overrides);
 				}
 			}
 
-			return this.objectType.pointer();
+			return this.objectType.qualify(qualifier);
 		}
 	}
 
-	private getUnionTypes(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides: ReadonlyMap<string, Type>): ReadonlyArray<Type> {
+	private hasUndefinedOrNull(type: ts.TypeNode): boolean {
 		if (ts.isUnionTypeNode(type)) {
-			return type.types.flatMap(type => this.getUnionTypes(node, sourceFile, type, overrides));
+			for (const member of type.types) {
+				if (this.hasUndefinedOrNull(member)) {
+					return true;
+				}
+			}
+
+			return false;
+		} else {
+			return type.kind === ts.SyntaxKind.UndefinedKeyword || (ts.isLiteralTypeNode(type) && type.literal.kind == ts.SyntaxKind.NullKeyword);
+		}
+	}
+
+	private getUnionTypesWithQualifier(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, qualifier: TypeQualifier, overrides: ReadonlyMap<string, Type>): ReadonlyArray<Type> {
+		if (ts.isUnionTypeNode(type)) {
+			return type.types.flatMap(type => this.getUnionTypesWithQualifier(node, sourceFile, type, qualifier, overrides));
 		} else if (type.kind === ts.SyntaxKind.UndefinedKeyword) {
 			return [];
 		} else if (ts.isLiteralTypeNode(type) && type.literal.kind === ts.SyntaxKind.NullKeyword) {
 			return [];
 		} else {
-			return [this.getType(node, sourceFile, type, overrides)];
+			return [this.getType(node, sourceFile, type, qualifier, overrides)];
+		}
+	}
+
+	private getUnionTypes(node: Node, sourceFile: ts.SourceFile, type: ts.TypeNode, overrides: ReadonlyMap<string, Type>): ReadonlyArray<Type> {
+		if (this.hasUndefinedOrNull(type)) {
+			return this.getUnionTypesWithQualifier(node, sourceFile, type, TypeQualifier.Pointer, overrides);
+		} else {
+			return this.getUnionTypesWithQualifier(node, sourceFile, type, TypeQualifier.ConstReference, overrides);
 		}
 	}
 
@@ -429,7 +451,7 @@ class Parser {
 	private createFunctions(name: string, node: Node, declaration: [ts.SourceFile, ts.SignatureDeclarationBase], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): ReadonlyArray<Function> {
 		const [sourceFile, decl] = declaration;
 		overrides = this.setOverrides(sourceFile, overrides, decl.typeParameters);
-		const type = ts.isConstructSignatureDeclaration(decl) ? undefined : this.getType(node, sourceFile, decl.type!, overrides);
+		const type = ts.isConstructSignatureDeclaration(decl) ? undefined : this.getType(node, sourceFile, decl.type!, TypeQualifier.Pointer, overrides);
 		const functions = new Array;
 
 		for (const parameters of this.createFunctionParameters(node, sourceFile, decl, overrides)) {
@@ -453,9 +475,9 @@ class Parser {
 		return functions;
 	}
 
-	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration | ts.PropertySignature], overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Variable {
+	private createVariable(name: string, node: Node, declaration: [ts.SourceFile, ts.VariableDeclaration | ts.PropertySignature], qualifier: TypeQualifier, overrides: ReadonlyMap<string, Type>, namespace?: Namespace): Variable {
 		const [sourceFile, decl] = declaration;
-		const type = this.getType(node, sourceFile, decl.type!, overrides);
+		const type = this.getType(node, sourceFile, decl.type!, qualifier, overrides);
 		const result = new Variable(name, type, namespace);
 		return result;
 	}
@@ -463,7 +485,7 @@ class Parser {
 	private addTypeAlias(node: Node, declaration: [ts.SourceFile, ts.TypeAliasDeclaration], typeAliasObject: Alias, overrides: ReadonlyMap<string, Type>): void {
 		const [sourceFile, decl] = declaration;
 		overrides = this.setOverrides(sourceFile, overrides, decl.typeParameters);
-		typeAliasObject.setType(this.getType(node, sourceFile, decl.type!, overrides));
+		typeAliasObject.setType(this.getType(node, sourceFile, decl.type!, TypeQualifier.Pointer, overrides));
 		this.addTypeParameters(sourceFile, typeAliasObject, decl.typeParameters);
 	}
 
@@ -518,13 +540,13 @@ class Parser {
 					functionObject.addFlags(Flags.Static);
 					classObject.addMember(functionObject, Visibility.Public);
 				}
-			} else if (variableDeclaration) {
-				const variableObject = this.createVariable(name, child, variableDeclaration, overrides);
-				variableObject.addFlags(Flags.Static);
-				classObject.addMember(variableObject, Visibility.Public);
 			} else if (typeAliasDeclaration && typeAliasObject) {
 				this.addTypeAlias(child, typeAliasDeclaration, typeAliasObject, overrides);
 				classObject.addMember(typeAliasObject, Visibility.Public);
+			} else if (variableDeclaration) {
+				const variableObject = this.createVariable(name, child, variableDeclaration, TypeQualifier.Pointer, overrides);
+				variableObject.addFlags(Flags.Static);
+				classObject.addMember(variableObject, Visibility.Public);
 			} else {
 				const newClassObject = new Class(name);
 				classObject.addMember(newClassObject, Visibility.Public);
@@ -564,7 +586,7 @@ class Parser {
 							}
 						} else if (ts.isPropertySignature(member)) {
 							const [realName, name] = getName(sourceFile, member.name);
-							const variableObject = this.createVariable(name, type, [sourceFile, member], newOverrides);
+							const variableObject = this.createVariable(name, type, [sourceFile, member], TypeQualifier.Pointer, newOverrides);
 							variableObject.addFlags(Flags.Static);
 							classObject.addMember(variableObject, Visibility.Public);
 						} else if (ts.isConstructSignatureDeclaration(member)) {
@@ -596,17 +618,17 @@ class Parser {
 			for (const functionObject of this.createFunctions(name, node, functionDeclaration, new Map, namespace)) {
 				this.file.addGlobal(functionObject);
 			}
+		} else if (typeAliasDeclaration && typeAliasObject) {
+			this.addTypeAlias(node, typeAliasDeclaration, typeAliasObject, new Map);
+			typeAliasObject.setParent(namespace);
+			this.file.addGlobal(typeAliasObject);
 		} else if (variableDeclaration) {
-			const variableObject = this.createVariable(name, node, variableDeclaration, new Map, namespace);
+			const variableObject = this.createVariable(name, node, variableDeclaration, TypeQualifier.Reference, new Map, namespace);
 			variableObject.addFlags(Flags.Extern);
 
 			if (!variableObject.getType().isVoid()) {
 				this.file.addGlobal(variableObject);
 			}
-		} else if (typeAliasDeclaration && typeAliasObject) {
-			this.addTypeAlias(node, typeAliasDeclaration, typeAliasObject, new Map);
-			typeAliasObject.setParent(namespace);
-			this.file.addGlobal(typeAliasObject);
 		} else {
 			const newNamespace = new Namespace(name, namespace);
 

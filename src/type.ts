@@ -125,9 +125,34 @@ export class AndExpression extends Value {
 	}
 }
 
+export enum TypeQualifier {
+	Pointer,
+	Reference,
+	ConstReference,
+}
+
 export abstract class Type extends Expression {
 	public pointer(): PointerType {
 		return new PointerType(this);
+	}
+
+	public reference(): ReferenceType {
+		return new ReferenceType(this);
+	}
+
+	public constReference(): ConstReferenceType {
+		return new ConstReferenceType(this);
+	}
+
+	public qualify(qualifier: TypeQualifier): Type {
+		switch (qualifier) {
+		case TypeQualifier.Pointer:
+			return this.pointer();
+		case TypeQualifier.Reference:
+			return this.reference();
+		case TypeQualifier.ConstReference:
+			return this.constReference();
+		}
 	}
 
 	public expand(): VariadicExpansionType {
@@ -247,6 +272,30 @@ export class PointerType extends WrapperType {
 
 	public equals(other: Expression): boolean {
 		return other instanceof PointerType && this.getInner().equals(other.getInner());
+	}
+}
+
+export class ReferenceType extends WrapperType {
+	public write(writer: Writer, namespace?: Namespace): void {
+		this.getInner().write(writer, namespace);
+		writer.write("&");
+	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof ReferenceType && this.getInner().equals(other.getInner());
+	}
+}
+
+export class ConstReferenceType extends WrapperType {
+	public write(writer: Writer, namespace?: Namespace): void {
+		writer.write("const");
+		writer.writeSpace();
+		this.getInner().write(writer, namespace);
+		writer.write("&");
+	}
+
+	public equals(other: Expression): boolean {
+		return other instanceof ConstReferenceType && this.getInner().equals(other.getInner());
 	}
 }
 

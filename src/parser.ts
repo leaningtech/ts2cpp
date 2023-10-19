@@ -1,18 +1,18 @@
 import { Namespace, Flags } from "./namespace.js";
-import { TemplateDeclaration } from "./declaration.js";
+import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { Class, Visibility } from "./class.js";
 import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { File } from "./file.js";
-import { Type, ExternType, DeclaredType, ParameterType } from "./type.js";
+import { Type, NamedType, DeclaredType } from "./type.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import * as ts from "typescript";
 
-const VOID_TYPE = new ExternType("void");
-const BOOL_TYPE = new ExternType("bool");
-const DOUBLE_TYPE = new ExternType("double");
+const VOID_TYPE = new NamedType("void");
+const BOOL_TYPE = new NamedType("bool");
+const DOUBLE_TYPE = new NamedType("double");
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
 
 class Node {
@@ -64,7 +64,6 @@ export class Parser {
 	private readonly bigintType: BuiltinType;
 	private readonly symbolType: BuiltinType;
 	private readonly declaredTypes: TypeMap = new Map;
-	private typeParameterId: number = 1;
 
 	public constructor(program: ts.Program) {
 		this.typeChecker = program.getTypeChecker();
@@ -105,21 +104,20 @@ export class Parser {
 			};
 		} else {
 			return {
-				type: new ExternType(`client::${name}`),
+				type: new NamedType(`client::${name}`),
 			};
 		}
 	}
 
-	private getTypeParameter(type: ts.TypeParameter): ParameterType {
+	private getTypeParameter(type: ts.TypeParameter, id: number): NamedType {
 		let result = this.declaredTypes.get(type);
 
 		if (!result) {
-			const id = this.typeParameterId++;
-			result = new ParameterType(`_T${id}`, id);
+			result = new NamedType(`_T${id}`);
 			this.declaredTypes.set(type, result);
 		}
 
-		return result as ParameterType;
+		return result as NamedType;
 	}
 
 	private discover(self: Node, parent: ts.Node): void {
@@ -160,7 +158,7 @@ export class Parser {
 	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo): void {
 		const declaredType = types.get(type) ?? this.declaredTypes.get(type);
 
-		if (declaredType && declaredType instanceof ParameterType) {
+		if (declaredType && type.isTypeParameter()) {
 			info.addType(declaredType, TypeKind.Generic);
 		} else if (declaredType) {
 			info.addType(declaredType, TypeKind.Class);
@@ -227,9 +225,10 @@ export class Parser {
 		const typeParams = new Array;
 
 		if (decl.typeParameters) {
-			for (const typeParameter of decl.typeParameters) {
+			for (let i = 0; i < decl.typeParameters.length; i++) {
+				const typeParameter = decl.typeParameters[i];
 				const type = this.typeChecker.getTypeAtLocation(typeParameter);
-				typeParams.push(this.getTypeParameter(type).getName());
+				typeParams.push(this.getTypeParameter(type, i).getName());
 			}
 		}
 
@@ -242,6 +241,10 @@ export class Parser {
 		}
 
 		for (const parameter of decl.parameters) {
+			if (parameter.name.getText() === "this") {
+				continue;
+			}
+
 			const parameterInfo = this.getTypeNodeInfo(parameter.type!, types);
 
 			if (parameter.questionToken) {
@@ -267,7 +270,7 @@ export class Parser {
 
 				if (parameter.dotDotDotToken) {
 					funcObj.addVariadicTypeParameter("_Args");
-					funcObj.addParameter(new ParameterType("_Args", -1).expand(), name);
+					funcObj.addParameter(new NamedType("_Args").expand(), name);
 				} else {
 					funcObj.addParameter(type, name);
 				}

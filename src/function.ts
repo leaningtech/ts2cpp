@@ -120,7 +120,7 @@ export class Function extends TemplateDeclaration {
 		}
 
 		for (let i = 0; i < this.parameters.length; i++) {
-			if (!this.parameters[i].getType().equals(other.parameters[i].getType())) {
+			if (this.parameters[i].getType().key() !== other.parameters[i].getType().key()) {
 				return false;
 			}
 		}

@@ -30,6 +30,14 @@ export abstract class Declaration extends Namespace {
 	private state?: State;
 	private referenced: boolean = false;
 	private referenceData?: ReferenceData;
+	private id: number;
+
+	private static count: number = 0;
+
+	public constructor(name: string, parent?: Namespace) {
+		super(name, parent);
+		this.id = Declaration.count++;
+	}
 
 	public isResolved(state: State): boolean {
 		return this.state !== undefined && this.state >= state;
@@ -41,6 +49,10 @@ export abstract class Declaration extends Namespace {
 
 	public setState(state: State): void {
 		this.state = state;
+	}
+
+	public getId(): number {
+		return this.id;
 	}
 
 	public getNamespace(): Namespace | undefined {

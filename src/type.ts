@@ -5,10 +5,10 @@ import { Writer } from "./writer.js";
 export abstract class Expression {
 	public abstract getDeclarations(): ReadonlyArray<Declaration>;
 	public abstract write(writer: Writer, namespace?: Namespace): void;
-	public abstract equals(other: Expression): boolean;
+	public abstract key(): string;
 
 	public static enableIf(condition: Expression, type?: Type): TemplateType {
-		const result = new TemplateType(new ExternType("std::enable_if_t"));
+		const result = new TemplateType(new NamedType("std::enable_if_t"));
 		result.addTypeParameter(condition);
 
 		if (type) {
@@ -19,21 +19,21 @@ export abstract class Expression {
 	}
 
 	public static isSame(lhs: Type, rhs: Type): TemplateType {
-		const result = new TemplateType(new ExternType("std::is_same_v"));
+		const result = new TemplateType(new NamedType("std::is_same_v"));
 		result.addTypeParameter(lhs);
 		result.addTypeParameter(rhs);
 		return result;
 	}
 
 	public static isConvertible(from: Type, to: Type): TemplateType {
-		const result = new TemplateType(new ExternType("std::is_convertible_v"));
+		const result = new TemplateType(new NamedType("std::is_convertible_v"));
 		result.addTypeParameter(from);
 		result.addTypeParameter(to);
 		return result;
 	}
 
-	public static or(...children: ReadonlyArray<Expression>): OrExpression {
-		const result = new OrExpression();
+	public static or(...children: ReadonlyArray<Expression>): ValueExpression {
+		const result = new ValueExpression("||");
 
 		for (const expression of children) {
 			result.addChild(expression);
@@ -42,8 +42,8 @@ export abstract class Expression {
 		return result;
 	}
 
-	public static and(...children: ReadonlyArray<Expression>): AndExpression {
-		const result = new AndExpression();
+	public static and(...children: ReadonlyArray<Expression>): ValueExpression {
+		const result = new ValueExpression("&&");
 
 		for (const expression of children) {
 			result.addChild(expression);
@@ -53,8 +53,14 @@ export abstract class Expression {
 	}
 }
 
-export abstract class Value extends Expression {
+export class ValueExpression extends Expression {
 	private readonly children: Array<Expression> = new Array;
+	private readonly delim: string;
+
+	public constructor(delim: string) {
+		super();
+		this.delim = delim;
+	}
 
 	public getChildren(): ReadonlyArray<Expression> {
 		return this.children;
@@ -68,7 +74,7 @@ export abstract class Value extends Expression {
 		return this.children.flatMap(expression => expression.getDeclarations());
 	}
 
-	public writeDelim(writer: Writer, delim: string, namespace?: Namespace): void {
+	public write(writer: Writer, namespace?: Namespace): void {
 		if (this.children.length === 1) {
 			this.children[0].write(writer, namespace);
 		} else {
@@ -78,7 +84,7 @@ export abstract class Value extends Expression {
 			for (const expression of this.children) {
 				if (!first) {
 					writer.writeSpace(false);
-					writer.write(delim);
+					writer.write(this.delim);
 					writer.writeSpace(false);
 				}
 
@@ -90,80 +96,44 @@ export abstract class Value extends Expression {
 		}
 	}
 
-	public childrenEquals(other: Value): boolean {
-		if (this.children.length !== other.children.length) {
-			return false;
-		}
-
-		for (let i = 0; i < this.children.length; i++) {
-			if (!this.children[i].equals(other.children[i])) {
-				return false;
-			}
-		}
-
-		return true;
-	}
-}
-
-export class OrExpression extends Value {
-	public write(writer: Writer, namespace?: Namespace): void {
-		this.writeDelim(writer, "||", namespace);
-	}
-
-	public equals(other: Expression): boolean {
-		return other instanceof OrExpression && this.childrenEquals(other);
-	}
-}
-
-export class AndExpression extends Value {
-	public write(writer: Writer, namespace?: Namespace): void {
-		this.writeDelim(writer, "&&", namespace);
-	}
-
-	public equals(other: Expression): boolean {
-		return other instanceof AndExpression && this.childrenEquals(other);
+	public key(): string {
+		const children = this.children.map(child => child.key()).join("");
+		return `${this.delim[0]}${children};`;
 	}
 }
 
 export enum TypeQualifier {
-	Pointer,
-	ConstPointer,
-	Reference,
-	ConstReference,
+	Pointer = 1,
+	Reference = 2,
+	Const = 4,
+	Variadic = 8,
+	ConstPointer = Const | Pointer,
+	ConstReference = Const | Reference,
 }
 
 export abstract class Type extends Expression {
-	public pointer(): PointerType {
-		return new PointerType(this, false);
+	public qualify(qualifier: TypeQualifier): QualifiedType {
+		return new QualifiedType(this, qualifier);
+	}
+	
+	public pointer(): QualifiedType {
+		return this.qualify(TypeQualifier.Pointer);
 	}
 
-	public constPointer(): PointerType {
-		return new PointerType(this, true);
+	public constPointer(): QualifiedType {
+		return this.qualify(TypeQualifier.ConstPointer);
 	}
 
-	public reference(): ReferenceType {
-		return new ReferenceType(this, false);
+	public reference(): QualifiedType {
+		return this.qualify(TypeQualifier.Reference);
 	}
 
-	public constReference(): ReferenceType {
-		return new ReferenceType(this, true);
+	public constReference(): QualifiedType {
+		return this.qualify(TypeQualifier.ConstReference);
 	}
 
-	public qualify(qualifier: TypeQualifier): Type {
-		switch (qualifier) {
-		case TypeQualifier.Pointer:
-			return this.pointer();
-		case TypeQualifier.ConstPointer:
-			return this.constPointer();
-		case TypeQualifier.Reference:
-			return this.reference();
-		case TypeQualifier.ConstReference:
-			return this.constReference();
-		}
-	}
-
-	public expand(): VariadicExpansionType {
-		return new VariadicExpansionType(this);
+	public expand(): QualifiedType {
+		return this.qualify(TypeQualifier.Variadic);
 	}
 }
 
@@ -190,12 +160,12 @@ export class DeclaredType extends UnqualifiedType {
 		writer.write(this.declaration.getPath(namespace));
 	}
 
-	public equals(other: Expression): boolean {
-		return other instanceof DeclaredType && this.declaration === other.declaration;
+	public key(): string {
+		return `D${this.declaration.getId()}`;
 	}
 }
 
-export abstract class NamedType extends UnqualifiedType {
+export class NamedType extends UnqualifiedType {
 	private readonly name: string;
 
 	public constructor(name: string) {
@@ -214,110 +184,57 @@ export abstract class NamedType extends UnqualifiedType {
 	public write(writer: Writer, namespace?: Namespace): void {
 		writer.write(this.name);
 	}
-}
 
-export class ExternType extends NamedType {
-	public equals(other: Expression): boolean {
-		return other instanceof ExternType && this.getName() === other.getName();
+	public key(): string {
+		return `N${this.name};`;
 	}
 }
 
-export class ParameterType extends NamedType {
-	private readonly id: number;
-
-	public constructor(name: string, id: number) {
-		super(name);
-		this.id = id;
-	}
-
-	public getId(): number {
-		return this.id;
-	}
-
-	public equals(other: Expression): boolean {
-		return other instanceof ParameterType && this.id == other.id;
-	}
-}
-
-export abstract class WrapperType extends Type {
+export class QualifiedType extends Type {
 	private readonly inner: Type;
+	private readonly qualifier: TypeQualifier;
 
-	public constructor(inner: Type) {
+	public constructor(inner: Type, qualifier: TypeQualifier) {
 		super();
 		this.inner = inner;
+		this.qualifier = qualifier;
 	}
 
 	public getInner(): Type {
 		return this.inner;
 	}
 
+	public getQualifier(): TypeQualifier {
+		return this.qualifier;
+	}
+
 	public getDeclarations(): ReadonlyArray<Declaration> {
 		return this.inner.getDeclarations();
 	}
-}
-
-export class VariadicExpansionType extends WrapperType {
-	public write(writer: Writer, namespace?: Namespace): void {
-		this.getInner().write(writer, namespace);
-		writer.write("...");
-	}
-
-	public equals(other: Expression): boolean {
-		return other instanceof VariadicExpansionType && this.getInner().equals(other.getInner());
-	}
-}
-
-export class PointerType extends WrapperType {
-	private readonly constness: boolean;
-
-	public constructor(inner: Type, constness: boolean) {
-		super(inner);
-		this.constness = constness;
-	}
-
-	public isConst(): boolean {
-		return this.constness;
-	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
-		if (this.constness) {
+		if (this.qualifier & TypeQualifier.Const) {
 			writer.write("const");
 			writer.writeSpace();
 		}
 
 		this.getInner().write(writer, namespace);
-		writer.write("*");
-	}
 
-	public equals(other: Expression): boolean {
-		return other instanceof PointerType && this.constness === other.constness && this.getInner().equals(other.getInner());
-	}
-}
-
-export class ReferenceType extends WrapperType {
-	private readonly constness: boolean;
-
-	public constructor(inner: Type, constness: boolean) {
-		super(inner);
-		this.constness = constness;
-	}
-
-	public isConst(): boolean {
-		return this.constness;
-	}
-
-	public write(writer: Writer, namespace?: Namespace): void {
-		if (this.constness) {
-			writer.write("const");
-			writer.writeSpace();
+		if (this.qualifier & TypeQualifier.Pointer) {
+			writer.write("*");
+		}
+		
+		if (this.qualifier & TypeQualifier.Reference) {
+			writer.write("&");
 		}
 
-		this.getInner().write(writer, namespace);
-		writer.write("&");
+		if (this.qualifier & TypeQualifier.Variadic) {
+			writer.write("...");
+		}
 	}
-
-	public equals(other: Expression): boolean {
-		return other instanceof ReferenceType && this.constness === other.constness && this.getInner().equals(other.getInner());
+	
+	public key(): string {
+		return `Q${this.qualifier}${this.inner.key()}`;
 	}
 }
 
@@ -366,25 +283,10 @@ export class TemplateType extends Type {
 		writer.write(">");
 	}
 
-	public equals(other: Expression): boolean {
-		if (!(other instanceof TemplateType)) {
-			return false;
-		}
+	public key(): string {
+		const typeParameters = this.typeParameters
+			.map(typeParameter => typeParameter.key()).join("");
 
-		if (!this.inner.equals(other.inner)) {
-			return false;
-		}
-
-		if (this.typeParameters.length !== other.typeParameters.length) {
-			return false;
-		}
-
-		for (let i = 0; i < this.typeParameters.length; i++) {
-			if (!this.typeParameters[i].equals(other.typeParameters[i])) {
-				return false;
-			}
-		}
-
-		return true;
+		return `T${this.inner.key()}${typeParameters};`;
 	}
 }

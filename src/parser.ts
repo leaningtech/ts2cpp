@@ -393,6 +393,26 @@ export class Parser {
 				for (const funcObj of this.createFuncs(member, TYPES_EMPTY, typeId)) {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
+			} else if (ts.isPropertySignature(member)) {
+				const name = escapeName(member.name.getText());
+				const info = this.getTypeNodeInfo(member.type!, TYPES_EMPTY);
+				const readOnly = !!member.modifiers && member.modifiers
+					.some(modifier => ts.isReadonlyKeywordOrPlusOrMinusToken(modifier));
+
+				if (member.questionToken) {
+					info.setOptional();
+				}
+
+				const funcObj = new Function(`get_${name}`, info.asReturnType());
+				classObj.addMember(funcObj, Visibility.Public);
+
+				if (!readOnly) {
+					for (const parameter of info.asParameterTypes()) {
+						const funcObj = new Function(`set_${name}`);
+						funcObj.addParameter(parameter, name);
+						classObj.addMember(funcObj, Visibility.Public);
+					}
+				}
 			}
 		}
 

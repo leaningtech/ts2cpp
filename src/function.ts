@@ -7,10 +7,12 @@ import { Type } from "./type.js";
 export class Parameter {
 	private readonly type: Type;
 	private readonly name: string;
+	private readonly defaultValue?: string;
 
-	public constructor(type: Type, name: string) {
+	public constructor(type: Type, name: string, defaultValue?: string) {
 		this.type = type;
 		this.name = name;
+		this.defaultValue = defaultValue;
 	}
 
 	public getType(): Type {
@@ -20,11 +22,35 @@ export class Parameter {
 	public getName(): string {
 		return this.name;
 	}
+
+	public getDefaultValue(): string | undefined {
+		return this.defaultValue;
+	}
+}
+
+export class Initializer {
+	private readonly name: string;
+	private readonly value: string;
+
+	public constructor(name: string, value: string) {
+		this.name = name;
+		this.value = value;
+	}
+
+	public getName(): string {
+		return this.name;
+	}
+
+	public getValue(): string {
+		return this.value;
+	}
 }
 
 export class Function extends TemplateDeclaration {
 	private readonly parameters: Array<Parameter> = new Array;
+	private readonly initializers: Array<Initializer> = new Array;
 	private type?: Type;
+	private body?: string;
 
 	public constructor(name: string, type?: Type, namespace?: Namespace) {
 		super(name, namespace);
@@ -35,12 +61,28 @@ export class Function extends TemplateDeclaration {
 		return this.parameters;
 	}
 
-	public addParameter(type: Type, name: string): void {
-		this.parameters.push(new Parameter(type, name));
+	public addParameter(type: Type, name: string, defaultValue?: string): void {
+		this.parameters.push(new Parameter(type, name, defaultValue));
+	}
+
+	public getInitializers(): ReadonlyArray<Initializer> {
+		return this.initializers;
+	}
+
+	public addInitializer(name: string, value: string): void {
+		this.initializers.push(new Initializer(name, value));
 	}
 
 	public getType(): Type | undefined {
 		return this.type;
+	}
+
+	public getBody(): string | undefined {
+		return this.body;
+	}
+
+	public setBody(body: string): void {
+		this.body = body;
 	}
 
 	public maxState(): State {
@@ -80,6 +122,8 @@ export class Function extends TemplateDeclaration {
 		writer.write("(");
 
 		for (const parameter of this.parameters) {
+			const defaultValue = parameter.getDefaultValue();
+
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
@@ -88,6 +132,14 @@ export class Function extends TemplateDeclaration {
 			parameter.getType().write(writer, namespace);
 			writer.writeSpace();
 			writer.write(parameter.getName());
+
+			if (defaultValue) {
+				writer.writeSpace(false);
+				writer.write("=");
+				writer.writeSpace(false);
+				writer.write(defaultValue);
+			}
+
 			first = false;
 		}
 
@@ -98,8 +150,24 @@ export class Function extends TemplateDeclaration {
 			this.writeAttributes(writer);
 		}
 
-		writer.write(";");
-		writer.writeLine(false);
+		first = true;
+
+		for (const initializer of this.initializers) {
+			writer.write(first ? ":" : ",");
+			writer.writeSpace(false);
+			writer.write(initializer.getName());
+			writer.write("(");
+			writer.write(initializer.getValue());
+			writer.write(")");
+			first = false;
+		}
+
+		if (this.body !== undefined) {
+			writer.writeBody(this.body);
+		} else {
+			writer.write(";");
+			writer.writeLine(false);
+		}
 	}
 
 	public equals(other: Declaration): boolean {

@@ -19,11 +19,34 @@ export class Global implements Target {
 	}
 }
 
+export class Include {
+	private readonly name: string;
+	private readonly system: boolean;
+
+	public constructor(name: string, system: boolean) {
+		this.name = name;
+		this.system = system;
+	}
+
+	public getName(): string {
+		return this.name;
+	}
+
+	public isSystem(): boolean {
+		return this.system;
+	}
+}
+
 export class File {
 	private readonly globals: Array<Global> = new Array;
+	private readonly includes: Array<Include> = new Array;
 
 	public addGlobal(declaration: Declaration): void {
 		this.globals.push(new Global(declaration));
+	}
+
+	public addInclude(name: string, system: boolean) {
+		this.includes.push(new Include(name, system));
 	}
 
 	public removeDuplicates(): void {
@@ -32,6 +55,23 @@ export class File {
 
 	public write(writer: Writer): void {
 		let namespace: Namespace | undefined = undefined;
+
+		for (const include of this.includes) {
+			writer.write("#include");
+			writer.writeSpace(false);
+
+			if (include.isSystem()) {
+				writer.write("<");
+				writer.write(include.getName());
+				writer.write(">");
+			} else {
+				writer.write("\"");
+				writer.write(include.getName());
+				writer.write("\"");
+			}
+
+			writer.writeLine();
+		}
 
 		resolveDependencies(this.globals, (global, state) => {
 			const newNamespace = global.getDeclaration().getNamespace();

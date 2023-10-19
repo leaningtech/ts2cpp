@@ -8,6 +8,7 @@ import { File } from "./file.js";
 import { Type, NamedType, DeclaredType, TemplateType } from "./type.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
+import { addExtensions } from "./extensions.js";
 import * as ts from "typescript";
 
 const VOID_TYPE = new NamedType("void");
@@ -56,15 +57,15 @@ type VarDecl = ts.VariableDeclaration | ts.PropertySignature;
 type TypeDecl = ts.TypeAliasDeclaration;
 
 export class Parser {
-	private readonly file: File = new File;
 	private readonly typeChecker: ts.TypeChecker;
 	private readonly root: Node = new Node;
-	private readonly objectType: BuiltinType;
-	private readonly stringType: BuiltinType;
-	private readonly bigintType: BuiltinType;
-	private readonly symbolType: BuiltinType;
 	private readonly declaredTypes: TypeMap = new Map;
 	private readonly declaredTemplateTypes: TypeMap = new Map;
+	public readonly file: File = new File;
+	public readonly objectBuiltin: BuiltinType;
+	public readonly stringBuiltin: BuiltinType;
+	public readonly bigintBuiltin: BuiltinType;
+	public readonly symbolBuiltin: BuiltinType;
 
 	public constructor(program: ts.Program) {
 		this.typeChecker = program.getTypeChecker();
@@ -75,24 +76,20 @@ export class Parser {
 			this.discover(this.root, sourceFile);
 		}
 
-		this.objectType = this.getBuiltinType("Object");
-		this.stringType = this.getBuiltinType("String");
-		this.bigintType = this.getBuiltinType("BigInt");
-		this.symbolType = this.getBuiltinType("Symbol");
+		this.objectBuiltin = this.getBuiltinType("Object");
+		this.stringBuiltin = this.getBuiltinType("String");
+		this.bigintBuiltin = this.getBuiltinType("BigInt");
+		this.symbolBuiltin = this.getBuiltinType("Symbol");
 		this.generate(this.root, namespace);
 		this.file.removeDuplicates();
 
-		if (this.objectType.classObj) {
-			this.objectType.classObj.addAttribute("cheerp::client_layout");
+		if (this.objectBuiltin.classObj) {
+			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
 		}
 	}
 
 	public getFile(): File {
 		return this.file;
-	}
-
-	public getObjectType(): Type {
-		return this.objectType.type;
 	}
 
 	private getBuiltinType(name: string): BuiltinType {
@@ -189,50 +186,45 @@ export class Parser {
 		} else if (type.flags & ts.TypeFlags.Undefined) {
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.StringLike) {
-			info.addType(this.stringType.type, TypeKind.Class);
+			info.addType(this.stringBuiltin.type, TypeKind.Class);
 		} else  if (type.flags & ts.TypeFlags.BigIntLike) {
-			info.addType(this.bigintType.type, TypeKind.Class);
+			info.addType(this.bigintBuiltin.type, TypeKind.Class);
 		} else if (type.flags & ts.TypeFlags.ESSymbolLike) {
-			info.addType(this.symbolType.type, TypeKind.Class);
+			info.addType(this.symbolBuiltin.type, TypeKind.Class);
 		} else if (type.isUnion()) {
 			for (const inner of type.types) {
 				this.addTypeInfo(inner, types, info);
 			}
-		} else {
-			if (!(type.flags & ts.TypeFlags.Object)) {
-				info.addType(this.objectType.type, TypeKind.Class);
-				return;
-			}
-
+		} else if (type.flags & ts.TypeFlags.Object) {
 			const objectType = type as ts.ObjectType;
 
-			if (!(objectType.objectFlags & ts.ObjectFlags.Reference)) {
-				info.addType(this.objectType.type, TypeKind.Class);
-				return;
+			if (objectType.objectFlags & ts.ObjectFlags.Reference) {
+				const typeRef = objectType as ts.TypeReference;
+				const target = this.declaredTypes.get(typeRef.target);
+
+				if (!target) {
+					info.addType(this.objectBuiltin.type, TypeKind.Class);
+					return;
+				}
+
+				const templateType = new TemplateType(target);
+				this.declaredTemplateTypes.set(type, templateType);
+
+				for (const typeArg of this.typeChecker.getTypeArguments(typeRef)) {
+					const info = this.getTypeInfo(typeArg, types);
+					templateType.addTypeParameter(info.asTypeParameter());
+				}
+		
+				info.addType(templateType, TypeKind.Class);
+			} else {
+				info.addType(this.objectBuiltin.type, TypeKind.Class);
 			}
-
-			const typeRef = objectType as ts.TypeReference;
-			const target = this.declaredTypes.get(typeRef.target);
-
-			if (!target) {
-				info.addType(this.objectType.type, TypeKind.Class);
-				return;
-			}
-
-			const templateType = new TemplateType(target);
-			this.declaredTemplateTypes.set(type, templateType);
-
-			for (const typeArg of this.typeChecker.getTypeArguments(typeRef)) {
-				const info = this.getTypeInfo(typeArg, types);
-				templateType.addTypeParameter(info.asTypeParameter());
-			}
-			
-			info.addType(templateType, TypeKind.Class);
+		} else {
+			info.addType(this.objectBuiltin.type, TypeKind.Class);
 		}
 	}
 
 	private getTypeInfo(type: ts.Type, types: TypeMap): TypeInfo {
-		console.log(type);
 		const info = new TypeInfo(this);
 		this.addTypeInfo(type, types, info);
 		return info;
@@ -404,8 +396,8 @@ export class Parser {
 			}
 		}
 
-		if (classObj.getBases().length === 0 && this.objectType.classObj !== classObj) {
-			classObj.addBase(this.objectType.type, Visibility.Public);
+		if (classObj.getBases().length === 0 && this.objectBuiltin.classObj !== classObj) {
+			classObj.addBase(this.objectBuiltin.type, Visibility.Public);
 		}
 
 		for (const child of node.children.values()) {
@@ -472,5 +464,6 @@ export class Parser {
 export function parse(names: ReadonlyArray<string>): File {
 	const program = ts.createProgram(names, {});
 	const parser = new Parser(program);
+	addExtensions(parser);
 	return parser.getFile();
 }

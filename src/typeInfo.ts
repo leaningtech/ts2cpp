@@ -39,7 +39,7 @@ export class TypeInfo {
 	private optional: boolean = false;
 
 	public constructor(parser: Parser) {
-		this.objectType = parser.getObjectType();
+		this.objectType = parser.objectBuiltin.type;
 	}
 
 	public getTypes(): ReadonlyArray<TypeData> {

@@ -66,4 +66,17 @@ export class Writer {
 		this.write(semicolon ? "};" : "}");
 		this.writeLine(false);
 	}
+
+	public writeBody(body: string, semicolon: boolean = false): void {
+		this.writeBlockOpen();
+
+		if (body !== "") {
+			for (const line of body.trim().split("\n")) {
+				this.write(this.options.pretty ? line : line.trim());
+				this.writeLine(false);
+			}
+		}
+
+		this.writeBlockClose(semicolon);
+	}
 }

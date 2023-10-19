@@ -1,5 +1,5 @@
 import { Declaration } from "./declaration.js";
-import { State, Target, resolveDependencies } from "./target.js";
+import { State, Target, resolveDependencies, removeDuplicates } from "./target.js";
 import { Writer } from "./writer.js";
 import { Namespace } from "./namespace.js";
 
@@ -24,6 +24,10 @@ export class File {
 
 	public addGlobal(declaration: Declaration): void {
 		this.globals.push(new Global(declaration));
+	}
+
+	public removeDuplicates(): void {
+		this.globals.splice(0, this.globals.length, ...removeDuplicates(this.globals));
 	}
 
 	public write(writer: Writer): void {

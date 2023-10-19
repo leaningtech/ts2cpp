@@ -4,7 +4,7 @@ import { Type } from "./type.js";
 import { State, Dependencies, ReasonKind, Dependency } from "./target.js";
 import { Writer } from "./writer.js";
 
-export class Alias extends TemplateDeclaration {
+export class TypeAlias extends TemplateDeclaration {
 	private type: Type;
 
 	public constructor(name: string, type: Type, namespace?: Namespace) {
@@ -50,6 +50,6 @@ export class Alias extends TemplateDeclaration {
 	}
 
 	public equals(other: Declaration): boolean {
-		return other instanceof Alias && this.getName() === other.getName();
+		return other instanceof TypeAlias && this.getName() === other.getName();
 	}
 }

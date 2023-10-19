@@ -1,6 +1,6 @@
 import { Namespace } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies } from "./target.js";
+import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
 import { Type } from "./type.js";
 import { Writer } from "./writer.js";
 
@@ -78,35 +78,7 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public removeDuplicates(): void {
-		const memberMap = new Map<string, Array<Member>>;
-		const newMembers = new Array<Member>;
-
-		for (const member of this.members) {
-			const declaration = member.getDeclaration();
-			const name = declaration.getName();
-			let memberList = memberMap.get(name);
-			let duplicate = false;
-
-			if (!memberList) {
-				memberList = new Array;
-				memberMap.set(name, memberList);
-			}
-
-			for (const other of memberList) {
-				if (declaration.equals(other.getDeclaration())) {
-					duplicate = true;
-					declaration.setParent(undefined);
-					break;
-				}
-			}
-
-			if (!duplicate) {
-				memberList.push(member);
-				newMembers.push(member);
-			}
-		}
-
-		this.members.splice(0, this.members.length, ...newMembers);
+		this.members.splice(0, this.members.length, ...removeDuplicates(this.members));
 	}
 
 	public maxState(): State {

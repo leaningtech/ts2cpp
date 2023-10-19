@@ -127,27 +127,34 @@ export class AndExpression extends Value {
 
 export enum TypeQualifier {
 	Pointer,
+	ConstPointer,
 	Reference,
 	ConstReference,
 }
 
 export abstract class Type extends Expression {
 	public pointer(): PointerType {
-		return new PointerType(this);
+		return new PointerType(this, false);
+	}
+
+	public constPointer(): PointerType {
+		return new PointerType(this, true);
 	}
 
 	public reference(): ReferenceType {
-		return new ReferenceType(this);
+		return new ReferenceType(this, false);
 	}
 
-	public constReference(): ConstReferenceType {
-		return new ConstReferenceType(this);
+	public constReference(): ReferenceType {
+		return new ReferenceType(this, true);
 	}
 
 	public qualify(qualifier: TypeQualifier): Type {
 		switch (qualifier) {
 		case TypeQualifier.Pointer:
 			return this.pointer();
+		case TypeQualifier.ConstPointer:
+			return this.constPointer();
 		case TypeQualifier.Reference:
 			return this.reference();
 		case TypeQualifier.ConstReference:
@@ -157,10 +164,6 @@ export abstract class Type extends Expression {
 
 	public expand(): VariadicExpansionType {
 		return new VariadicExpansionType(this);
-	}
-
-	public isVoid(): boolean {
-		return false;
 	}
 }
 
@@ -217,10 +220,6 @@ export class ExternType extends NamedType {
 	public equals(other: Expression): boolean {
 		return other instanceof ExternType && this.getName() === other.getName();
 	}
-
-	public isVoid(): boolean {
-		return this.getName() === "void";
-	}
 }
 
 export class ParameterType extends NamedType {
@@ -229,6 +228,10 @@ export class ParameterType extends NamedType {
 	public constructor(name: string, id: number) {
 		super(name);
 		this.id = id;
+	}
+
+	public getId(): number {
+		return this.id;
 	}
 
 	public equals(other: Expression): boolean {
@@ -265,37 +268,56 @@ export class VariadicExpansionType extends WrapperType {
 }
 
 export class PointerType extends WrapperType {
+	private readonly constness: boolean;
+
+	public constructor(inner: Type, constness: boolean) {
+		super(inner);
+		this.constness = constness;
+	}
+
+	public isConst(): boolean {
+		return this.constness;
+	}
+
 	public write(writer: Writer, namespace?: Namespace): void {
+		if (this.constness) {
+			writer.write("const");
+			writer.writeSpace();
+		}
+
 		this.getInner().write(writer, namespace);
 		writer.write("*");
 	}
 
 	public equals(other: Expression): boolean {
-		return other instanceof PointerType && this.getInner().equals(other.getInner());
+		return other instanceof PointerType && this.constness === other.constness && this.getInner().equals(other.getInner());
 	}
 }
 
 export class ReferenceType extends WrapperType {
+	private readonly constness: boolean;
+
+	public constructor(inner: Type, constness: boolean) {
+		super(inner);
+		this.constness = constness;
+	}
+
+	public isConst(): boolean {
+		return this.constness;
+	}
+
 	public write(writer: Writer, namespace?: Namespace): void {
+		if (this.constness) {
+			writer.write("const");
+			writer.writeSpace();
+		}
+
 		this.getInner().write(writer, namespace);
 		writer.write("&");
 	}
 
 	public equals(other: Expression): boolean {
-		return other instanceof ReferenceType && this.getInner().equals(other.getInner());
-	}
-}
-
-export class ConstReferenceType extends WrapperType {
-	public write(writer: Writer, namespace?: Namespace): void {
-		writer.write("const");
-		writer.writeSpace();
-		this.getInner().write(writer, namespace);
-		writer.write("&");
-	}
-
-	public equals(other: Expression): boolean {
-		return other instanceof ConstReferenceType && this.getInner().equals(other.getInner());
+		return other instanceof ReferenceType && this.constness === other.constness && this.getInner().equals(other.getInner());
 	}
 }
 

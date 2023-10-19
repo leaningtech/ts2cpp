@@ -185,3 +185,32 @@ class DependencyResolver<T extends Target> {
 export function resolveDependencies<T extends Target>(targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {
 	new DependencyResolver(targets, resolve).resolveDependencies();
 }
+
+export function removeDuplicates<T extends Target>(targets: ReadonlyArray<T>): Array<T> {
+	const targetMap = new Map<string, Array<T>>;
+	const newTargets = new Array<T>;
+
+outer:
+	for (const target of targets) {
+		const declaration = target.getDeclaration();
+		const name = declaration.getName();
+		let targetList = targetMap.get(name);
+
+		if (!targetList) {
+			targetList = new Array;
+			targetMap.set(name, targetList);
+		}
+
+		for (const other of targetList) {
+			if (declaration.equals(other.getDeclaration())) {
+				declaration.setParent(undefined);
+				continue outer;
+			}
+		}
+
+		targetList.push(target);
+		newTargets.push(target);
+	}
+
+	return newTargets;
+}

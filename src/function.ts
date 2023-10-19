@@ -43,10 +43,6 @@ export class Function extends TemplateDeclaration {
 		return this.type;
 	}
 
-	public setType(type?: Type): void {
-		this.type = type;
-	}
-
 	public maxState(): State {
 		return State.Partial;
 	}

@@ -16,10 +16,6 @@ export class Variable extends Declaration {
 		return this.type;
 	}
 
-	public setType(type: Type): void {
-		this.type = type;
-	}
-
 	public maxState(): State {
 		return State.Partial;
 	}

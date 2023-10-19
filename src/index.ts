@@ -1,11 +1,14 @@
 import { Writer } from "./writer.js";
 import { parseNode, parseFile } from "./parse.js";
+import { parse } from "./parser.js";
 import { Reason, ReasonKind } from "./target.js";
 
 const writer = new Writer("clientlib.h", { pretty: true });
+const file = parse(["/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts"]);
+// const file = parse(["test.d.ts"]);
 // const node = parseNode(["test.d.ts"]);
-const node = parseNode(["/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts"]);
-const file = parseFile(node);
+// const node = parseNode(["/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts"]);
+// const file = parseFile(node);
 
 try {
 	file.write(writer);

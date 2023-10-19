@@ -6,8 +6,11 @@ import { Variable } from "./variable.js";
 import { Function } from "./function.js";
 import { Type, ExternType, DeclaredType, ParameterType, TemplateType, UnqualifiedType, TypeQualifier } from "./type.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { Alias } from "./alias.js";
-import { getName } from "./name.js";
+import { TypeAlias } from "./typeAlias.js";
+
+function getName(sourceFile: ts.SourceFile, name?: ts.Node): [string, string] {
+	return ["", ""]
+}
 
 class Node {
 	private readonly parent?: Node;
@@ -16,7 +19,7 @@ class Node {
 	private functionDeclaration?: [ts.SourceFile, ts.FunctionDeclaration];
 	private variableDeclaration?: [ts.SourceFile, ts.VariableDeclaration];
 	private typeAliasDeclaration?: [ts.SourceFile, ts.TypeAliasDeclaration];
-	private typeAliasObject?: Alias;
+	private typeAliasObject?: TypeAlias;
 	private classObject?: Class;
 
 	public constructor(parent?: Node) {
@@ -58,7 +61,7 @@ class Node {
 		return this.typeAliasDeclaration;
 	}
 
-	public getTypeAliasObject(): Alias | undefined {
+	public getTypeAliasObject(): TypeAlias | undefined {
 		return this.typeAliasObject;
 	}
 
@@ -116,7 +119,7 @@ class Node {
 				const [realName, name] = getName(sourceFile, node.name);
 				const child = this.getChild(name);
 				child.typeAliasDeclaration = [sourceFile, node];
-				child.typeAliasObject = new Alias(name, new ExternType("void"));
+				child.typeAliasObject = new TypeAlias(name, new ExternType("void"));
 			}
 		});
 	}
@@ -157,7 +160,7 @@ class Parser {
 	}
 
 	private createTemplateType(node: Node, sourceFile: ts.SourceFile, type: UnqualifiedType, typeArguments?: ts.NodeArray<ts.TypeNode>, overrides?: ReadonlyMap<string, Type>): Type {
-		if (typeArguments && type instanceof DeclaredType && type.getDeclaration() instanceof Alias) {
+		if (typeArguments && type instanceof DeclaredType && type.getDeclaration() instanceof TypeAlias) {
 			const templateType = new TemplateType(type);
 
 			for (const typeArgument of typeArguments) {
@@ -362,7 +365,7 @@ class Parser {
 		return result;
 	}
 
-	private addTypeAlias(node: Node, declaration: [ts.SourceFile, ts.TypeAliasDeclaration], typeAliasObject: Alias, overrides: ReadonlyMap<string, Type>): void {
+	private addTypeAlias(node: Node, declaration: [ts.SourceFile, ts.TypeAliasDeclaration], typeAliasObject: TypeAlias, overrides: ReadonlyMap<string, Type>): void {
 		const [sourceFile, decl] = declaration;
 		overrides = this.setOverrides(sourceFile, overrides, decl.typeParameters);
 		typeAliasObject.setType(this.getType(node, sourceFile, decl.type!, TypeQualifier.Pointer, overrides));
@@ -506,9 +509,11 @@ class Parser {
 			const variableObject = this.createVariable(name, node, variableDeclaration, TypeQualifier.Reference, new Map, namespace);
 			variableObject.addFlags(Flags.Extern);
 
+			/*
 			if (!variableObject.getType().isVoid()) {
 				this.file.addGlobal(variableObject);
 			}
+			*/
 		} else {
 			const newNamespace = new Namespace(name, namespace);
 

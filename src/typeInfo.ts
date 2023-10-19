@@ -59,7 +59,11 @@ export class TypeInfo {
 	}
 
 	public asTypeParameter(): Type {
-		return this.objectType;
+		if (this.types.length === 1) {
+			return this.types[0].qualify(TypeQualifier.Pointer, this.optional);
+		} else {
+			return this.objectType.pointer();
+		}
 	}
 
 	public asBaseType(): Type {

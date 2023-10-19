@@ -5,7 +5,7 @@ import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { File } from "./file.js";
-import { Type, NamedType, DeclaredType } from "./type.js";
+import { Type, NamedType, DeclaredType, TemplateType } from "./type.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import * as ts from "typescript";
@@ -64,6 +64,7 @@ export class Parser {
 	private readonly bigintType: BuiltinType;
 	private readonly symbolType: BuiltinType;
 	private readonly declaredTypes: TypeMap = new Map;
+	private readonly declaredTemplateTypes: TypeMap = new Map;
 
 	public constructor(program: ts.Program) {
 		this.typeChecker = program.getTypeChecker();
@@ -156,10 +157,27 @@ export class Parser {
 	}
 
 	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo): void {
+		const declaredTemplateType = this.declaredTemplateTypes.get(type);
 		const declaredType = types.get(type) ?? this.declaredTypes.get(type);
 
-		if (declaredType && type.isTypeParameter()) {
+		if (declaredTemplateType) {
+			info.addType(declaredTemplateType, TypeKind.Class);
+		} else if (declaredType && type.isTypeParameter()) {
 			info.addType(declaredType, TypeKind.Generic);
+		} else if (declaredType && type.isClassOrInterface()) {
+			if (type.typeParameters && type.typeParameters.length > 0) {
+				const templateType = new TemplateType(declaredType);
+				this.declaredTemplateTypes.set(type, templateType);
+
+				for (const typeParam of type.typeParameters) {
+					const info = this.getTypeInfo(typeParam, types);
+					templateType.addTypeParameter(info.asTypeParameter());
+				}
+
+				info.addType(templateType, TypeKind.Class);
+			} else {
+				info.addType(declaredType, TypeKind.Class);
+			}
 		} else if (declaredType) {
 			info.addType(declaredType, TypeKind.Class);
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
@@ -181,11 +199,40 @@ export class Parser {
 				this.addTypeInfo(inner, types, info);
 			}
 		} else {
-			info.addType(this.objectType.type, TypeKind.Class);
+			if (!(type.flags & ts.TypeFlags.Object)) {
+				info.addType(this.objectType.type, TypeKind.Class);
+				return;
+			}
+
+			const objectType = type as ts.ObjectType;
+
+			if (!(objectType.objectFlags & ts.ObjectFlags.Reference)) {
+				info.addType(this.objectType.type, TypeKind.Class);
+				return;
+			}
+
+			const typeRef = objectType as ts.TypeReference;
+			const target = this.declaredTypes.get(typeRef.target);
+
+			if (!target) {
+				info.addType(this.objectType.type, TypeKind.Class);
+				return;
+			}
+
+			const templateType = new TemplateType(target);
+			this.declaredTemplateTypes.set(type, templateType);
+
+			for (const typeArg of this.typeChecker.getTypeArguments(typeRef)) {
+				const info = this.getTypeInfo(typeArg, types);
+				templateType.addTypeParameter(info.asTypeParameter());
+			}
+			
+			info.addType(templateType, TypeKind.Class);
 		}
 	}
 
 	private getTypeInfo(type: ts.Type, types: TypeMap): TypeInfo {
+		console.log(type);
 		const info = new TypeInfo(this);
 		this.addTypeInfo(type, types, info);
 		return info;
@@ -218,17 +265,16 @@ export class Parser {
 		return [type.symbol, TYPES_EMPTY];
 	}
 
-	private *createFuncs(decl: FuncDecl, types: TypeMap, node?: Child): Generator<Function> {
+	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, node?: Child): Generator<Function> {
 		let name, returnType;
 		let params = new Array(new Array);
 		let questionParams = new Array;
 		const typeParams = new Array;
 
 		if (decl.typeParameters) {
-			for (let i = 0; i < decl.typeParameters.length; i++) {
-				const typeParameter = decl.typeParameters[i];
+			for (const typeParameter of decl.typeParameters) {
 				const type = this.typeChecker.getTypeAtLocation(typeParameter);
-				typeParams.push(this.getTypeParameter(type, i).getName());
+				typeParams.push(this.getTypeParameter(type, typeId++).getName());
 			}
 		}
 
@@ -291,12 +337,12 @@ export class Parser {
 		return new Variable(name, info.asVariableType(member));
 	}
 
-	private generateType(decl: TypeDecl, types: TypeMap, typeObj: TypeAlias): void {
+	private generateType(decl: TypeDecl, types: TypeMap, typeId: number, typeObj: TypeAlias): void {
 		const info = this.getTypeNodeInfo(decl.type, types);
 		typeObj.setType(info.asTypeAlias());
 	}
 
-	private generateConstructor(node: Child, classObj: Class, decl: VarDecl): void {
+	private generateConstructor(node: Child, classObj: Class, typeId: number, decl: VarDecl): void {
 		const type = this.typeChecker.getTypeFromTypeNode(decl.type!);
 		const [symbol, types] = this.getSymbol(type, TYPES_EMPTY);
 		const members = (symbol.declarations ?? new Array)
@@ -305,12 +351,12 @@ export class Parser {
 
 		for (const member of members) {
 			if (ts.isMethodSignature(member)) {
-				for (const funcObj of this.createFuncs(member, types)) {
+				for (const funcObj of this.createFuncs(member, types, typeId)) {
 					funcObj.addFlags(Flags.Static);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isConstructSignatureDeclaration(member)) {
-				for (const funcObj of this.createFuncs(member, types, node)) {
+				for (const funcObj of this.createFuncs(member, types, typeId, node)) {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member)) {
@@ -318,7 +364,7 @@ export class Parser {
 				const child = node.children.get(name);
 
 				if (child && child.classObj) {
-					this.generateConstructor(child, child.classObj, member);
+					this.generateConstructor(child, child.classObj, typeId, member);
 				} else {
 					const varObj = this.createVar(member, types, true);
 					varObj.addFlags(Flags.Static);
@@ -328,25 +374,33 @@ export class Parser {
 		}
 	}
 
-	private generateClass(node: Child, classObj: Class): void {
+	private generateClass(node: Child, classObj: Class, typeId: number): void {
+		if (node.interfaceDecls.length > 0) {
+			const type = this.typeChecker.getTypeAtLocation(node.interfaceDecls[0]);
+			const interfaceType = type as ts.InterfaceType;
+			const baseTypes = this.typeChecker.getBaseTypes(interfaceType);
+
+			for (const baseType of baseTypes) {
+				const info = this.getTypeInfo(baseType, TYPES_EMPTY);
+				classObj.addBase(info.asBaseType(), Visibility.Public);
+			}
+
+			if (interfaceType.typeParameters) {
+				for (const type of interfaceType.typeParameters) {
+					const typeParam = this.getTypeParameter(type, typeId++).getName();
+					classObj.addTypeParameter(typeParam);
+				}
+			}
+		}
+
 		const members = node.interfaceDecls
 			.flatMap(decl => decl.members);
 
 		for (const member of members) {
 			if (ts.isMethodSignature(member)) {
-				for (const funcObj of this.createFuncs(member, TYPES_EMPTY)) {
+				for (const funcObj of this.createFuncs(member, TYPES_EMPTY, typeId)) {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
-			}
-		}
-
-		if (node.interfaceDecls.length > 0) {
-			const type = this.typeChecker.getTypeAtLocation(node.interfaceDecls[0]);
-			const baseTypes = this.typeChecker.getBaseTypes(type as ts.InterfaceType);
-
-			for (const baseType of baseTypes) {
-				const info = this.getTypeInfo(baseType, TYPES_EMPTY);
-				classObj.addBase(info.asBaseType(), Visibility.Public);
 			}
 		}
 
@@ -356,10 +410,10 @@ export class Parser {
 
 		for (const child of node.children.values()) {
 			if (child.classObj) {
-				this.generateClass(child, child.classObj);
+				this.generateClass(child, child.classObj, typeId);
 				classObj.addMember(child.classObj, Visibility.Public);
 			} else if (child.funcDecl) {
-				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY)) {
+				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY, typeId)) {
 					funcObj.addFlags(Flags.Static);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
@@ -368,17 +422,17 @@ export class Parser {
 				varObj.addFlags(Flags.Static);
 				classObj.addMember(varObj, Visibility.Public);
 			} else if (child.typeDecl && child.typeObj) {
-				this.generateType(child.typeDecl, TYPES_EMPTY, child.typeObj);
+				this.generateType(child.typeDecl, TYPES_EMPTY, typeId, child.typeObj);
 				classObj.addMember(child.typeObj, Visibility.Public);
 			} else {
 				child.classObj = new Class(child.name);
-				this.generateClass(child, child.classObj);
+				this.generateClass(child, child.classObj, typeId);
 				classObj.addMember(child.classObj, Visibility.Public);
 			}
 		}
 
 		if (node.varDecl) {
-			this.generateConstructor(node, classObj, node.varDecl);
+			this.generateConstructor(node, classObj, typeId, node.varDecl);
 		}
 
 		classObj.removeDuplicates();
@@ -388,11 +442,11 @@ export class Parser {
 	private generate(node: Node, namespace?: Namespace): void {
 		for (const child of node.children.values()) {
 			if (child.classObj) {
-				this.generateClass(child, child.classObj);
+				this.generateClass(child, child.classObj, 0);
 				child.classObj.setParent(namespace);
 				child.classObj.computeReferences();
 			} else if (child.funcDecl) {
-				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY)) {
+				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY, 0)) {
 					funcObj.setParent(namespace);
 					this.file.addGlobal(funcObj);
 				}
@@ -405,7 +459,7 @@ export class Parser {
 					this.file.addGlobal(varObj);
 				}
 			} else if (child.typeDecl && child.typeObj) {
-				this.generateType(child.typeDecl, TYPES_EMPTY, child.typeObj);
+				this.generateType(child.typeDecl, TYPES_EMPTY, 0, child.typeObj);
 				child.typeObj.setParent(namespace);
 				this.file.addGlobal(child.typeObj);
 			} else {

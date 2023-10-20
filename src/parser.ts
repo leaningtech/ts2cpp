@@ -5,7 +5,7 @@ import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { File } from "./file.js";
-import { Expression, Type, NamedType, DeclaredType, TemplateType } from "./type.js";
+import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType } from "./type.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { addExtensions } from "./extensions.js";
@@ -156,6 +156,8 @@ export class Parser {
 	}
 
 	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo): void {
+		// TODO: type literals and literal types
+
 		const declaredTemplateType = this.declaredTemplateTypes.get(type);
 		const declaredType = types.get(type) ?? this.declaredTypes.get(type);
 
@@ -265,7 +267,7 @@ export class Parser {
 		let questionParams = new Array;
 		const typeParams = new Array;
 
-		// TODO: type constraints
+		// TODO: remove unsused type parameters
 		// TODO: union type
 
 		if (decl.typeParameters) {
@@ -281,6 +283,27 @@ export class Parser {
 			name = escapeName(decl.name!.getText());
 			const returnInfo = this.getTypeNodeInfo(decl.type!, types);
 			returnType = returnInfo.asReturnType();
+		}
+
+		if (decl.typeParameters) {
+			const expression = new ValueExpression(ExpressionKind.LogicalAnd);
+
+			for (const typeParameter of decl.typeParameters) {
+				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
+				const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);
+				const typeParam = this.declaredTypes.get(typeParamType)!;
+
+				// TODO: remove duplicate constraints
+
+				if (constraint) {
+					const constraintInfo = this.getTypeNodeInfo(constraint, TYPES_EMPTY);
+					expression.addChild(constraintInfo.asTypeConstraint(typeParam));
+				}
+			}
+
+			if (expression.getChildren().length > 0) {
+				returnType = Type.enableIf(expression, returnType);
+			}
 		}
 
 		for (const parameter of decl.parameters) {
@@ -393,8 +416,10 @@ export class Parser {
 
 			for (const typeParameter of typeParameters) {
 				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
-				const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);;
+				const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);
 				const typeParam = this.declaredTypes.get(typeParamType)!;
+
+				// TODO: remove duplicate constraints
 
 				if (constraint) {
 					const constraintInfo = this.getTypeNodeInfo(constraint, TYPES_EMPTY);

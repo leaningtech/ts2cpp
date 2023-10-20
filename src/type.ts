@@ -33,7 +33,7 @@ export abstract class Expression {
 	}
 
 	public static or(...children: ReadonlyArray<Expression>): ValueExpression {
-		const result = new ValueExpression("||");
+		const result = new ValueExpression(ExpressionKind.LogicalOr);
 
 		for (const expression of children) {
 			result.addChild(expression);
@@ -43,7 +43,7 @@ export abstract class Expression {
 	}
 
 	public static and(...children: ReadonlyArray<Expression>): ValueExpression {
-		const result = new ValueExpression("&&");
+		const result = new ValueExpression(ExpressionKind.LogicalAnd);
 
 		for (const expression of children) {
 			result.addChild(expression);
@@ -53,13 +53,18 @@ export abstract class Expression {
 	}
 }
 
+export enum ExpressionKind {
+	LogicalAnd,
+	LogicalOr,
+};
+
 export class ValueExpression extends Expression {
 	private readonly children: Array<Expression> = new Array;
-	private readonly delim: string;
+	private readonly kind: ExpressionKind;
 
-	public constructor(delim: string) {
+	public constructor(kind: ExpressionKind) {
 		super();
-		this.delim = delim;
+		this.kind = kind;
 	}
 
 	public getChildren(): ReadonlyArray<Expression> {
@@ -67,7 +72,9 @@ export class ValueExpression extends Expression {
 	}
 
 	public addChild(expression: Expression): void {
-		this.children.push(expression);
+		if (!this.children.map(child => child.key()).includes(expression.key())) {
+			this.children.push(expression);
+		}
 	}
 	
 	public getDeclarations(): ReadonlyArray<Declaration> {
@@ -75,7 +82,16 @@ export class ValueExpression extends Expression {
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
-		if (this.children.length === 1) {
+		if (this.children.length === 0) {
+			switch (this.kind) {
+			case ExpressionKind.LogicalAnd:
+				writer.write("true");
+				break;
+			case ExpressionKind.LogicalOr:
+				writer.write("false");
+				break;
+			}
+		} else if (this.children.length === 1) {
 			this.children[0].write(writer, namespace);
 		} else {
 			let first = true;
@@ -84,7 +100,16 @@ export class ValueExpression extends Expression {
 			for (const expression of this.children) {
 				if (!first) {
 					writer.writeSpace(false);
-					writer.write(this.delim);
+
+					switch (this.kind) {
+					case ExpressionKind.LogicalAnd:
+						writer.write("&&");
+						break;
+					case ExpressionKind.LogicalOr:
+						writer.write("||");
+						break;
+					}
+
 					writer.writeSpace(false);
 				}
 
@@ -98,7 +123,13 @@ export class ValueExpression extends Expression {
 
 	public key(): string {
 		const children = this.children.map(child => child.key()).join("");
-		return `${this.delim[0]}${children};`;
+
+		switch (this.kind) {
+		case ExpressionKind.LogicalAnd:
+			return `&${children};`;
+		case ExpressionKind.LogicalOr:
+			return `|${children};`;
+		}
 	}
 }
 

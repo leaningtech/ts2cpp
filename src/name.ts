@@ -1,3 +1,4 @@
+const DIGITS = "0123456789";
 const CHARSET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
 const RESERVED = [
@@ -104,7 +105,7 @@ export function escapeName(name: string): string {
 	let result = "";
 
 	for (const char of name) {
-		if (CHARSET.includes(char)) {
+		if (CHARSET.includes(char) && (result !== "" || !DIGITS.includes(char))) {
 			result += char;
 		} else {
 			result += `_${char.charCodeAt(0)}_`;

@@ -77,22 +77,22 @@ export class Parser {
 		}
 
 		this.objectBuiltin = this.getBuiltinType("Object");
-		this.stringBuiltin = this.getBuiltinType("String");
-		this.bigintBuiltin = this.getBuiltinType("BigInt");
-		this.symbolBuiltin = this.getBuiltinType("Symbol");
+		this.stringBuiltin = this.getBuiltinType("String", this.objectBuiltin);
+		this.bigintBuiltin = this.getBuiltinType("BigInt", this.objectBuiltin);
+		this.symbolBuiltin = this.getBuiltinType("Symbol", this.objectBuiltin);
 		this.generate(this.root, namespace);
 		this.file.removeDuplicates();
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
-}
+		}
 	}
 
 	public getFile(): File {
 		return this.file;
 	}
 
-	private getBuiltinType(name: string): BuiltinType {
+	private getBuiltinType(name: string, object?: BuiltinType): BuiltinType {
 		const child = this.root.children.get(name);
 
 		if (child && child.classObj) {
@@ -100,6 +100,8 @@ export class Parser {
 				classObj: child.classObj,
 				type: new DeclaredType(child.classObj),
 			};
+		} else if (object) {
+			return object;
 		} else {
 			return {
 				type: new NamedType(`client::${name}`),
@@ -177,14 +179,14 @@ export class Parser {
 			}
 		} else if (declaredType) {
 			info.addType(declaredType, TypeKind.Class);
+		} else if (type.flags & ts.TypeFlags.Undefined) {
+			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
 			info.addType(VOID_TYPE, TypeKind.Primitive);
 		} else if (type.flags & ts.TypeFlags.NumberLike) {
 			info.addType(DOUBLE_TYPE, TypeKind.Primitive);
 		} else if (type.flags & ts.TypeFlags.BooleanLike) {
 			info.addType(BOOL_TYPE, TypeKind.Primitive);
-		} else if (type.flags & ts.TypeFlags.Undefined) {
-			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.StringLike) {
 			info.addType(this.stringBuiltin.type, TypeKind.Class);
 		} else  if (type.flags & ts.TypeFlags.BigIntLike) {
@@ -424,7 +426,7 @@ export class Parser {
 
 				if (!readOnly) {
 					for (const parameter of info.asParameterTypes()) {
-						const funcObj = new Function(`set_${name}`);
+						const funcObj = new Function(`set_${name}`, VOID_TYPE);
 						funcObj.addParameter(parameter, name);
 						classObj.addMember(funcObj, Visibility.Public);
 					}

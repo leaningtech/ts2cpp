@@ -24,9 +24,9 @@ export class TypeData {
 		return this.kind;
 	}
 
-	public qualify(qualifier: TypeQualifier, optional: boolean = false): Type {
-		if (this.kind === TypeKind.Class || optional) {
-			return this.type.qualify(qualifier);
+	public getPointerOrPrimitive(): Type {
+		if (this.kind === TypeKind.Class) {
+			return this.type.pointer();
 		} else {
 			return this.type;
 		}
@@ -58,80 +58,65 @@ export class TypeInfo {
 		this.optional = true;
 	}
 
-	public asRawType(): Type {
+	public getSingle(): TypeData {
 		if (this.types.length === 1) {
-			return this.types[0].getType();
+			return this.types[0];
 		} else {
-			return this.objectType;
+			return new TypeData(this.objectType, TypeKind.Class);
 		}
 	}
 
-	public asRegularType(): Type {
-		if (this.types.length === 1) {
-			return this.types[0].qualify(TypeQualifier.Pointer, this.optional);
+	public getPlural(): ReadonlyArray<TypeData> {
+		if (this.types.length > 0) {
+			return this.types;
 		} else {
-			return this.objectType.pointer();
+			return [new TypeData(this.objectType, TypeKind.Class)];
 		}
 	}
 
 	public asTypeConstraint(type: Type): Expression {
 		return Expression.or(
-			...this.types.map(constraint => {
-				const cc = constraint.qualify(TypeQualifier.Pointer, this.optional);
-				return Expression.isConvertible(type, cc);
+			...this.getPlural().map(constraint => {
+				return Expression.isConvertible(type, constraint.getPointerOrPrimitive());
 			})
 		);
 	}
 
 	public asTypeParameter(): Type {
-		return this.asRegularType();
+		return this.getSingle().getPointerOrPrimitive();
 	}
 
 	public asBaseType(): Type {
-		return this.asRawType();
+		return this.getSingle().getType();
 	}
 
 	public asReturnType(): Type {
-		return this.asRegularType();
+		return this.getSingle().getPointerOrPrimitive();
 	}
 
 	public asParameterTypes(): ReadonlyArray<Type> {
-		if (this.types.length > 0) {
-			return this.types.flatMap(type => {
-				const constReference = type.qualify(TypeQualifier.ConstReference);
-
-				if (this.optional) {
-					return [constReference, type.getType().constPointer()];
-				} else {
-					return [constReference];
-				}
-			});
-		} else {
-			if (this.optional) {
-				return [this.objectType.constReference(), this.objectType.constPointer()];
+		return this.getPlural().flatMap(type => {
+			if (type.getKind() !== TypeKind.Class) {
+				return [type.getType()];
+			} else if (this.optional) {
+				return [type.getType().constReference(), type.getType().constPointer()];
 			} else {
-				return [this.objectType.constReference()];
+				return [type.getType().constReference()];
 			}
-		}
+		});
 	}
 
 	public asVariableType(member: boolean): Type {
-		if (this.types.length === 1) {
-			if (this.optional || member) {
-				return this.types[0].qualify(TypeQualifier.Pointer);
-			} else {
-				return this.types[0].getType();
-			}
+		const type = this.getSingle();
+
+		if (this.optional || member) {
+			return type.getPointerOrPrimitive();
 		} else {
-			if (this.optional || member) {
-				return this.objectType.pointer();
-			} else {
-				return this.objectType;
-			}
+			return type.getType();
 		}
 	}
 
 	public asTypeAlias(): Type {
-		return this.asRawType();
+		return this.getSingle().getType();
 	}
 }

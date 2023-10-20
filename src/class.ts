@@ -128,6 +128,8 @@ export class Class extends TemplateDeclaration {
 					writer.writeSpace();
 				}
 
+				writer.write("virtual");
+				writer.writeSpace();
 				base.getType().write(writer, this.getParent());
 			}
 

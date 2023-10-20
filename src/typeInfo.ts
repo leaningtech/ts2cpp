@@ -1,5 +1,5 @@
 import { Parser } from "./parser.js";
-import { Type, TypeQualifier } from "./type.js";
+import { Expression, Type, TypeQualifier } from "./type.js";
 
 export enum TypeKind {
 	Class,
@@ -24,8 +24,8 @@ export class TypeData {
 		return this.kind;
 	}
 
-	public qualify(qualifier: TypeQualifier, force: boolean = false): Type {
-		if (this.kind === TypeKind.Class || force) {
+	public qualify(qualifier: TypeQualifier, optional: boolean = false): Type {
+		if (this.kind === TypeKind.Class || optional) {
 			return this.type.qualify(qualifier);
 		} else {
 			return this.type;
@@ -58,15 +58,7 @@ export class TypeInfo {
 		this.optional = true;
 	}
 
-	public asTypeParameter(): Type {
-		if (this.types.length === 1) {
-			return this.types[0].qualify(TypeQualifier.Pointer, this.optional);
-		} else {
-			return this.objectType.pointer();
-		}
-	}
-
-	public asBaseType(): Type {
+	public asRawType(): Type {
 		if (this.types.length === 1) {
 			return this.types[0].getType();
 		} else {
@@ -74,12 +66,33 @@ export class TypeInfo {
 		}
 	}
 
-	public asReturnType(): Type {
+	public asRegularType(): Type {
 		if (this.types.length === 1) {
 			return this.types[0].qualify(TypeQualifier.Pointer, this.optional);
 		} else {
 			return this.objectType.pointer();
 		}
+	}
+
+	public asTypeConstraint(type: Type): Expression {
+		return Expression.or(
+			...this.types.map(constraint => {
+				const cc = constraint.qualify(TypeQualifier.Pointer, this.optional);
+				return Expression.isConvertible(type, cc);
+			})
+		);
+	}
+
+	public asTypeParameter(): Type {
+		return this.asRegularType();
+	}
+
+	public asBaseType(): Type {
+		return this.asRawType();
+	}
+
+	public asReturnType(): Type {
+		return this.asRegularType();
 	}
 
 	public asParameterTypes(): ReadonlyArray<Type> {
@@ -119,10 +132,6 @@ export class TypeInfo {
 	}
 
 	public asTypeAlias(): Type {
-		if (this.types.length === 1) {
-			return this.types[0].getType();
-		} else {
-			return this.objectType;
-		}
+		return this.asRawType();
 	}
 }

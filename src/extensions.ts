@@ -5,6 +5,7 @@ import { Type, DeclaredType, NamedType } from "./type.js";
 import { Parser } from "./parser.js";
 
 // TODO: check correctness of string conversion functions
+// TODO: separate object class into separate file so we can include <string>
 
 function addConversionConstructor(classObj: Class, type: Type) {
 	const funcObj = new Function(classObj.getName());
@@ -105,6 +106,7 @@ return out;
 
 export function addExtensions(parser: Parser): void {
 	// parser.file.addInclude("string", true);
+	parser.file.addInclude("type_traits", true);
 	parser.file.addInclude("cstddef", true);
 	parser.file.addInclude("cstdint", true);
 

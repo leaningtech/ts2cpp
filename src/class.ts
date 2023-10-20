@@ -1,7 +1,7 @@
 import { Namespace } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
-import { Type } from "./type.js";
+import { Expression, Type } from "./type.js";
 import { Writer } from "./writer.js";
 
 export enum Visibility {
@@ -59,6 +59,7 @@ export class Base {
 export class Class extends TemplateDeclaration {
 	private readonly members: Array<Member> = new Array;
 	private readonly bases: Array<Base> = new Array;
+	private readonly constraints: Array<Expression> = new Array;
 
 	public getMembers(): ReadonlyArray<Member> {
 		return this.members;
@@ -75,6 +76,10 @@ export class Class extends TemplateDeclaration {
 
 	public addBase(type: Type, visibility: Visibility): void {
 		this.bases.push(new Base(type, visibility));
+	}
+
+	public addConstraint(expression: Expression): void {
+		this.constraints.push(expression);
 	}
 
 	public removeDuplicates(): void {
@@ -127,6 +132,13 @@ export class Class extends TemplateDeclaration {
 			}
 
 			writer.writeBlockOpen();
+
+			for (const constraint of this.constraints) {
+				writer.write("static_assert(");
+				constraint.write(writer, namespace);
+				writer.write(");");
+				writer.writeLine(false);
+			}
 
 			resolveDependencies(this.members, (member, state) => {
 				const memberVisibility = member.getVisibility();

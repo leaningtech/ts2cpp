@@ -5,7 +5,7 @@ import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { File } from "./file.js";
-import { Type, NamedType, DeclaredType, TemplateType } from "./type.js";
+import { Expression, Type, NamedType, DeclaredType, TemplateType } from "./type.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { addExtensions } from "./extensions.js";
@@ -85,7 +85,7 @@ export class Parser {
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
-		}
+}
 	}
 
 	public getFile(): File {
@@ -263,6 +263,9 @@ export class Parser {
 		let questionParams = new Array;
 		const typeParams = new Array;
 
+		// TODO: type constraints
+		// TODO: union type
+
 		if (decl.typeParameters) {
 			for (const typeParameter of decl.typeParameters) {
 				const type = this.typeChecker.getTypeAtLocation(typeParameter);
@@ -371,6 +374,8 @@ export class Parser {
 			const type = this.typeChecker.getTypeAtLocation(node.interfaceDecls[0]);
 			const interfaceType = type as ts.InterfaceType;
 			const baseTypes = this.typeChecker.getBaseTypes(interfaceType);
+			const typeParameters = node.interfaceDecls
+				.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
 
 			for (const baseType of baseTypes) {
 				const info = this.getTypeInfo(baseType, TYPES_EMPTY);
@@ -378,9 +383,20 @@ export class Parser {
 			}
 
 			if (interfaceType.typeParameters) {
-				for (const type of interfaceType.typeParameters) {
-					const typeParam = this.getTypeParameter(type, typeId++).getName();
-					classObj.addTypeParameter(typeParam);
+				for (const typeParameter of interfaceType.typeParameters) {
+					const typeParam = this.getTypeParameter(typeParameter, typeId++);
+					classObj.addTypeParameter(typeParam.getName());
+				}
+			}
+
+			for (const typeParameter of typeParameters) {
+				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
+				const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);;
+				const typeParam = this.declaredTypes.get(typeParamType)!;
+
+				if (constraint) {
+					const constraintInfo = this.getTypeNodeInfo(constraint, TYPES_EMPTY);
+					classObj.addConstraint(constraintInfo.asTypeConstraint(typeParam));
 				}
 			}
 		}
@@ -444,6 +460,7 @@ export class Parser {
 		}
 
 		if (node.varDecl) {
+			// TODO: use non-template version of class
 			this.generateConstructor(node, classObj, typeId, node.varDecl);
 		}
 

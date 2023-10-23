@@ -5,8 +5,6 @@ import { Type, DeclaredType, NamedType } from "./type.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
 
-// TODO: check correctness of string conversion functions
-
 function addConversionConstructor(classObj: Class, type: Type) {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addParameter(type, "x");
@@ -30,37 +28,20 @@ function addStringExtensions(parser: Parser, stringClass: Class): void {
 	fromUtf8.addParameter(new NamedType("std::size_t"), "len", "SIZE_MAX");
 	fromUtf8.setBody(`
 client::String* out = new client::String();
-unsigned int codepoint;
-while (len > 0 && *in != 0) {
-	unsigned char ch = static_cast<unsigned char>(*in);
-	// ASCII range
-	if (ch <= 0x7F)
-		codepoint = ch;
-	// Continuation bytes
-	else if (ch <= 0xbf)
-		codepoint = (codepoint << 6) | (ch & 0x3f);
-	// Start of 2-bytes sequence
-	else if (ch <= 0xdf)
-		codepoint = ch & 0x1f;
-	// Start of 3-bytes sequence
-	else if (ch <= 0xef)
-		codepoint = ch & 0x0f;
-	// Start of 4-bytes sequence
-	else
-		codepoint = ch & 0x07;
-	++in;
-	--len;
-	// NOTE: we are assuming that invalid codepoints will be handled
-	// in a sensible way by javascript strings
-	if (len == 0 || (*in & 0xc0) != 0x80) {
-		if (codepoint <= 0xffff) {
-			out = out->concat(client::String::fromCharCode(codepoint));
+unsigned int cp;
+for (std::size_t i = 0; i < len && in[i];) {
+	unsigned char ch = in[i++];
+	cp =
+		ch < 0x80 ? ch :
+		ch < 0xc0 ? cp << 6 | (ch & 0x3f) :
+		ch < 0xe0 ? ch & 0x1f :
+		ch < 0xf0 ? ch & 0x0f : ch & 0x07;
+	if (i == len || (in[i] & 0xc0) != 0x80) {
+		if (cp <= 0xffff) {
+			out = out->concat(fromCharCode(cp));
 		} else {
-			codepoint -= 0x10000;
-			unsigned int highSurrogate = (codepoint >> 10) + 0xd800;
-			unsigned int lowSurrogate = (codepoint & 0x3ff) + 0xdc00;
-			out = out->concat(client::String::fromCharCode(highSurrogate));
-			out = out->concat(client::String::fromCharCode(lowSurrogate));
+			out = out->concat(fromCharCode((cp - 0x10000) >> 10 | 0xd800));
+			out = out->concat(fromCharCode((cp & 0x3ff) | 0xdc00));
 		}
 	}
 }
@@ -70,25 +51,29 @@ return out;
 	const toUtf8 = new Function("toUtf8", new NamedType("std::string"));
 	toUtf8.setBody(`
 std::string out;
-const size_t len = get_length();
-for (size_t i = 0; i < len; i++) {
-	unsigned int codepoint = charCodeAt(i);
-	if (codepoint >= 0xd800 && codepoint <= 0xdfff) {
-		unsigned int surrogate = charCodeAt(++i);
-		codepoint = 0x10000 + ((codepoint & 0x3ff) << 10) + (surrogate & 0x3ff);
-	}
-	if (codepoint > 0xffff) {
-		codepoint = 0xfffd; // Was invalid character, use replacement character U+FFFD
-	}
-	if (codepoint <= 0x7f) {
-		out.push_back(codepoint);
-	} else if (codepoint <= 0x7ff) {
-		out.push_back(0xC0 | (codepoint >> 6));
-		out.push_back(0x80 | (codepoint & 63));
-	} else {
-		out.push_back(0xE0 | (codepoint >> 12));
-		out.push_back(0x80 | ((codepoint >> 6) & 63));
-		out.push_back(0x80 | (codepoint & 63));
+std::size_t len = get_length();
+unsigned int cp;
+for (std::size_t i = 0; i < len;) {
+	unsigned int ch = charCodeAt(i++);
+	cp =
+		ch < 0xd800 || ch > 0xdfff ? ch :
+		ch < 0xdc00 ? (ch & 0x3ff) << 10 : (cp | (ch & 0x3ff)) + 0x10000;
+	if (i == len || (ch & 0xdc00) != 0xd800) {
+		if (cp <= 0x7f) {
+			out.push_back(cp);
+		} else if (cp <= 0x7ff) {
+			out.push_back(0xc0 | cp >> 6);
+			out.push_back(0x80 | (cp & 0x3f));
+		} else if (cp <= 0xffff) {
+			out.push_back(0xe0 | cp >> 12);
+			out.push_back(0x80 | (cp >> 6 & 0x3f));
+			out.push_back(0x80 | (cp & 0x3f));
+		} else {
+			out.push_back(0xf0 | cp >> 18);
+			out.push_back(0x80 | (cp >> 12 & 0x3f));
+			out.push_back(0x80 | (cp >> 6 & 0x3f));
+			out.push_back(0x80 | (cp & 0x3f));
+		}
 	}
 }
 return out;
@@ -100,7 +85,7 @@ return out;
 	charConstructor.setBody(``);
 
 	stringClass.addMember(fromUtf8, Visibility.Public);
-	// stringClass.addMember(toUtf8, Visibility.Public);
+	stringClass.addMember(toUtf8, Visibility.Public);
 	stringClass.addMember(charConstructor, Visibility.Public);
 }
 

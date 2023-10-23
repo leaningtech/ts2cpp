@@ -77,6 +77,10 @@ export class Function extends TemplateDeclaration {
 		return this.type;
 	}
 
+	public setType(type: Type | undefined): void {
+		this.type = type;
+	}
+
 	public getBody(): string | undefined {
 		return this.body;
 	}

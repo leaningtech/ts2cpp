@@ -167,29 +167,34 @@ export abstract class TemplateDeclaration extends Declaration {
 		this.typeParameters.push(new TypeParameter(name, true));
 	}
 
-	public writeTemplate(writer: Writer): void {
-		if (this.typeParameters.length > 0) {
-			let first = true;
-			writer.write("template<");
+	public static writeParameters(writer: Writer, parameters: ReadonlyArray<TypeParameter>): void {
+		let first = true;
+		writer.write("<");
 
-			for (const typeParameter of this.typeParameters) {
-				if (!first) {
-					writer.write(",");
-					writer.writeSpace(false);
-				}
-
-				if (typeParameter.isVariadic()) {
-					writer.write("class...");
-				} else {
-					writer.write("class");
-				}
-
-				writer.writeSpace();
-				writer.write(typeParameter.getName());
-				first = false;
+		for (const typeParameter of parameters) {
+			if (!first) {
+				writer.write(",");
+				writer.writeSpace(false);
 			}
 
-			writer.write(">");
+			if (typeParameter.isVariadic()) {
+				writer.write("class...");
+			} else {
+				writer.write("class");
+			}
+
+			writer.writeSpace();
+			writer.write(typeParameter.getName());
+			first = false;
+		}
+
+		writer.write(">");
+	}
+
+	public writeTemplate(writer: Writer): void {
+		if (this.typeParameters.length > 0) {
+			writer.write("template");
+			TemplateDeclaration.writeParameters(writer, this.typeParameters);
 			writer.writeLine(false);
 		}
 	}

@@ -5,7 +5,7 @@ import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
-import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType } from "./type.js";
+import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType } from "./type.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { addExtensions } from "./extensions.js";
@@ -14,6 +14,7 @@ import * as ts from "typescript";
 const VOID_TYPE = new NamedType("void");
 const BOOL_TYPE = new NamedType("bool");
 const DOUBLE_TYPE = new NamedType("double");
+const ELLIPSES = new NamedType("...");
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
 
 class Node {
@@ -66,10 +67,12 @@ export class Parser {
 	public readonly stringBuiltin: BuiltinType;
 	public readonly bigintBuiltin: BuiltinType;
 	public readonly symbolBuiltin: BuiltinType;
+	public readonly arrayElementTypeHelper: UnqualifiedType;
 
 	public constructor(program: ts.Program, library: Library) {
 		this.library = library;
 		this.library.addGlobalInclude("type_traits", true);
+		this.library.addGlobalInclude("jshelper.h", false);
 		this.typeChecker = program.getTypeChecker();
 		const namespace = new Namespace("client");
 		namespace.addAttribute("cheerp::genericjs");
@@ -82,6 +85,7 @@ export class Parser {
 		this.stringBuiltin = this.getBuiltinType("String", this.objectBuiltin);
 		this.bigintBuiltin = this.getBuiltinType("BigInt", this.objectBuiltin);
 		this.symbolBuiltin = this.getBuiltinType("Symbol", this.objectBuiltin);
+		this.arrayElementTypeHelper = new NamedType("cheerp::ArrayElementTypeT");
 		this.generate(this.root, namespace);
 		this.library.removeDuplicates();
 
@@ -158,6 +162,7 @@ export class Parser {
 	}
 
 	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo): void {
+		// TODO: any can be any type, not just object
 		// TODO: type literals and literal types
 
 		const declaredTemplateType = this.declaredTemplateTypes.get(type);
@@ -340,6 +345,7 @@ export class Parser {
 
 		for (const parameters of params) {
 			const funcObj = new Function(name, returnType);
+			const constraint = new ValueExpression(ExpressionKind.LogicalAnd);
 
 			for (const typeParam of typeParams) {
 				funcObj.addTypeParameter(typeParam);
@@ -348,14 +354,23 @@ export class Parser {
 			for (const [parameter, type] of parameters) {
 				const name = escapeName(parameter.name.getText());
 
-				// TODO: constraints on variadic functions
-
 				if (parameter.dotDotDotToken) {
 					funcObj.addVariadicTypeParameter("_Args");
-					funcObj.addParameter(new NamedType("_Args").expand(), name);
+					const param = new NamedType("_Args");
+					funcObj.addParameter(param.expand(), name);
+					const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
+					const element = new TemplateType(this.arrayElementTypeHelper);
+					element.addTypeParameter(type);
+					argsConstraint.addChild(Expression.isConvertible(param, element));
+					argsConstraint.addChild(ELLIPSES);
+					constraint.addChild(argsConstraint);
 				} else {
 					funcObj.addParameter(type, name);
 				}
+			}
+
+			if (returnType && constraint.getChildren().length > 0) {
+				funcObj.setType(Type.enableIf(constraint, returnType));
 			}
 
 			yield funcObj;

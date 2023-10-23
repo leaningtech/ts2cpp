@@ -166,6 +166,10 @@ export abstract class Type extends Expression {
 	public expand(): QualifiedType {
 		return this.qualify(TypeQualifier.Variadic);
 	}
+
+	public getMemberType(name: string) {
+		return new MemberType(this, name);
+	}
 }
 
 export abstract class UnqualifiedType extends Type {
@@ -219,6 +223,41 @@ export class NamedType extends UnqualifiedType {
 	public key(): string {
 		return `N${this.name};`;
 	}
+}
+
+export class MemberType extends UnqualifiedType {
+	private readonly inner: Type;
+	private readonly name: string;
+
+	public constructor(inner: Type, name: string) {
+		super();
+		this.inner = inner;
+		this.name = name;
+	}
+
+	public getInner(): Type {
+		return this.inner;
+	}
+
+	public getName(): string {
+		return this.name;
+	}
+
+	public getDeclarations(): ReadonlyArray<Declaration> {
+		return this.inner.getDeclarations();
+	}
+
+	public write(writer: Writer, namespace?: Namespace): void {
+		writer.write("typename");
+		writer.writeSpace();
+		this.inner.write(writer, namespace);
+		writer.write("::");
+		writer.write(this.name);
+	}
+
+	public key(): string {
+		return `Y${this.inner.key()}${this.name};`;
+	};
 }
 
 export class QualifiedType extends Type {

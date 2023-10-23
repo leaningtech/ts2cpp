@@ -261,6 +261,29 @@ export class Parser {
 		return [type.symbol, TYPES_EMPTY];
 	}
 
+	private *getConstraints(typeParameters?: ReadonlyArray<ts.TypeParameterDeclaration>): Generator<Expression> {
+		const constraintSet = new Set;
+
+		if (typeParameters) {
+			for (const typeParameter of typeParameters) {
+				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
+
+				if (constraint) {
+					const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);
+					const typeParam = this.declaredTypes.get(typeParamType)!;
+					const constraintInfo = this.getTypeNodeInfo(constraint, TYPES_EMPTY);
+					const result = constraintInfo.asTypeConstraint(typeParam);
+					const key = result.key();
+
+					if (!constraintSet.has(key)) {
+						yield result;
+						constraintSet.add(key);
+					}
+				}
+			}
+		}
+	}
+
 	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, node?: Child): Generator<Function> {
 		let name, returnType;
 		let params = new Array(new Array);
@@ -285,25 +308,14 @@ export class Parser {
 			returnType = returnInfo.asReturnType();
 		}
 
-		if (decl.typeParameters) {
-			const expression = new ValueExpression(ExpressionKind.LogicalAnd);
+		const expression = new ValueExpression(ExpressionKind.LogicalAnd);
 
-			for (const typeParameter of decl.typeParameters) {
-				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
-				const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);
-				const typeParam = this.declaredTypes.get(typeParamType)!;
+		for (const constraint of this.getConstraints(decl.typeParameters)) {
+			expression.addChild(constraint);
+		}
 
-				// TODO: remove duplicate constraints
-
-				if (constraint) {
-					const constraintInfo = this.getTypeNodeInfo(constraint, TYPES_EMPTY);
-					expression.addChild(constraintInfo.asTypeConstraint(typeParam));
-				}
-			}
-
-			if (expression.getChildren().length > 0) {
-				returnType = Type.enableIf(expression, returnType);
-			}
+		if (expression.getChildren().length > 0) {
+			returnType = Type.enableIf(expression, returnType);
 		}
 
 		for (const parameter of decl.parameters) {
@@ -414,17 +426,8 @@ export class Parser {
 				}
 			}
 
-			for (const typeParameter of typeParameters) {
-				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
-				const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);
-				const typeParam = this.declaredTypes.get(typeParamType)!;
-
-				// TODO: remove duplicate constraints
-
-				if (constraint) {
-					const constraintInfo = this.getTypeNodeInfo(constraint, TYPES_EMPTY);
-					classObj.addConstraint(constraintInfo.asTypeConstraint(typeParam));
-				}
+			for (const constraint of this.getConstraints(typeParameters)) {
+				classObj.addConstraint(constraint);
 			}
 		}
 

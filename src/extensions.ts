@@ -3,9 +3,9 @@ import { Function } from "./function.js";
 import { Class, Visibility } from "./class.js";
 import { Type, DeclaredType, NamedType } from "./type.js";
 import { Parser } from "./parser.js";
+import { Library } from "./library.js";
 
 // TODO: check correctness of string conversion functions
-// TODO: separate object class into separate file so we can include <string>
 
 function addConversionConstructor(classObj: Class, type: Type) {
 	const funcObj = new Function(classObj.getName());
@@ -105,10 +105,14 @@ return out;
 }
 
 export function addExtensions(parser: Parser): void {
-	// parser.file.addInclude("string", true);
-	parser.file.addInclude("type_traits", true);
-	parser.file.addInclude("cstddef", true);
-	parser.file.addInclude("cstdint", true);
+	const library = parser.getLibrary();
+	const jsobjectFile = library.getFile("cheerp/jsobject.h")!;
+	const typesFile = library.getFile("cheerp/types.h")!;
+	const clientlibFile = library.getFile("cheerp/clientlib.h")!;
+
+	typesFile.addInclude("string", true);
+	jsobjectFile.addInclude("cstddef", true);
+	jsobjectFile.addInclude("cstdint", true);
 
 	if (parser.stringBuiltin.classObj) {
 		addStringExtensions(parser, parser.stringBuiltin.classObj);

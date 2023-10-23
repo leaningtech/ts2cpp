@@ -4,7 +4,7 @@ import { Class, Visibility } from "./class.js";
 import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
-import { File } from "./file.js";
+import { Library } from "./library.js";
 import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType } from "./type.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
@@ -61,13 +61,15 @@ export class Parser {
 	private readonly root: Node = new Node;
 	private readonly declaredTypes: TypeMap = new Map;
 	private readonly declaredTemplateTypes: TypeMap = new Map;
-	public readonly file: File = new File;
+	private readonly library: Library;
 	public readonly objectBuiltin: BuiltinType;
 	public readonly stringBuiltin: BuiltinType;
 	public readonly bigintBuiltin: BuiltinType;
 	public readonly symbolBuiltin: BuiltinType;
 
-	public constructor(program: ts.Program) {
+	public constructor(program: ts.Program, library: Library) {
+		this.library = library;
+		this.library.addGlobalInclude("type_traits", true);
 		this.typeChecker = program.getTypeChecker();
 		const namespace = new Namespace("client");
 		namespace.addAttribute("cheerp::genericjs");
@@ -81,15 +83,15 @@ export class Parser {
 		this.bigintBuiltin = this.getBuiltinType("BigInt", this.objectBuiltin);
 		this.symbolBuiltin = this.getBuiltinType("Symbol", this.objectBuiltin);
 		this.generate(this.root, namespace);
-		this.file.removeDuplicates();
+		this.library.removeDuplicates();
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
 		}
 	}
 
-	public getFile(): File {
-		return this.file;
+	public getLibrary(): Library {
+		return this.library;
 	}
 
 	private getBuiltinType(name: string, object?: BuiltinType): BuiltinType {
@@ -346,6 +348,8 @@ export class Parser {
 			for (const [parameter, type] of parameters) {
 				const name = escapeName(parameter.name.getText());
 
+				// TODO: constraints on variadic functions
+
 				if (parameter.dotDotDotToken) {
 					funcObj.addVariadicTypeParameter("_Args");
 					funcObj.addParameter(new NamedType("_Args").expand(), name);
@@ -470,6 +474,7 @@ export class Parser {
 			if (child.classObj) {
 				this.generateClass(child, child.classObj, typeId);
 				classObj.addMember(child.classObj, Visibility.Public);
+				this.library.addGlobal(classObj);
 			} else if (child.funcDecl) {
 				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY, typeId)) {
 					funcObj.addFlags(Flags.Static);
@@ -486,6 +491,7 @@ export class Parser {
 				child.classObj = new Class(child.name);
 				this.generateClass(child, child.classObj, typeId);
 				classObj.addMember(child.classObj, Visibility.Public);
+				this.library.addGlobal(classObj);
 			}
 		}
 
@@ -495,7 +501,6 @@ export class Parser {
 		}
 
 		classObj.removeDuplicates();
-		this.file.addGlobal(classObj);
 	}
 
 	private generate(node: Node, namespace?: Namespace): void {
@@ -504,10 +509,11 @@ export class Parser {
 				this.generateClass(child, child.classObj, 0);
 				child.classObj.setParent(namespace);
 				child.classObj.computeReferences();
+				this.library.addGlobal(child.classObj);
 			} else if (child.funcDecl) {
 				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY, 0)) {
 					funcObj.setParent(namespace);
-					this.file.addGlobal(funcObj);
+					this.library.addGlobal(funcObj);
 				}
 			} else if (child.varDecl) {
 				const varObj = this.createVar(child.varDecl, TYPES_EMPTY, false);
@@ -515,12 +521,12 @@ export class Parser {
 				if (varObj.getType() !== VOID_TYPE) {
 					varObj.setParent(namespace);
 					varObj.addFlags(Flags.Extern);
-					this.file.addGlobal(varObj);
+					this.library.addGlobal(varObj);
 				}
 			} else if (child.typeDecl && child.typeObj) {
 				this.generateType(child.typeDecl, TYPES_EMPTY, 0, child.typeObj);
 				child.typeObj.setParent(namespace);
-				this.file.addGlobal(child.typeObj);
+				this.library.addGlobal(child.typeObj);
 			} else {
 				this.generate(child, new Namespace(child.name, namespace));
 			}
@@ -528,9 +534,21 @@ export class Parser {
 	}
 }
 
-export function parse(names: ReadonlyArray<string>): File {
+export function parse(names: ReadonlyArray<string>): Library {
 	const program = ts.createProgram(names, {});
-	const parser = new Parser(program);
+	const library = new Library("cheerp/clientlib.h");
+	const jsobjectFile = library.addFile("cheerp/jsobject.h");
+	const typesFile = library.addFile("cheerp/types.h");
+	const clientlibFile = library.getDefaultFile();
+	jsobjectFile.addName("client::Object");
+	typesFile.addName("client::String");
+	typesFile.addName("client::Array");
+	typesFile.addName("client::Map");
+	typesFile.addName("client::Number");
+	typesFile.addName("client::Function");
+	typesFile.addInclude("jsobject.h", false, jsobjectFile);
+	clientlibFile.addInclude("types.h", false, typesFile);
+	const parser = new Parser(program, library);
 	addExtensions(parser);
-	return parser.getFile();
+	return library;
 }

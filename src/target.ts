@@ -113,8 +113,6 @@ class DependencyResolver<T extends Target> {
 	}
 
 	private resolveDependency(declaration: Declaration, target: T, state: State, kind: ReasonKind, reason?: Reason): void {
-		// TODO: remove forward declaration immediately before full declaration
-
 		const parentDeclaration = declaration.getParentDeclaration();
 		const newReason = new Reason(declaration, state, kind, reason);
 

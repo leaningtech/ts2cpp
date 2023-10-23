@@ -119,7 +119,8 @@ export abstract class Declaration extends Namespace {
 				this.getChildren()
 					.map(child => Array.from(child.getDependencies(child.referenced ? State.Complete : State.Partial)))
 					.reduce((acc, dependencies) => acc.concat(dependencies), Array.from(this.getDirectDependencies(State.Complete)))
-					.filter(([declaration, state]) => !declaration.isDescendantOf(this))
+					.filter(([declaration, dependency]) => !declaration.isDescendantOf(this))
+					.filter(([declaration, dependency]) => declaration !== this || dependency.getState() !== State.Partial)
 			);
 		} else {
 			return this.getDirectDependencies(State.Partial);

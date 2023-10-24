@@ -107,6 +107,14 @@ export class Function extends TemplateDeclaration {
 		);
 	}
 
+	public getDirectNamedTypes(): ReadonlySet<string> {
+		return new Set(
+			this.parameters
+				.flatMap(parameter => [...parameter.getType().getNamedTypes()])
+				.concat([...this.type?.getNamedTypes() ?? []])
+		);
+	}
+
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
 		const flags = this.getFlags();
 		let first = true;

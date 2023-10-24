@@ -97,14 +97,22 @@ export class Class extends TemplateDeclaration {
 	public getDirectDependencies(state: State): Dependencies {
 		if (state === State.Complete) {
 			return new Dependencies(
-				this.bases
-					.flatMap(base => base.getType().getDeclarations())
-					.filter((declaration): declaration is Declaration => !!declaration)
+				this.constraints
+					.concat(this.bases.map(base => base.getType()))
+					.flatMap(type => type.getDeclarations())
 					.map(declaration => [declaration, new Dependency(State.Complete, this, ReasonKind.BaseClass)])
 			);
 		} else {
 			return new Dependencies;
 		}
+	}
+
+	public getDirectNamedTypes(): ReadonlySet<string> {
+		return new Set(
+			this.constraints
+				.concat(this.bases.map(base => base.getType()))
+				.flatMap(type => [...type.getNamedTypes()])
+		);
 	}
 
 	public write(writer: Writer, state: State, namespace?: Namespace): void {

@@ -373,6 +373,8 @@ export class Parser {
 				funcObj.setType(Type.enableIf(constraint, returnType));
 			}
 
+			funcObj.removeUnusedTypeParameters();
+
 			yield funcObj;
 		}
 	}
@@ -389,8 +391,11 @@ export class Parser {
 	}
 
 	private generateType(decl: TypeDecl, types: TypeMap, typeId: number, typeObj: TypeAlias): void {
+		// TODO: type constraints for type aliases
+
 		const info = this.getTypeNodeInfo(decl.type, types);
 		typeObj.setType(info.asTypeAlias());
+		typeObj.removeUnusedTypeParameters();
 	}
 
 	private generateConstructor(node: Child, classObj: Class, typeId: number, decl: VarDecl): void {
@@ -515,6 +520,7 @@ export class Parser {
 			this.generateConstructor(node, classObj, typeId, node.varDecl);
 		}
 
+		classObj.removeUnusedTypeParameters();
 		classObj.removeDuplicates();
 	}
 

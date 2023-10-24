@@ -127,9 +127,18 @@ export abstract class Declaration extends Namespace {
 		}
 	}
 
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set(
+			this.getChildren()
+				.flatMap(child => [...child.getNamedTypes()])
+				.concat([...this.getDirectNamedTypes()])
+		);
+	}
+
 	public abstract maxState(): State;
 	public abstract getChildren(): ReadonlyArray<Declaration>;
 	public abstract getDirectDependencies(state: State): Dependencies;
+	public abstract getDirectNamedTypes(): ReadonlySet<string>;
 	public abstract write(writer: Writer, state: State, namespace?: Namespace): void;
 	public abstract equals(other: Declaration): boolean;
 }
@@ -211,5 +220,15 @@ export abstract class TemplateDeclaration extends Declaration {
 		}
 
 		return true;
+	}
+
+	public removeUnusedTypeParameters(): void {
+		const namedTypes = this.getNamedTypes();
+
+		const typeParameters = this.typeParameters.filter(typeParameter => {
+			return namedTypes.has(typeParameter.getName());
+		});
+
+		this.typeParameters.splice(0, this.typeParameters.length, ...typeParameters);
 	}
 }

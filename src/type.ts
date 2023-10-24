@@ -4,6 +4,7 @@ import { Writer } from "./writer.js";
 
 export abstract class Expression {
 	public abstract getDeclarations(): ReadonlyArray<Declaration>;
+	public abstract getNamedTypes(): ReadonlySet<string>;
 	public abstract write(writer: Writer, namespace?: Namespace): void;
 	public abstract key(): string;
 
@@ -79,6 +80,10 @@ export class ValueExpression extends Expression {
 	
 	public getDeclarations(): ReadonlyArray<Declaration> {
 		return this.children.flatMap(expression => expression.getDeclarations());
+	}
+	
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set(this.children.flatMap(expression => [...expression.getNamedTypes()]));
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -190,6 +195,10 @@ export class DeclaredType extends UnqualifiedType {
 	public getDeclarations(): ReadonlyArray<Declaration> {
 		return [this.declaration];
 	}
+	
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set;
+	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
 		writer.write(this.declaration.getPath(namespace));
@@ -214,6 +223,10 @@ export class NamedType extends UnqualifiedType {
 
 	public getDeclarations(): ReadonlyArray<Declaration> {
 		return new Array;
+	}
+	
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set([this.name]);
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -245,6 +258,10 @@ export class MemberType extends UnqualifiedType {
 
 	public getDeclarations(): ReadonlyArray<Declaration> {
 		return this.inner.getDeclarations();
+	}
+	
+	public getNamedTypes(): ReadonlySet<string> {
+		return this.inner.getNamedTypes();
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -280,6 +297,10 @@ export class QualifiedType extends Type {
 
 	public getDeclarations(): ReadonlyArray<Declaration> {
 		return this.inner.getDeclarations();
+	}
+	
+	public getNamedTypes(): ReadonlySet<string> {
+		return this.inner.getNamedTypes();
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -333,6 +354,14 @@ export class TemplateType extends Type {
 		return this.typeParameters
 			.flatMap(typeParameter => typeParameter.getDeclarations())
 			.concat(this.inner.getDeclarations());
+	}
+	
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set(
+			this.typeParameters
+				.flatMap(typeParameter => [...typeParameter.getNamedTypes()])
+				.concat([...this.inner.getNamedTypes()])
+		);
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {

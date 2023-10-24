@@ -36,6 +36,10 @@ export class TypeAlias extends TemplateDeclaration {
 		);
 	}
 
+	public getDirectNamedTypes(): ReadonlySet<string> {
+		return this.type.getNamedTypes();
+	}
+
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
 		this.writeTemplate(writer);
 		writer.write("using");

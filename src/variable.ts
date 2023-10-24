@@ -32,6 +32,10 @@ export class Variable extends Declaration {
 		);
 	}
 
+	public getDirectNamedTypes(): ReadonlySet<string> {
+		return this.type.getNamedTypes();
+	}
+
 	public write(writer: Writer, state: State, namespace?: Namespace): void {
 		const flags = this.getFlags();
 

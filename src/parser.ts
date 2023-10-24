@@ -312,8 +312,6 @@ export class Parser {
 		let questionParams = new Array;
 		const typeParams = new Array;
 
-		// TODO: union type
-
 		if (decl.typeParameters) {
 			for (const typeParameter of decl.typeParameters) {
 				const type = this.typeChecker.getTypeAtLocation(typeParameter);

@@ -1,5 +1,5 @@
 import { Parser } from "./parser.js";
-import { Expression, Type, TypeQualifier } from "./type.js";
+import { Expression, Type, NamedType, TemplateType, TypeQualifier } from "./type.js";
 
 export enum TypeKind {
 	Class,
@@ -91,7 +91,19 @@ export class TypeInfo {
 	}
 
 	public asReturnType(): Type {
-		return this.getSingle().getPointerOrPrimitive();
+		// TODO: add more functions to union type
+
+		if (this.types.length > 1) {
+			const result = new TemplateType(new NamedType("client::_Union"));
+
+			for (const type of this.types) {
+				result.addTypeParameter(type.getPointerOrPrimitive());
+			}
+
+			return result.pointer();
+		} else {
+			return this.getSingle().getPointerOrPrimitive();
+		}
 	}
 
 	public asParameterTypes(): ReadonlyArray<Type> {

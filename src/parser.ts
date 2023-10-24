@@ -56,6 +56,7 @@ type TypeMap = Map<ts.Type, Type>;
 type FuncDecl = ts.SignatureDeclarationBase;
 type VarDecl = ts.VariableDeclaration | ts.PropertySignature;
 type TypeDecl = ts.TypeAliasDeclaration;
+type TypeParamDecl = ts.TypeParameterDeclaration;
 
 export class Parser {
 	private readonly typeChecker: ts.TypeChecker;
@@ -268,7 +269,7 @@ export class Parser {
 		return [type.symbol, TYPES_EMPTY];
 	}
 
-	private *getConstraints(typeParameters?: ReadonlyArray<ts.TypeParameterDeclaration>): Generator<Expression> {
+	private *getConstraints(typeParameters?: ReadonlyArray<TypeParamDecl>): Generator<Expression> {
 		const constraintSet = new Set;
 
 		if (typeParameters) {
@@ -291,13 +292,26 @@ export class Parser {
 		}
 	}
 
+	private getTypeConstraints(type: Type, typeParameters?: ReadonlyArray<TypeParamDecl>): Type {
+		const expression = new ValueExpression(ExpressionKind.LogicalAnd);
+
+		for (const constraint of this.getConstraints(typeParameters)) {
+			expression.addChild(constraint);
+		}
+
+		if (expression.getChildren().length > 0) {
+			return Type.enableIf(expression, type);
+		} else {
+			return type;
+		}
+	}
+
 	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, node?: Child): Generator<Function> {
 		let name, returnType;
 		let params = new Array(new Array);
 		let questionParams = new Array;
 		const typeParams = new Array;
 
-		// TODO: remove unsused type parameters
 		// TODO: union type
 
 		if (decl.typeParameters) {
@@ -315,14 +329,8 @@ export class Parser {
 			returnType = returnInfo.asReturnType();
 		}
 
-		const expression = new ValueExpression(ExpressionKind.LogicalAnd);
-
-		for (const constraint of this.getConstraints(decl.typeParameters)) {
-			expression.addChild(constraint);
-		}
-
-		if (expression.getChildren().length > 0) {
-			returnType = Type.enableIf(expression, returnType);
+		if (returnType) {
+			returnType = this.getTypeConstraints(returnType, decl.typeParameters);
 		}
 
 		for (const parameter of decl.parameters) {
@@ -391,10 +399,16 @@ export class Parser {
 	}
 
 	private generateType(decl: TypeDecl, types: TypeMap, typeId: number, typeObj: TypeAlias): void {
-		// TODO: type constraints for type aliases
-
 		const info = this.getTypeNodeInfo(decl.type, types);
-		typeObj.setType(info.asTypeAlias());
+
+		if (decl.typeParameters) {
+			for (const typeParameter of decl.typeParameters) {
+				const type = this.typeChecker.getTypeAtLocation(typeParameter);
+				typeObj.addTypeParameter(this.getTypeParameter(type, typeId++).getName());
+			}
+		}
+
+		typeObj.setType(this.getTypeConstraints(info.asTypeAlias(), decl.typeParameters));
 		typeObj.removeUnusedTypeParameters();
 	}
 
@@ -520,7 +534,7 @@ export class Parser {
 			this.generateConstructor(node, classObj, typeId, node.varDecl);
 		}
 
-		classObj.removeUnusedTypeParameters();
+		// classObj.removeUnusedTypeParameters();
 		classObj.removeDuplicates();
 	}
 

@@ -62,7 +62,7 @@ export class TypeInfo {
 		if (this.types.length === 1) {
 			return this.types[0];
 		} else {
-			return new TypeData(this.objectType, TypeKind.Class);
+			return new TypeData(new NamedType("client::_Any"), TypeKind.Class);
 		}
 	}
 
@@ -70,14 +70,14 @@ export class TypeInfo {
 		if (this.types.length > 0) {
 			return this.types;
 		} else {
-			return [new TypeData(this.objectType, TypeKind.Class)];
+			return [new TypeData(new NamedType("client::_Any"), TypeKind.Class)];
 		}
 	}
 
 	public asTypeConstraint(type: Type): Expression {
 		return Expression.or(
 			...this.getPlural().map(constraint => {
-				return Expression.isConvertible(type, constraint.getPointerOrPrimitive());
+				return Expression.isAcceptable(type, constraint.getPointerOrPrimitive());
 			})
 		);
 	}

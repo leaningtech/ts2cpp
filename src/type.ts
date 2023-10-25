@@ -33,6 +33,13 @@ export abstract class Expression {
 		return result;
 	}
 
+	public static isAcceptable(from: Type, to: Type): TemplateType {
+		const result = new TemplateType(new NamedType("cheerp::IsAcceptableV"));
+		result.addTypeParameter(from);
+		result.addTypeParameter(to);
+		return result;
+	}
+
 	public static or(...children: ReadonlyArray<Expression>): ValueExpression {
 		const result = new ValueExpression(ExpressionKind.LogicalOr);
 

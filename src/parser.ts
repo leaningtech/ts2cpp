@@ -163,7 +163,6 @@ export class Parser {
 	}
 
 	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo): void {
-		// TODO: any can be any type, not just object
 		// TODO: type literals and literal types
 
 		const declaredTemplateType = this.declaredTemplateTypes.get(type);
@@ -190,6 +189,9 @@ export class Parser {
 		} else if (declaredType) {
 			info.addType(declaredType, TypeKind.Class);
 		} else if (type.flags & ts.TypeFlags.Undefined) {
+			info.setOptional();
+		} else if (type.flags & ts.TypeFlags.Any) {
+			info.addType(new NamedType("client::_Any"), TypeKind.Class);
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
 			info.addType(VOID_TYPE, TypeKind.Primitive);
@@ -367,7 +369,7 @@ export class Parser {
 					const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
 					const element = new TemplateType(this.arrayElementTypeHelper);
 					element.addTypeParameter(type);
-					argsConstraint.addChild(Expression.isConvertible(param, element));
+					argsConstraint.addChild(Expression.isAcceptable(param, element));
 					argsConstraint.addChild(ELLIPSES);
 					constraint.addChild(argsConstraint);
 				} else {
@@ -380,7 +382,6 @@ export class Parser {
 			}
 
 			funcObj.removeUnusedTypeParameters();
-
 			yield funcObj;
 		}
 	}
@@ -498,8 +499,12 @@ export class Parser {
 			}
 		}
 
-		if (classObj.getBases().length === 0 && this.objectBuiltin.classObj !== classObj) {
-			classObj.addBase(this.objectBuiltin.type, Visibility.Public);
+		if (classObj.getBases().length === 0) {
+			if (this.objectBuiltin.classObj !== classObj) {
+				classObj.addBase(this.objectBuiltin.type, Visibility.Public);
+			} else {
+				classObj.addBase(new NamedType("client::_Any"), Visibility.Public);
+			}
 		}
 
 		for (const child of node.children.values()) {

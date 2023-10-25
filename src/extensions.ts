@@ -20,7 +20,6 @@ function addStringExtensions(parser: Parser, stringClass: Class): void {
 	addConversionConstructor(stringClass, new NamedType("unsigned long"));
 	addConversionConstructor(stringClass, new NamedType("int"));
 	addConversionConstructor(stringClass, new NamedType("unsigned int"));
-	addConversionConstructor(stringClass, new NamedType("double"));
 
 	const fromUtf8 = new Function("fromUtf8", stringType.pointer());
 	fromUtf8.addFlags(Flags.Static);

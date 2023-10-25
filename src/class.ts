@@ -138,8 +138,6 @@ export class Class extends TemplateDeclaration {
 
 				// TODO: fix virtual inheritance
 
-				writer.write("virtual");
-				writer.writeSpace();
 				base.getType().write(writer, this.getParent());
 			}
 

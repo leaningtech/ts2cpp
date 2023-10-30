@@ -2,6 +2,7 @@ import { Flags } from "./namespace.js";
 import { Function } from "./function.js";
 import { Class, Visibility } from "./class.js";
 import { Type, DeclaredType, NamedType } from "./type.js";
+import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE } from "./types.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
 
@@ -16,15 +17,15 @@ function addStringExtensions(parser: Parser, stringClass: Class): void {
 
 	addConversionConstructor(stringClass, stringType.constPointer());
 	addConversionConstructor(stringClass, stringType.constReference());
-	addConversionConstructor(stringClass, new NamedType("long"));
-	addConversionConstructor(stringClass, new NamedType("unsigned long"));
-	addConversionConstructor(stringClass, new NamedType("int"));
-	addConversionConstructor(stringClass, new NamedType("unsigned int"));
+	addConversionConstructor(stringClass, LONG_TYPE);
+	addConversionConstructor(stringClass, UNSIGNED_LONG_TYPE);
+	addConversionConstructor(stringClass, INT_TYPE);
+	addConversionConstructor(stringClass, UNSIGNED_INT_TYPE);
 
 	const fromUtf8 = new Function("fromUtf8", stringType.pointer());
 	fromUtf8.addFlags(Flags.Static);
-	fromUtf8.addParameter(new NamedType("char").constPointer(), "in");
-	fromUtf8.addParameter(new NamedType("std::size_t"), "len", "SIZE_MAX");
+	fromUtf8.addParameter(CONST_CHAR_POINTER_TYPE, "in");
+	fromUtf8.addParameter(SIZE_TYPE, "len", "SIZE_MAX");
 	fromUtf8.setBody(`
 client::String* out = new client::String();
 unsigned int cp;
@@ -47,7 +48,7 @@ for (std::size_t i = 0; i < len && in[i];) {
 return out;
 	`);
 
-	const toUtf8 = new Function("toUtf8", new NamedType("std::string"));
+	const toUtf8 = new Function("toUtf8", STRING_TYPE);
 	toUtf8.setBody(`
 std::string out;
 std::size_t len = get_length();
@@ -79,7 +80,7 @@ return out;
 	`);
 
 	const charConstructor = new Function(stringClass.getName());
-	charConstructor.addParameter(new NamedType("char").constPointer(), "x");
+	charConstructor.addParameter(CONST_CHAR_POINTER_TYPE, "x");
 	charConstructor.addInitializer(stringClass.getName(), "fromUtf8(x)");
 	charConstructor.setBody(``);
 

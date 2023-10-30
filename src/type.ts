@@ -9,7 +9,7 @@ export abstract class Expression {
 	public abstract key(): string;
 
 	public static enableIf(condition: Expression, type?: Type): TemplateType {
-		const result = new TemplateType(new NamedType("std::enable_if_t"));
+		const result = new TemplateType(ENABLE_IF);
 		result.addTypeParameter(condition);
 
 		if (type) {
@@ -20,21 +20,21 @@ export abstract class Expression {
 	}
 
 	public static isSame(lhs: Type, rhs: Type): TemplateType {
-		const result = new TemplateType(new NamedType("std::is_same_v"));
+		const result = new TemplateType(IS_SAME);
 		result.addTypeParameter(lhs);
 		result.addTypeParameter(rhs);
 		return result;
 	}
 
 	public static isConvertible(from: Type, to: Type): TemplateType {
-		const result = new TemplateType(new NamedType("std::is_convertible_v"));
+		const result = new TemplateType(IS_CONVERTIBLE);
 		result.addTypeParameter(from);
 		result.addTypeParameter(to);
 		return result;
 	}
 
 	public static isAcceptable(from: Type, to: Type): TemplateType {
-		const result = new TemplateType(new NamedType("cheerp::IsAcceptableV"));
+		const result = new TemplateType(IS_ACCEPTABLE);
 		result.addTypeParameter(from);
 		result.addTypeParameter(to);
 		return result;
@@ -396,3 +396,5 @@ export class TemplateType extends Type {
 		return `T${this.inner.key()}${typeParameters};`;
 	}
 }
+
+import { ENABLE_IF, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE } from "./types.js";

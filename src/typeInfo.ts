@@ -1,5 +1,6 @@
 import { Parser } from "./parser.js";
 import { Expression, Type, NamedType, TemplateType, TypeQualifier } from "./type.js";
+import { ANY_TYPE, UNION_TYPE } from "./types.js";
 
 export enum TypeKind {
 	Class,
@@ -62,7 +63,7 @@ export class TypeInfo {
 		if (this.types.length === 1) {
 			return this.types[0];
 		} else {
-			return new TypeData(new NamedType("client::_Any"), TypeKind.Class);
+			return new TypeData(ANY_TYPE, TypeKind.Class);
 		}
 	}
 
@@ -70,7 +71,7 @@ export class TypeInfo {
 		if (this.types.length > 0) {
 			return this.types;
 		} else {
-			return [new TypeData(new NamedType("client::_Any"), TypeKind.Class)];
+			return [new TypeData(ANY_TYPE, TypeKind.Class)];
 		}
 	}
 
@@ -94,7 +95,7 @@ export class TypeInfo {
 		// TODO: add more functions to union type
 
 		if (this.types.length > 1) {
-			const result = new TemplateType(new NamedType("client::_Union"));
+			const result = new TemplateType(UNION_TYPE);
 
 			for (const type of this.types) {
 				result.addTypeParameter(type.getPointerOrPrimitive());

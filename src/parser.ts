@@ -6,15 +6,12 @@ import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
 import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType } from "./type.js";
+import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ARRAY_ELEMENT_TYPE, ANY_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { escapeName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { addExtensions } from "./extensions.js";
 import * as ts from "typescript";
 
-const VOID_TYPE = new NamedType("void");
-const BOOL_TYPE = new NamedType("bool");
-const DOUBLE_TYPE = new NamedType("double");
-const ELLIPSES = new NamedType("...");
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
 
 class Node {
@@ -69,7 +66,6 @@ export class Parser {
 	public readonly stringBuiltin: BuiltinType;
 	public readonly bigintBuiltin: BuiltinType;
 	public readonly symbolBuiltin: BuiltinType;
-	public readonly arrayElementTypeHelper: UnqualifiedType;
 
 	public constructor(program: ts.Program, library: Library) {
 		this.library = library;
@@ -87,7 +83,6 @@ export class Parser {
 		this.stringBuiltin = this.getBuiltinType("String", this.objectBuiltin);
 		this.bigintBuiltin = this.getBuiltinType("BigInt", this.objectBuiltin);
 		this.symbolBuiltin = this.getBuiltinType("Symbol", this.objectBuiltin);
-		this.arrayElementTypeHelper = new NamedType("cheerp::ArrayElementTypeT");
 		this.generate(this.root, namespace);
 		this.library.removeDuplicates();
 
@@ -196,7 +191,7 @@ export class Parser {
 		} else if (type.flags & ts.TypeFlags.Undefined) {
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.Any) {
-			info.addType(new NamedType("client::_Any"), TypeKind.Class);
+			info.addType(ANY_TYPE, TypeKind.Class);
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
 			info.addType(VOID_TYPE, TypeKind.Primitive);
@@ -369,10 +364,10 @@ export class Parser {
 
 				if (parameter.dotDotDotToken) {
 					funcObj.addVariadicTypeParameter("_Args");
-					const param = new NamedType("_Args");
+					const param = ARGS;
 					funcObj.addParameter(param.expand(), name);
 					const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
-					const element = new TemplateType(this.arrayElementTypeHelper);
+					const element = new TemplateType(ARRAY_ELEMENT_TYPE);
 					element.addTypeParameter(type);
 					argsConstraint.addChild(Expression.isAcceptable(param, element));
 					argsConstraint.addChild(ELLIPSES);
@@ -508,7 +503,7 @@ export class Parser {
 			if (this.objectBuiltin.classObj !== classObj) {
 				classObj.addBase(this.objectBuiltin.type, Visibility.Public);
 			} else {
-				classObj.addBase(new NamedType("client::_Any"), Visibility.Public);
+				classObj.addBase(ANY_TYPE, Visibility.Public);
 			}
 		}
 

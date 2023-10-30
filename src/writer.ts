@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { Writable } from "stream";
 
 export interface Options {
 	pretty: boolean;
@@ -8,7 +9,7 @@ export interface Options {
 }
 
 export class Writer {
-	private readonly fd: number;
+	private readonly stream: Writable;
 	private depth: number = 0;
 	private line: boolean = true;
 
@@ -20,29 +21,29 @@ export class Writer {
 	};
 
 	public constructor(path: fs.PathLike, options?: Partial<Options>) {
-		this.fd = fs.openSync(path, "w");
+		this.stream = fs.createWriteStream(path);
 		Object.assign(this.options, options);
 	}
 
 	public write(string: string, depth: number = 0): void {
 		if (this.line && this.options.pretty) {
-			fs.writeSync(this.fd, this.options.tab.repeat(this.depth + depth));
+			this.stream.write(this.options.tab.repeat(this.depth + depth));
 		}
 
-		fs.writeSync(this.fd, string);
+		this.stream.write(string);
 		this.line = false;
 	}
 
 	public writeLine(required: boolean = true): void {
 		if (required || this.options.pretty) {
-			fs.writeSync(this.fd, this.options.line);
+			this.stream.write(this.options.line);
 			this.line = true;
 		}
 	}
 
 	public writeSpace(required: boolean = true): void {
 		if (required || this.options.pretty) {
-			fs.writeSync(this.fd, this.options.space);
+			this.stream.write(this.options.space);
 		}
 	}
 

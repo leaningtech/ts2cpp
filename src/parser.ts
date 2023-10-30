@@ -63,6 +63,7 @@ export class Parser {
 	private readonly root: Node = new Node;
 	private readonly declaredTypes: TypeMap = new Map;
 	private readonly declaredTemplateTypes: TypeMap = new Map;
+	private readonly classes: Array<Class> = new Array;
 	private readonly library: Library;
 	public readonly objectBuiltin: BuiltinType;
 	public readonly stringBuiltin: BuiltinType;
@@ -89,6 +90,10 @@ export class Parser {
 		this.arrayElementTypeHelper = new NamedType("cheerp::ArrayElementTypeT");
 		this.generate(this.root, namespace);
 		this.library.removeDuplicates();
+
+		for (const declaration of this.classes) {
+			declaration.computeVirtualBaseClasses();
+		}
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
@@ -539,6 +544,7 @@ export class Parser {
 
 		// classObj.removeUnusedTypeParameters();
 		classObj.removeDuplicates();
+		this.classes.push(classObj);
 	}
 
 	private generate(node: Node, namespace?: Namespace): void {

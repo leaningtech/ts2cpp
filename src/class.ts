@@ -1,7 +1,7 @@
 import { Namespace } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
-import { Expression, Type } from "./type.js";
+import { Expression, Type, DeclaredType } from "./type.js";
 import { Writer } from "./writer.js";
 
 export enum Visibility {
@@ -41,10 +41,12 @@ export class Member implements Target {
 export class Base {
 	private readonly type: Type;
 	private readonly visibility: Visibility;
+	private virtual: boolean;
 
-	public constructor(type: Type, visibility: Visibility) {
+	public constructor(type: Type, visibility: Visibility, virtual: boolean = false) {
 		this.type = type;
 		this.visibility = visibility;
+		this.virtual = virtual;
 	}
 
 	public getType(): Type {
@@ -53,6 +55,14 @@ export class Base {
 
 	public getVisibility(): Visibility {
 		return this.visibility;
+	}
+
+	public isVirtual(): boolean {
+		return this.virtual;
+	}
+
+	public setVirtual(virtual: boolean): void {
+		this.virtual = virtual;
 	}
 }
 
@@ -72,6 +82,14 @@ export class Class extends TemplateDeclaration {
 
 	public getBases(): ReadonlyArray<Base> {
 		return this.bases;
+	}
+
+	public getBaseClasses(): ReadonlyArray<Class> {
+		return this.bases
+			.map(base => base.getType())
+			.filter((type): type is DeclaredType => type instanceof DeclaredType)
+			.map(type => type.getDeclaration())
+			.filter((declaration): declaration is Class => declaration instanceof Class);
 	}
 
 	public addBase(type: Type, visibility: Visibility): void {
@@ -136,7 +154,10 @@ export class Class extends TemplateDeclaration {
 					writer.writeSpace();
 				}
 
-				// TODO: fix virtual inheritance
+				if (base.isVirtual()) {
+					writer.write("virtual");
+					writer.writeSpace();
+				}
 
 				base.getType().write(writer, this.getParent());
 			}
@@ -172,5 +193,38 @@ export class Class extends TemplateDeclaration {
 
 	public equals(other: Declaration): boolean {
 		return other instanceof Class && this.getName() === other.getName();
+	}
+
+	private getRecursiveBaseKeys(): ReadonlyArray<string> {
+		return this.getBaseClasses()
+			.flatMap(declaration => [...declaration.getRecursiveBaseKeys()])
+			.concat(this.bases.map(base => base.getType().key()));
+	}
+
+	public computeVirtualBaseClasses(keys?: ReadonlySet<string>): void {
+		if (!keys) {
+			const map = new Map<string, number>;
+
+			for (const key of this.getRecursiveBaseKeys()) {
+				const value = map.get(key) ?? 0;
+				map.set(key, value + 1);
+			}
+
+			keys = new Set(
+				[...map.entries()]
+					.filter(([key, count]) => count >= 2)
+					.map(([key, count]) => key)
+			);
+		}
+
+		for (const base of this.bases) {
+			if (keys.has(base.getType().key())) {
+				base.setVirtual(true);
+			}
+		}
+
+		for (const declaration of this.getBaseClasses()) {
+			declaration.computeVirtualBaseClasses(keys);
+		}
 	}
 }

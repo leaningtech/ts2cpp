@@ -195,20 +195,27 @@ export class Class extends TemplateDeclaration {
 		return other instanceof Class && this.getName() === other.getName();
 	}
 
-	private getRecursiveBaseKeys(): ReadonlyArray<string> {
-		return this.getBaseClasses()
-			.flatMap(declaration => [...declaration.getRecursiveBaseKeys()])
-			.concat(this.bases.map(base => base.getType().key()));
+	private getRecursiveBaseKeys(map: Map<string, number>): void {
+		for (const base of this.bases) {
+			const type = base.getType();
+			const key = type.key();
+			const value = map.get(key) ?? 0;
+			map.set(key, value + 1);
+
+			if (value === 0 && type instanceof DeclaredType) {
+				const declaration = type.getDeclaration();
+
+				if (declaration instanceof Class) {
+					declaration.getRecursiveBaseKeys(map);
+				}
+			}
+		}
 	}
 
 	public computeVirtualBaseClasses(keys?: ReadonlySet<string>): void {
 		if (!keys) {
 			const map = new Map<string, number>;
-
-			for (const key of this.getRecursiveBaseKeys()) {
-				const value = map.get(key) ?? 0;
-				map.set(key, value + 1);
-			}
+			this.getRecursiveBaseKeys(map);
 
 			keys = new Set(
 				[...map.entries()]

@@ -86,6 +86,7 @@ export class Parser {
 		this.stringBuiltin = this.getBuiltinType("String", this.objectBuiltin);
 		this.bigintBuiltin = this.getBuiltinType("BigInt", this.objectBuiltin);
 		this.symbolBuiltin = this.getBuiltinType("Symbol", this.objectBuiltin);
+
 		this.generate(this.root, namespace);
 		this.library.removeDuplicates();
 
@@ -100,6 +101,18 @@ export class Parser {
 
 	public getLibrary(): Library {
 		return this.library;
+	}
+
+	public getClasses(): ReadonlyArray<Class> {
+		return this.classes;
+	}
+
+	public getRootClass(name: string): Class | undefined {
+		const child = this.root.children.get(name);
+
+		if (child && child.basicClassObj) {
+			return child.basicClassObj;
+		}
 	}
 
 	private getBuiltinType(name: string, object?: BuiltinType): BuiltinType {
@@ -431,6 +444,8 @@ export class Parser {
 			}
 
 			typeObj.setType(this.getTypeConstraints(info.asTypeAlias(), types, decl.typeParameters));
+		} else {
+			typeObj.setType(info.asTypeAlias());
 		}
 
 		typeObj.removeUnusedTypeParameters();

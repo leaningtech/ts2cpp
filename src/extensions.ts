@@ -2,14 +2,22 @@ import { Flags } from "./namespace.js";
 import { Function } from "./function.js";
 import { Class, Visibility } from "./class.js";
 import { Type, DeclaredType, NamedType } from "./type.js";
-import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE } from "./types.js";
+import { VOID_TYPE, BOOL_TYPE, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE } from "./types.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
 
-function addConversionConstructor(classObj: Class, type: Type) {
+function addConversionConstructor(classObj: Class, type: Type): void {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addParameter(type, "x");
 	classObj.addMember(funcObj, Visibility.Public);
+}
+
+function addBase(parser: Parser, base: Class, derivedName: string): void {
+	const derivedClass = parser.getRootClass(derivedName);
+
+	if (derivedClass) {
+		derivedClass.addBase(new DeclaredType(base), Visibility.Public);
+	}
 }
 
 function addStringExtensions(parser: Parser, stringClass: Class): void {
@@ -89,6 +97,40 @@ return out;
 	stringClass.addMember(charConstructor, Visibility.Public);
 }
 
+function addMapExtensions(parser: Parser, mapClass: Class): void {
+	const keyType = new NamedType("K");
+	const valueType = new NamedType("V");
+
+	const getFunc = new Function("get", valueType);
+	getFunc.addTypeParameter("K");
+	getFunc.addTypeParameter("V");
+	getFunc.addParameter(keyType, "k");
+	
+	const setFunc = new Function("set", VOID_TYPE);
+	setFunc.addTypeParameter("K");
+	setFunc.addTypeParameter("V");
+	setFunc.addParameter(keyType, "k");
+	setFunc.addParameter(valueType, "v");
+
+	const hasFunc = new Function("has", BOOL_TYPE);
+	hasFunc.addTypeParameter("K");
+	hasFunc.addParameter(keyType, "k");
+
+	const deleteFunc = new Function("delete_", VOID_TYPE);
+	deleteFunc.addTypeParameter("K");
+	deleteFunc.addParameter(keyType, "k");
+	deleteFunc.setBody(`
+bool out;
+__asm__("%1.delete(%2)" : "=r"(out) : "r"(this), "r"(k));
+return out;
+	`);
+
+	mapClass.addMember(getFunc, Visibility.Public);
+	mapClass.addMember(setFunc, Visibility.Public);
+	mapClass.addMember(hasFunc, Visibility.Public);
+	mapClass.addMember(deleteFunc, Visibility.Public);
+}
+
 export function addExtensions(parser: Parser): void {
 	const library = parser.getLibrary();
 	const jsobjectFile = library.getFile("cheerp/jsobject.h")!;
@@ -99,7 +141,35 @@ export function addExtensions(parser: Parser): void {
 	jsobjectFile.addInclude("cstddef", true);
 	jsobjectFile.addInclude("cstdint", true);
 
+	const mapClass = parser.getRootClass("Map");
+	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
+
 	if (parser.stringBuiltin.classObj) {
 		addStringExtensions(parser, parser.stringBuiltin.classObj);
+	}
+
+	if (mapClass) {
+		addMapExtensions(parser, mapClass);
+	}
+
+	if (arrayBufferViewClass) {
+		addBase(parser, arrayBufferViewClass, "Int8Array");
+		addBase(parser, arrayBufferViewClass, "Uint8Array");
+		addBase(parser, arrayBufferViewClass, "Uint8ClampedArray");
+		addBase(parser, arrayBufferViewClass, "Int16Array");
+		addBase(parser, arrayBufferViewClass, "Uint16Array");
+		addBase(parser, arrayBufferViewClass, "Int32Array");
+		addBase(parser, arrayBufferViewClass, "Uint32Array");
+		addBase(parser, arrayBufferViewClass, "Float32Array");
+		addBase(parser, arrayBufferViewClass, "Float64Array");
+		arrayBufferViewClass.computeVirtualBaseClasses();
+	}
+
+	for (const classObj of parser.getClasses()) {
+		for (const child of classObj.getChildren()) {
+			if (child instanceof Function && child.getName() === "get_length") {
+				child.setType(INT_TYPE);
+			}
+		}
 	}
 }

@@ -113,7 +113,7 @@ export function escapeName(name: string): string {
 	}
 
 	if (RESERVED.includes(result)) {
-		result = "_" + result;
+		result = result + "_";
 	}
 
 	return result;

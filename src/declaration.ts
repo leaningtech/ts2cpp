@@ -214,7 +214,7 @@ export abstract class TemplateDeclaration extends Declaration {
 		}
 
 		for (let i = 0; i < this.typeParameters.length; i++) {
-			if (this.typeParameters[i].isVariadic() != other.typeParameters[i].isVariadic()) {
+			if (this.typeParameters[i].isVariadic() !== other.typeParameters[i].isVariadic()) {
 				return false;
 			}
 		}

@@ -4,11 +4,11 @@ import { Reason, ReasonKind } from "./target.js";
 
 // TODO: split header files so clientlib.h just includes other stuff but they can be included separately too
 
-const library = parse(["/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts"]);
-// const file = parse(["test.d.ts"]);
-// const node = parseNode(["test.d.ts"]);
-// const node = parseNode(["/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts"]);
-// const file = parseFile(node);
+const library = parse([
+	//"test.d.ts",
+	"/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts",
+	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es2015.d.ts",
+]);
 
 try {
 	library.write({ pretty: true });

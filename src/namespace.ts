@@ -3,10 +3,12 @@ import { Writer } from "./writer.js";
 export enum Flags {
 	Static = 1,
 	Extern = 2,
+	Explicit = 4,
+	Const = 8,
 }
 
 export class Namespace {
-	private readonly name: string;
+	private name: string;
 	private flags: Flags = 0 as Flags;
 	private parent?: Namespace;
 	private attributes: Array<string> = new Array;
@@ -18,6 +20,10 @@ export class Namespace {
 
 	public getName(): string {
 		return this.name;
+	}
+
+	public setName(name: string): void {
+		this.name = name;
 	}
 
 	public getFlags(): Flags {

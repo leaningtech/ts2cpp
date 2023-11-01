@@ -120,6 +120,11 @@ export class Function extends TemplateDeclaration {
 		let first = true;
 		this.writeTemplate(writer);
 
+		if (flags & Flags.Explicit) {
+			writer.write("explicit");
+			writer.writeSpace();
+		}
+
 		if (flags & Flags.Static) {
 			writer.write("static");
 			writer.writeSpace();
@@ -156,6 +161,11 @@ export class Function extends TemplateDeclaration {
 		}
 
 		writer.write(")");
+
+		if (flags & Flags.Const) {
+			writer.writeSpace(false);
+			writer.write("const");
+		}
 
 		if (this.getAttributes().length > 0) {
 			writer.writeSpace(false);

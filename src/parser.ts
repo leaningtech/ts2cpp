@@ -39,6 +39,7 @@ class Child extends Node {
 	public genericClassObj?: Class;
 	public basicTypeObj?: TypeAlias;
 	public genericTypeObj?: TypeAlias;
+	public type?: ts.Type;
 
 	public constructor(name: string) {
 		super();
@@ -66,6 +67,7 @@ export class Parser {
 	private readonly classes: Array<Class> = new Array;
 	private readonly library: Library;
 	public readonly objectBuiltin: BuiltinType;
+	public readonly numberBuiltin: BuiltinType;
 	public readonly stringBuiltin: BuiltinType;
 	public readonly bigintBuiltin: BuiltinType;
 	public readonly symbolBuiltin: BuiltinType;
@@ -83,6 +85,7 @@ export class Parser {
 		}
 
 		this.objectBuiltin = this.getBuiltinType("Object");
+		this.numberBuiltin = this.getBuiltinType("Number", this.objectBuiltin);
 		this.stringBuiltin = this.getBuiltinType("String", this.objectBuiltin);
 		this.bigintBuiltin = this.getBuiltinType("BigInt", this.objectBuiltin);
 		this.symbolBuiltin = this.getBuiltinType("Symbol", this.objectBuiltin);
@@ -151,16 +154,16 @@ export class Parser {
 				child.interfaceDecls.push(node);
 
 				if (!child.basicClassObj) {
-					const type = this.typeChecker.getTypeAtLocation(node);
-					const interfaceType = type as ts.InterfaceType;
+					child.type = this.typeChecker.getTypeAtLocation(node);
+					const interfaceType = child.type as ts.InterfaceType;
 					child.basicClassObj = new Class(name);
 					const basicClassType = new DeclaredType(child.basicClassObj);
-					this.basicDeclaredTypes.set(type, basicClassType);
+					this.basicDeclaredTypes.set(child.type, basicClassType);
 
 					if (interfaceType.typeParameters && interfaceType.typeParameters.length > 0) {
 						child.genericClassObj = new Class(`T${name}`);
 						child.genericClassObj.addBase(basicClassType, Visibility.Public);
-						this.genericDeclaredTypes.set(type, new DeclaredType(child.genericClassObj));
+						this.genericDeclaredTypes.set(child.type, new DeclaredType(child.genericClassObj));
 					}
 				}
 			} else if (ts.isFunctionDeclaration(node)) {
@@ -221,7 +224,7 @@ export class Parser {
 		} else if (type.flags & ts.TypeFlags.Undefined) {
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.Any) {
-			info.addType(ANY_TYPE, TypeKind.Class);
+			info.addType(this.objectBuiltin.type, TypeKind.Class);
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
 			info.addType(VOID_TYPE, TypeKind.Primitive);
@@ -264,6 +267,10 @@ export class Parser {
 			} else {
 				info.addType(this.objectBuiltin.type, TypeKind.Class);
 			}
+		} else if (type.isTypeParameter()) {
+			info.addType(ANY_TYPE, TypeKind.Class);
+			info.addType(DOUBLE_TYPE, TypeKind.Primitive);
+			info.setOptional();
 		} else {
 			info.addType(this.objectBuiltin.type, TypeKind.Class);
 		}
@@ -489,7 +496,7 @@ export class Parser {
 		}
 	}
 
-	private generateClass(node: Child, classObj: Class, types: TypeMap, typeId: number, generic: boolean): void {
+	private generateClass(node: Child, classObj: Class, types: TypeMap, typeId: number, generic: boolean, parent?: Namespace): void {
 		if (node.interfaceDecls.length > 0) {
 			const type = this.typeChecker.getTypeAtLocation(node.interfaceDecls[0]);
 			const interfaceType = type as ts.InterfaceType;
@@ -561,12 +568,12 @@ export class Parser {
 		for (const child of node.children.values()) {
 			if (child.basicClassObj) {
 				if (!generic) {
-					this.generateClass(child, child.basicClassObj, types, typeId, false);
+					this.generateClass(child, child.basicClassObj, types, typeId, false, classObj);
 					classObj.addMember(child.basicClassObj, Visibility.Public);
 					this.library.addGlobal(child.basicClassObj);
 
 					if (child.genericClassObj) {
-						this.generateClass(child, child.genericClassObj, types, typeId, true);
+						this.generateClass(child, child.genericClassObj, types, typeId, true, classObj);
 						classObj.addMember(child.genericClassObj, Visibility.Public);
 						this.library.addGlobal(child.genericClassObj);
 					}
@@ -592,14 +599,29 @@ export class Parser {
 				}
 			} else if (!generic) {
 				child.basicClassObj = new Class(child.name);
-				this.generateClass(child, child.basicClassObj, types, typeId, false);
+				this.generateClass(child, child.basicClassObj, types, typeId, false, classObj);
 				classObj.addMember(child.basicClassObj, Visibility.Public);
 				this.library.addGlobal(child.basicClassObj);
 			}
 		}
 
 		if (node.varDecl) {
-			this.generateConstructor(node, classObj, types, typeId, node.varDecl, generic);
+			const type = this.typeChecker.getTypeFromTypeNode(node.varDecl.type!);
+
+			if (type === node.type) {
+				classObj.setName(classObj.getName() + "Class");
+				const varObj = this.createVar(node.varDecl, TYPES_EMPTY, false);
+				varObj.addFlags(Flags.Extern);
+
+				if (parent instanceof Class) {
+					parent.addMember(varObj, Visibility.Public);
+				} else {
+					varObj.setParent(parent);
+					this.library.addGlobal(varObj);
+				}
+			} else {
+				this.generateConstructor(node, classObj, types, typeId, node.varDecl, generic);
+			}
 		}
 
 		// classObj.removeUnusedTypeParameters();
@@ -610,13 +632,13 @@ export class Parser {
 	private generate(node: Node, namespace?: Namespace): void {
 		for (const child of node.children.values()) {
 			if (child.basicClassObj) {
-				this.generateClass(child, child.basicClassObj, TYPES_EMPTY, 0, false);
+				this.generateClass(child, child.basicClassObj, TYPES_EMPTY, 0, false, namespace);
 				child.basicClassObj.setParent(namespace);
 				child.basicClassObj.computeReferences();
 				this.library.addGlobal(child.basicClassObj);
 
 				if (child.genericClassObj) {
-					this.generateClass(child, child.genericClassObj, TYPES_EMPTY, 0, true);
+					this.generateClass(child, child.genericClassObj, TYPES_EMPTY, 0, true, namespace);
 					child.genericClassObj.setParent(namespace);
 					child.genericClassObj.computeReferences();
 					this.library.addGlobal(child.genericClassObj);

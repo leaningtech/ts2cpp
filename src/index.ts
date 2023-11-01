@@ -7,7 +7,7 @@ import { Reason, ReasonKind } from "./target.js";
 const library = parse([
 	//"test.d.ts",
 	"/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts",
-	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es2015.d.ts",
+	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es2017.d.ts",
 ]);
 
 try {

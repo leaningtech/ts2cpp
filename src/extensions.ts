@@ -2,22 +2,16 @@ import { Flags } from "./namespace.js";
 import { Function } from "./function.js";
 import { Class, Visibility } from "./class.js";
 import { Type, DeclaredType, NamedType } from "./type.js";
-import { VOID_TYPE, BOOL_TYPE, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE } from "./types.js";
+import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE } from "./types.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
+
+// TODO: add constraints for type parameters in this file
 
 function addConversionConstructor(classObj: Class, type: Type): void {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addParameter(type, "x");
 	classObj.addMember(funcObj, Visibility.Public);
-}
-
-function addBase(parser: Parser, base: Class, derivedName: string): void {
-	const derivedClass = parser.getRootClass(derivedName);
-
-	if (derivedClass) {
-		derivedClass.addBase(new DeclaredType(base), Visibility.Public);
-	}
 }
 
 function addStringExtensions(parser: Parser, stringClass: Class): void {
@@ -57,6 +51,7 @@ return out;
 	`);
 
 	const toUtf8 = new Function("toUtf8", STRING_TYPE);
+	toUtf8.addFlags(Flags.Const);
 	toUtf8.setBody(`
 std::string out;
 std::size_t len = get_length();
@@ -91,10 +86,57 @@ return out;
 	charConstructor.addParameter(CONST_CHAR_POINTER_TYPE, "x");
 	charConstructor.addInitializer(stringClass.getName(), "fromUtf8(x)");
 	charConstructor.setBody(``);
+	
+	const stringConversion = new Function("operator std::string");
+	stringConversion.addFlags(Flags.Const | Flags.Explicit);
+	stringConversion.setBody(`
+return this->toUtf8();
+	`);
 
 	stringClass.addMember(fromUtf8, Visibility.Public);
 	stringClass.addMember(toUtf8, Visibility.Public);
 	stringClass.addMember(charConstructor, Visibility.Public);
+	stringClass.addMember(stringConversion, Visibility.Public);
+}
+
+function addNumberExtensions(parser: Parser, numberClass: Class): void {
+	const doubleConstructor = new Function(numberClass.getName());
+	doubleConstructor.addParameter(DOUBLE_TYPE, "x");
+
+	numberClass.addMember(doubleConstructor, Visibility.Public);
+}
+
+function addObjectExtensions(parser: Parser, objectClass: Class): void {
+	const setFunc = new Function("set_", VOID_TYPE);
+	setFunc.addParameter(parser.stringBuiltin.type.constReference(), "name");
+	setFunc.addParameter(parser.objectBuiltin.type.constPointer(), "v");
+
+	const genericSetFunc = new Function("set_", VOID_TYPE);
+	genericSetFunc.addTypeParameter("T");
+	genericSetFunc.addParameter(parser.stringBuiltin.type.constReference(), "name");
+	genericSetFunc.addParameter(new NamedType("T"), "v");
+	
+	const indexFunc = new Function("operator[]", parser.objectBuiltin.type.pointer());
+	indexFunc.addFlags(Flags.Const);
+	indexFunc.addParameter(parser.stringBuiltin.type.constReference(), "name");
+	
+	const doubleConversion = new Function("operator double");
+	doubleConversion.addFlags(Flags.Const | Flags.Explicit);
+	doubleConversion.setBody(`
+return this->cast<double>();
+	`);
+
+	const intConversion = new Function("operator int");
+	intConversion.addFlags(Flags.Const | Flags.Explicit);
+	intConversion.setBody(`
+return this->cast<int>();
+	`);
+
+	objectClass.addMember(setFunc, Visibility.Public);
+	objectClass.addMember(genericSetFunc, Visibility.Public);
+	objectClass.addMember(indexFunc, Visibility.Public);
+	// objectClass.addMember(doubleConversion, Visibility.Public);
+	// objectClass.addMember(intConversion, Visibility.Public);
 }
 
 function addMapExtensions(parser: Parser, mapClass: Class): void {
@@ -116,7 +158,7 @@ function addMapExtensions(parser: Parser, mapClass: Class): void {
 	hasFunc.addTypeParameter("K");
 	hasFunc.addParameter(keyType, "k");
 
-	const deleteFunc = new Function("delete_", VOID_TYPE);
+	const deleteFunc = new Function("delete_", BOOL_TYPE);
 	deleteFunc.addTypeParameter("K");
 	deleteFunc.addParameter(keyType, "k");
 	deleteFunc.setBody(`
@@ -131,6 +173,62 @@ return out;
 	mapClass.addMember(deleteFunc, Visibility.Public);
 }
 
+function addArrayExtensions(parser: Parser, arrayClass: Class): void {
+	const indexFunc = new Function("operator[]", parser.objectBuiltin.type.pointer());
+	indexFunc.addFlags(Flags.Const);
+	indexFunc.addParameter(INT_TYPE, "index");
+	indexFunc.setBody(`
+return __builtin_cheerp_make_regular<Object*>(this, 0)[index];
+	`);
+	
+	const indexRefFunc = new Function("operator[]", parser.objectBuiltin.type.pointer().reference());
+	indexRefFunc.addParameter(INT_TYPE, "index");
+	indexRefFunc.setBody(`
+return __builtin_cheerp_make_regular<Object*>(this, 0)[index];
+	`);
+
+	arrayClass.addMember(indexFunc, Visibility.Public);
+	arrayClass.addMember(indexRefFunc, Visibility.Public);
+}
+
+function addTypedArrayExtensions(parser: Parser, arrayBufferViewClass: Class, name: string, type: string): void {
+	const typedArrayClass = parser.getRootClass(name);
+
+	if (typedArrayClass) {
+		typedArrayClass.addBase(new DeclaredType(arrayBufferViewClass), Visibility.Public);
+		typedArrayClass.computeVirtualBaseClasses();
+
+		const indexFunc = new Function("operator[]", new NamedType(type));
+		indexFunc.addFlags(Flags.Const);
+		indexFunc.addParameter(INT_TYPE, "index");
+		indexFunc.setBody(`
+return __builtin_cheerp_make_regular<${type}>(this, 0)[index];
+		`);
+		
+		const indexRefFunc = new Function("operator[]", new NamedType(type).reference());
+		indexRefFunc.addParameter(INT_TYPE, "index");
+		indexRefFunc.setBody(`
+return __builtin_cheerp_make_regular<${type}>(this, 0)[index];
+		`);
+
+		typedArrayClass.addMember(indexFunc, Visibility.Public);
+		typedArrayClass.addMember(indexRefFunc, Visibility.Public);
+	}
+}
+
+function addFunctionExtensions(parser: Parser, functionClass: Class) {
+	const eventListenerClass = parser.getRootClass("EventListener");
+
+	if (eventListenerClass) {
+		const eventListenerConstructor = new Function(functionClass.getName());
+		eventListenerConstructor.addParameter(new DeclaredType(eventListenerClass).pointer(), "x");
+		eventListenerConstructor.addInitializer("Object", "reinterpret_cast<Object*>(x)");
+		eventListenerConstructor.setBody(``);
+
+		functionClass.addMember(eventListenerConstructor, Visibility.Public);
+	}
+}
+
 export function addExtensions(parser: Parser): void {
 	const library = parser.getLibrary();
 	const jsobjectFile = library.getFile("cheerp/jsobject.h")!;
@@ -142,33 +240,76 @@ export function addExtensions(parser: Parser): void {
 	jsobjectFile.addInclude("cstdint", true);
 
 	const mapClass = parser.getRootClass("Map");
+	const arrayClass = parser.getRootClass("Array");
 	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
+	const functionClass = parser.getRootClass("Function");
 
 	if (parser.stringBuiltin.classObj) {
 		addStringExtensions(parser, parser.stringBuiltin.classObj);
+	}
+
+	if (parser.numberBuiltin.classObj) {
+		addNumberExtensions(parser, parser.numberBuiltin.classObj);
+	}
+
+	if (parser.objectBuiltin.classObj) {
+		addObjectExtensions(parser, parser.objectBuiltin.classObj);
 	}
 
 	if (mapClass) {
 		addMapExtensions(parser, mapClass);
 	}
 
+	if (arrayClass) {
+		addArrayExtensions(parser, arrayClass);
+	}
+
 	if (arrayBufferViewClass) {
-		addBase(parser, arrayBufferViewClass, "Int8Array");
-		addBase(parser, arrayBufferViewClass, "Uint8Array");
-		addBase(parser, arrayBufferViewClass, "Uint8ClampedArray");
-		addBase(parser, arrayBufferViewClass, "Int16Array");
-		addBase(parser, arrayBufferViewClass, "Uint16Array");
-		addBase(parser, arrayBufferViewClass, "Int32Array");
-		addBase(parser, arrayBufferViewClass, "Uint32Array");
-		addBase(parser, arrayBufferViewClass, "Float32Array");
-		addBase(parser, arrayBufferViewClass, "Float64Array");
-		arrayBufferViewClass.computeVirtualBaseClasses();
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Int8Array", "char");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint8Array", "unsigned char");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint8ClampedArray", "double");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Int16Array", "short");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint16Array", "unsigned short");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Int32Array", "int");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint32Array", "unsigned int");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Float32Array", "float");
+		addTypedArrayExtensions(parser, arrayBufferViewClass, "Float64Array", "double");
+	}
+
+	if (functionClass) {
+		addFunctionExtensions(parser, functionClass);
 	}
 
 	for (const classObj of parser.getClasses()) {
+		const className = classObj.getName();
+
 		for (const child of classObj.getChildren()) {
-			if (child instanceof Function && child.getName() === "get_length") {
-				child.setType(INT_TYPE);
+			if (child instanceof Function) {
+				const name = child.getName();
+				const parameters = child.getParameters();
+				const type = parameters.length === 1 ? parameters[0].getType() : undefined;
+
+				if (name === "get_length" || name === "get_size") {
+					child.addFlags(Flags.Const);
+					child.setType(INT_TYPE);
+				} else if (name === "indexOf" || name === "lastIndexOf") {
+					child.addFlags(Flags.Const);
+					child.setType(INT_TYPE);
+				} else if (name === "charCodeAt") {
+					child.addFlags(Flags.Const);
+					child.setType(INT_TYPE);
+				} else if (name === "concat") {
+					child.addFlags(Flags.Const);
+				} else if (className === "String" && name === "String") {
+					const keys = [
+						parser.objectBuiltin.type.constReference().key(),
+						parser.objectBuiltin.type.constPointer().key(),
+					];
+
+					if (type && keys.includes(type.key())) {
+						child.addFlags(Flags.Explicit);
+					}
+				}
 			}
 		}
 	}

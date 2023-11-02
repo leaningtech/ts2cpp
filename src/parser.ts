@@ -346,7 +346,7 @@ export class Parser {
 		}
 	}
 
-	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, className?: string): Generator<Function> {
+	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, forward?: string, className?: string): Generator<Function> {
 		let name, returnType;
 		let params = new Array(new Array);
 		let questionParams = new Array;
@@ -394,6 +394,7 @@ export class Parser {
 		for (const parameters of params) {
 			const funcObj = new Function(name, returnType);
 			const constraint = new ValueExpression(ExpressionKind.LogicalAnd);
+			const forwardParameters = [];
 
 			for (const typeParam of typeParams) {
 				funcObj.addTypeParameter(typeParam);
@@ -412,13 +413,23 @@ export class Parser {
 					argsConstraint.addChild(Expression.isAcceptable(param, element));
 					argsConstraint.addChild(ELLIPSES);
 					constraint.addChild(argsConstraint);
+					forwardParameters.push(name + "...");
 				} else {
 					funcObj.addParameter(type, name);
+					forwardParameters.push(name);
 				}
 			}
 
 			if (returnType && constraint.getChildren().length > 0) {
 				funcObj.setType(Type.enableIf(constraint, returnType));
+			}
+
+			// TODO: forward static methods as well
+
+			if (forward && ts.isConstructSignatureDeclaration(decl)) {
+				const params = forwardParameters.join(", ");
+				funcObj.addInitializer(forward, params);
+				funcObj.setBody(``);
 			}
 
 			funcObj.removeUnusedTypeParameters();
@@ -459,6 +470,7 @@ export class Parser {
 	}
 
 	private generateConstructor(node: Child, classObj: Class, classTypes: TypeMap, typeId: number, decl: VarDecl, generic: boolean): void {
+		const forward = generic ? node.name : undefined;
 		const type = this.typeChecker.getTypeFromTypeNode(decl.type!);
 		const [symbol, types] = this.getSymbol(type, classTypes);
 		const members = (symbol.declarations ?? new Array)
@@ -467,12 +479,12 @@ export class Parser {
 
 		for (const member of members) {
 			if (ts.isMethodSignature(member)) {
-				for (const funcObj of this.createFuncs(member, types, typeId)) {
+				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
 					funcObj.addFlags(Flags.Static);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isConstructSignatureDeclaration(member)) {
-				for (const funcObj of this.createFuncs(member, types, typeId, classObj.getName())) {
+				for (const funcObj of this.createFuncs(member, types, typeId, forward, classObj.getName())) {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member)) {
@@ -526,12 +538,12 @@ export class Parser {
 			}
 		}
 
-		const members = node.interfaceDecls
-			.flatMap(decl => decl.members);
+		const forward = generic ? node.name : undefined;
+		const members = node.interfaceDecls.flatMap(decl => decl.members);
 
 		for (const member of members) {
 			if (ts.isMethodSignature(member)) {
-				for (const funcObj of this.createFuncs(member, types, typeId)) {
+				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member)) {
@@ -579,7 +591,7 @@ export class Parser {
 					}
 				}
 			} else if (child.funcDecl) {
-				for (const funcObj of this.createFuncs(child.funcDecl, types, typeId)) {
+				for (const funcObj of this.createFuncs(child.funcDecl, types, typeId, forward)) {
 					funcObj.addFlags(Flags.Static);
 					classObj.addMember(funcObj, Visibility.Public);
 				}

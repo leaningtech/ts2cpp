@@ -41,6 +41,12 @@ export class Writer {
 		}
 	}
 
+	public writeLineStart(required: boolean = true): void {
+		if (!this.line) {
+			this.writeLine(required);
+		}
+	}
+
 	public writeSpace(required: boolean = true): void {
 		if (required || this.options.pretty) {
 			this.stream.write(this.options.space);
@@ -68,14 +74,19 @@ export class Writer {
 		this.writeLine(false);
 	}
 
+	public writeText(text: string): void {
+		for (const line of text.trim().split("\n")) {
+			this.writeLineStart(line.startsWith("#"));
+			this.write(this.options.pretty ? line : line.trim());
+			this.writeLine(line.startsWith("#"));
+		}
+	}
+
 	public writeBody(body: string, semicolon: boolean = false): void {
 		this.writeBlockOpen();
 
 		if (body !== "") {
-			for (const line of body.trim().split("\n")) {
-				this.write(this.options.pretty ? line : line.trim());
-				this.writeLine(false);
-			}
+			this.writeText(body);
 		}
 
 		this.writeBlockClose(semicolon);

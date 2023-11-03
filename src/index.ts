@@ -1,86 +1,60 @@
+import { Parser } from "./parser.js";
+import { catchErrors } from "./error.js";
+import { Library } from "./library.js";
+import { addExtensions } from "./extensions.js";
+import { setIgnoreErrors } from "./target.js";
+import { program } from "commander";
+import { JSHELPER_SOURCE } from "./jshelper.js";
 import { Writer } from "./writer.js";
-import { parse } from "./parser.js";
-import { Reason, ReasonKind } from "./target.js";
+import * as ts from "typescript";
 
-// TODO: split header files so clientlib.h just includes other stuff but they can be included separately too
+program
+	.option("--pretty")
+	.option("--default-lib")
+	.option("--out, -o <file>")
+	.option("--ignore-errors");
 
-const library = parse([
-	//"test.d.ts",
-	"/home/user/ts2cpp/node_modules/typescript/lib/lib.d.ts",
-	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es2017.d.ts",
-]);
+program.parse();
 
-try {
-	library.write({ pretty: true });
-} catch (reason) {
-	if (reason instanceof Reason) {
-		let kind = reason.getKind();
-		let prevDeclaration = reason.getDeclaration();
-		let nextReason = reason.getNext();
-		
-		console.error(`dependency cycle detected while generating [${prevDeclaration.getPath()}]`);
+const options = program.opts();
 
-		while (nextReason) {
-			let prevPath = prevDeclaration.getPath();
-			const path = nextReason.getDeclaration().getPath();
+const tsProgram = ts.createProgram(program.args, {
+	noLib: !options.defaultLib,
+});
 
-			switch (kind) {
-			case ReasonKind.Inner:
-				console.error(`required to generate [${path}]`);
-				break;
-			case ReasonKind.Member:
-				let referenceData = prevDeclaration.getReferenceData();
-				console.error(`required as part of the declaration of [${path}]`);
-				
-				while (referenceData) {
-					const referencedByPath = referenceData.getReferencedBy().getPath();
-					const referencedIn = referenceData.getReferencedIn();
-					
-					switch (referenceData.getReasonKind()) {
-					case ReasonKind.BaseClass:
-						console.error(`  because [${prevPath}] is referenced as a *base class* of [${referencedByPath}]`);
-						break;
-					case ReasonKind.VariableType:
-						console.error(`  because [${prevPath}] is referenced as the *type* of [${referencedByPath}]`);
-						break;
-					case ReasonKind.ReturnType:
-						console.error(`  because [${prevPath}] is referenced as the *return type* of [${referencedByPath}]`);
-						break;
-					case ReasonKind.ParameterType:
-						console.error(`  because [${prevPath}] is referenced as an *parameter type* of [${referencedByPath}]`);
-						break;
-					default:
-						console.error(`  because [${prevPath}] is referenced by [${referencedByPath}]`);
-						break;
-					}
+const library = new Library(options.O ?? "cheerp/clientlib.h");
 
-					prevPath = referencedIn.getPath();
-					referenceData = referencedIn.getReferenceData();
-				}
+let writerOptions = {
+	pretty: options.pretty,
+};
 
-				break;
-			case ReasonKind.BaseClass:
-				console.error(`required as a *base class* of [${path}]`);
-				break;
-			case ReasonKind.VariableType:
-				console.error(`required as the *type* of [${path}]`);
-				break;
-			case ReasonKind.ReturnType:
-				console.error(`required as the *return type* of [${path}]`);
-				break;
-			case ReasonKind.ParameterType:
-				console.error(`required as an *parameter type* of [${path}]`);
-				break;
-			default:
-				console.error(`required by ${path}`);
-				break;
-			}
-
-			kind = nextReason.getKind();
-			prevDeclaration = nextReason.getDeclaration();
-			nextReason = nextReason.getNext();
-		}
-	} else {
-		throw reason;
-	}
+if (options.defaultLib) {
+	const jshelperWriter = new Writer("cheerp/jshelper.h", writerOptions);
+	const jsobjectFile = library.addFile("cheerp/jsobject.h");
+	const typesFile = library.addFile("cheerp/types.h");
+	const clientlibFile = library.getDefaultFile();
+	jsobjectFile.addName("client::Object");
+	typesFile.addName("client::String");
+	typesFile.addName("client::Array");
+	typesFile.addName("client::Map");
+	typesFile.addName("client::Number");
+	typesFile.addName("client::Function");
+	typesFile.addInclude("jsobject.h", false, jsobjectFile);
+	clientlibFile.addInclude("types.h", false, typesFile);
+	library.addGlobalInclude("jshelper.h", false);
+	jshelperWriter.writeText(JSHELPER_SOURCE);
+} else {
+	library.addGlobalInclude("cheerp/clientlib.h", true);
 }
+
+const parser = new Parser(tsProgram, library);
+
+if (options.defaultLib) {
+	addExtensions(parser);
+}
+
+setIgnoreErrors(options.ignoreErrors);
+
+catchErrors(() => {
+	library.write(writerOptions);
+});

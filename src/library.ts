@@ -310,6 +310,7 @@ export class LibraryWriter {
 		for (const fileWriter of this.writers) {
 			const writer = fileWriter.getWriter();
 			fileWriter.writeNamespaceChange(undefined);
+			writer.writeLineStart();
 			writer.write("#endif");
 			writer.writeLine();
 		}

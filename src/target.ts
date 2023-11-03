@@ -1,6 +1,6 @@
 import { Declaration } from "./declaration.js";
 
-const IGNORE_ERRORS = false;
+let ignoreErrors = false;
 
 export enum State {
 	Partial,
@@ -135,7 +135,7 @@ class DependencyResolver<T extends Target> {
 			const pendingState = pendingStates[pendingStates.length - 1];
 
 			if (pendingState !== undefined && state >= pendingState) {
-				if (IGNORE_ERRORS) {
+				if (ignoreErrors) {
 					this.resolve(target, state);
 					declaration.setState(state);
 					return;
@@ -180,6 +180,10 @@ class DependencyResolver<T extends Target> {
 			this.resolveDependency(declaration, target, target.getTargetState(), ReasonKind.Root)
 		}
 	}
+}
+
+export function setIgnoreErrors(value: boolean): void {
+	ignoreErrors = false;
 }
 
 export function resolveDependencies<T extends Target>(targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {

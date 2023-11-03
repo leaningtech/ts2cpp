@@ -9,7 +9,6 @@ import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredT
 import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ARRAY_ELEMENT_TYPE, ANY_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
-import { addExtensions } from "./extensions.js";
 import * as ts from "typescript";
 
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
@@ -77,7 +76,6 @@ export class Parser {
 	public constructor(program: ts.Program, library: Library) {
 		this.library = library;
 		this.library.addGlobalInclude("type_traits", true);
-		this.library.addGlobalInclude("jshelper.h", false);
 		this.typeChecker = program.getTypeChecker();
 		const namespace = new Namespace("client");
 		namespace.addAttribute("cheerp::genericjs");
@@ -573,8 +571,10 @@ export class Parser {
 			}
 		}
 
+
 		if (classObj.getBases().length === 0) {
 			if (this.objectBuiltin.classObj !== classObj) {
+				// TODO: automatically find an appropriate base class
 				classObj.addBase(this.objectBuiltin.type, Visibility.Public);
 			} else {
 				classObj.addBase(ANY_TYPE, Visibility.Public);
@@ -687,23 +687,4 @@ export class Parser {
 			}
 		}
 	}
-}
-
-export function parse(names: ReadonlyArray<string>): Library {
-	const program = ts.createProgram(names, {});
-	const library = new Library("cheerp/clientlib.h");
-	const jsobjectFile = library.addFile("cheerp/jsobject.h");
-	const typesFile = library.addFile("cheerp/types.h");
-	const clientlibFile = library.getDefaultFile();
-	jsobjectFile.addName("client::Object");
-	typesFile.addName("client::String");
-	typesFile.addName("client::Array");
-	typesFile.addName("client::Map");
-	typesFile.addName("client::Number");
-	typesFile.addName("client::Function");
-	typesFile.addInclude("jsobject.h", false, jsobjectFile);
-	clientlibFile.addInclude("types.h", false, typesFile);
-	const parser = new Parser(program, library);
-	addExtensions(parser);
-	return library;
 }

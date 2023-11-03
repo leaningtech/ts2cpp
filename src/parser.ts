@@ -7,7 +7,7 @@ import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
 import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType } from "./type.js";
 import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ARRAY_ELEMENT_TYPE, ANY_TYPE, ARGS, ELLIPSES } from "./types.js";
-import { escapeName } from "./name.js";
+import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { addExtensions } from "./extensions.js";
 import * as ts from "typescript";
@@ -17,11 +17,11 @@ const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
 class Node {
 	public readonly children: Map<string, Child> = new Map;
 
-	public get(name: string): Child {
+	public get(interfaceName: string, name: string): Child {
 		let node = this.children.get(name);
 
 		if (!node) {
-			node = new Child(name);
+			node = new Child(interfaceName, name);
 			this.children.set(name, node);
 		}
 
@@ -30,7 +30,8 @@ class Node {
 }
 
 class Child extends Node {
-	public readonly name: string
+	public readonly interfaceName: string;
+	public readonly name: string;
 	public readonly interfaceDecls: Array<ts.InterfaceDeclaration> = new Array;
 	public funcDecl?: ts.FunctionDeclaration;
 	public varDecl?: ts.VariableDeclaration;
@@ -41,8 +42,9 @@ class Child extends Node {
 	public genericTypeObj?: TypeAlias;
 	public type?: ts.Type;
 
-	public constructor(name: string) {
+	public constructor(interfaceName: string, name: string) {
 		super();
+		this.interfaceName = interfaceName;
 		this.name = name;
 	}
 }
@@ -149,8 +151,8 @@ export class Parser {
 	private discover(self: Node, parent: ts.Node): void {
 		ts.forEachChild(parent, node => {
 			if (ts.isInterfaceDeclaration(node)) {
-				const name = escapeName(node.name.getText());
-				const child = self.get(name);
+				const [interfaceName, name] = getName(node.name);
+				const child = self.get(interfaceName, name);
 				child.interfaceDecls.push(node);
 
 				if (!child.basicClassObj) {
@@ -167,19 +169,19 @@ export class Parser {
 					}
 				}
 			} else if (ts.isFunctionDeclaration(node)) {
-				const name = escapeName(node.name!.getText());
-				const child = self.get(name);
+				const [interfaceName, name] = getName(node.name!);
+				const child = self.get(interfaceName, name);
 				child.funcDecl = node;
 			} else if (ts.isVariableStatement(node)) {
 				for (const decl of node.declarationList.declarations) {
-					const name = escapeName(decl.name.getText());
-					const child = self.get(name);
+					const [interfaceName, name] = getName(decl.name);
+					const child = self.get(interfaceName, name);
 					child.varDecl = decl;
 				}
 			} else if (ts.isTypeAliasDeclaration(node)) {
 				const type = this.typeChecker.getTypeAtLocation(node);
-				const name = escapeName(node.name.getText());
-				const child = self.get(name);
+				const [interfaceName, name] = getName(node.name);
+				const child = self.get(interfaceName, name);
 				child.typeDecl = node;
 				child.basicTypeObj = new TypeAlias(name, VOID_TYPE);
 
@@ -187,8 +189,8 @@ export class Parser {
 					// child.genericTypeObj = new TypeAlias(`T${name}`, VOID_TYPE);
 				}
 			} else if (ts.isModuleDeclaration(node)) {
-				const name = escapeName(node.name.getText());
-				const child = self.get(name);
+				const [interfaceName, name] = getName(node.name);
+				const child = self.get(interfaceName, name);
 				this.discover(child, node.body!);
 			}
 		});
@@ -347,7 +349,7 @@ export class Parser {
 	}
 
 	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, forward?: string, className?: string): Generator<Function> {
-		let name, returnType;
+		let interfaceName, name, returnType;
 		let params = new Array(new Array);
 		let questionParams = new Array;
 		const typeParams = new Array;
@@ -362,9 +364,10 @@ export class Parser {
 		}
 
 		if (ts.isConstructSignatureDeclaration(decl)) {
+			interfaceName = className!;
 			name = className!;
 		} else {
-			name = escapeName(decl.name!.getText());
+			[interfaceName, name] = getName(decl.name);
 			const returnInfo = this.getTypeNodeInfo(decl.type!, types);
 			returnType = returnInfo.asReturnType();
 		}
@@ -393,6 +396,7 @@ export class Parser {
 
 		for (const parameters of params) {
 			const funcObj = new Function(name, returnType);
+			funcObj.setInterfaceName(interfaceName);
 			const constraint = new ValueExpression(ExpressionKind.LogicalAnd);
 			const forwardParameters = [];
 
@@ -401,7 +405,7 @@ export class Parser {
 			}
 			
 			for (const [parameter, type] of parameters) {
-				const name = escapeName(parameter.name.getText());
+				const [interfaceName, name] = getName(parameter.name);
 
 				if (parameter.dotDotDotToken) {
 					funcObj.addVariadicTypeParameter("_Args");
@@ -438,7 +442,7 @@ export class Parser {
 	}
 
 	private createVar(decl: VarDecl, types: TypeMap, member: boolean): Variable {
-		const name = escapeName(decl.name.getText());
+		const [interfaceName, name] = getName(decl.name);
 		const info = this.getTypeNodeInfo(decl.type!, types);
 
 		if (ts.isPropertySignature(decl) && decl.questionToken) {
@@ -488,7 +492,7 @@ export class Parser {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member)) {
-				const name = escapeName(member.name.getText());
+				const [interfaceName, name] = getName(member.name);
 				const child = node.children.get(name);
 
 				if (child && child.basicClassObj) {
@@ -547,7 +551,7 @@ export class Parser {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member)) {
-				const name = escapeName(member.name.getText());
+				const [interfaceName, name] = getName(member.name);
 				const info = this.getTypeNodeInfo(member.type!, types);
 				const readOnly = !!member.modifiers && member.modifiers
 					.some(modifier => ts.isReadonlyKeywordOrPlusOrMinusToken(modifier));

@@ -8,6 +8,7 @@ export enum Flags {
 }
 
 export class Namespace {
+	private interfaceName?: string;
 	private name: string;
 	private flags: Flags = 0 as Flags;
 	private parent?: Namespace;
@@ -24,6 +25,11 @@ export class Namespace {
 
 	public setName(name: string): void {
 		this.name = name;
+	}
+
+	public setInterfaceName(name: string): void {
+		// TODO: set interface name for all types of declarations, not just functions
+		this.interfaceName = name;
 	}
 
 	public getFlags(): Flags {
@@ -60,6 +66,13 @@ export class Namespace {
 
 	public addAttribute(attribute: string): void {
 		this.attributes.push(attribute);
+	}
+
+	public writeInterfaceName(writer: Writer): void {
+		if (this.interfaceName && this.name !== this.interfaceName) {
+			writer.write(`[[cheerp::interface_name(("${this.interfaceName}"))]]`);
+			writer.writeLine(false);
+		}
 	}
 
 	public writeAttributes(writer: Writer): void {

@@ -1,3 +1,5 @@
+import * as ts from "typescript";
+
 const DIGITS = "0123456789";
 const CHARSET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
@@ -117,4 +119,11 @@ export function escapeName(name: string): string {
 	}
 
 	return result;
+}
+
+type Name = ts.Identifier | ts.BindingName | ts.ModuleName | ts.PropertyName;
+
+export function getName(identifier?: Name): [string, string] {
+	const name = identifier!.getText();
+	return [name, escapeName(name)];
 }

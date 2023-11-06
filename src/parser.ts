@@ -290,7 +290,7 @@ export class Parser {
 		return this.getTypeInfo(type, types);
 	}
 
-	private getSymbol(type: ts.Type, types: TypeMap): [ts.Symbol, TypeMap] {
+	private getSymbol(type: ts.Type, types: TypeMap): [ts.Symbol | undefined, TypeMap] {
 		if (type.flags & ts.TypeFlags.Object) {
 			const objectType = type as ts.ObjectType;
 
@@ -305,11 +305,11 @@ export class Parser {
 					result.set(typeParameter, info.asTypeParameter());
 				}
 
-				return [typeRef.target.symbol, result];
+				return [typeRef.target.getSymbol(), result];
 			}
 		}
 
-		return [type.symbol, TYPES_EMPTY];
+		return [type.getSymbol(), TYPES_EMPTY];
 	}
 
 	private *getConstraints(types: TypeMap, typeParameters?: ReadonlyArray<TypeParamDecl>): Generator<Expression> {
@@ -478,7 +478,7 @@ export class Parser {
 		const forward = generic ? node.name : undefined;
 		const type = this.typeChecker.getTypeFromTypeNode(decl.type!);
 		const [symbol, types] = this.getSymbol(type, classTypes);
-		const members = (symbol.declarations ?? new Array)
+		const members = (symbol?.declarations ?? new Array)
 			.filter(decl => ts.isInterfaceDeclaration(decl))
 			.flatMap(decl => decl.members);
 

@@ -16,12 +16,16 @@ const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
 class Node {
 	public readonly children: Map<string, Child> = new Map;
 
-	public get(interfaceName: string, name: string): Child {
+	public get(interfaceName: string, name: string, sourceFile: ts.SourceFile): Child {
 		let node = this.children.get(name);
 
 		if (!node) {
 			node = new Child(interfaceName, name);
 			this.children.set(name, node);
+		}
+
+		if (sourceFile.hasNoDefaultLib) {
+			node.defaultLib = true;
 		}
 
 		return node;
@@ -40,6 +44,7 @@ class Child extends Node {
 	public basicTypeObj?: TypeAlias;
 	public genericTypeObj?: TypeAlias;
 	public type?: ts.Type;
+	public defaultLib: boolean = false;
 
 	public constructor(interfaceName: string, name: string) {
 		super();
@@ -81,14 +86,14 @@ export class Parser {
 		namespace.addAttribute("cheerp::genericjs");
 
 		for (const sourceFile of program.getSourceFiles()) {
-			this.discover(this.root, sourceFile);
+			this.discover(this.root, sourceFile, sourceFile);
 		}
 
 		this.objectBuiltin = this.getBuiltinType("Object");
-		this.numberBuiltin = this.getBuiltinType("Number", this.objectBuiltin);
-		this.stringBuiltin = this.getBuiltinType("String", this.objectBuiltin);
-		this.bigintBuiltin = this.getBuiltinType("BigInt", this.objectBuiltin);
-		this.symbolBuiltin = this.getBuiltinType("Symbol", this.objectBuiltin);
+		this.numberBuiltin = this.getBuiltinType("Number");
+		this.stringBuiltin = this.getBuiltinType("String");
+		this.bigintBuiltin = this.getBuiltinType("BigInt");
+		this.symbolBuiltin = this.getBuiltinType("Symbol");
 
 		this.generate(this.root, namespace);
 		this.library.removeDuplicates();
@@ -118,7 +123,7 @@ export class Parser {
 		}
 	}
 
-	private getBuiltinType(name: string, object?: BuiltinType): BuiltinType {
+	private getBuiltinType(name: string): BuiltinType {
 		const child = this.root.children.get(name);
 
 		if (child && child.basicClassObj) {
@@ -126,8 +131,6 @@ export class Parser {
 				classObj: child.basicClassObj,
 				type: new DeclaredType(child.basicClassObj),
 			};
-		} else if (object) {
-			return object;
 		} else {
 			return {
 				type: new NamedType(`client::${name}`),
@@ -146,11 +149,11 @@ export class Parser {
 		return result as NamedType;
 	}
 
-	private discover(self: Node, parent: ts.Node): void {
+	private discover(self: Node, parent: ts.Node, sourceFile: ts.SourceFile): void {
 		ts.forEachChild(parent, node => {
 			if (ts.isInterfaceDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name);
-				const child = self.get(interfaceName, name);
+				const child = self.get(interfaceName, name, sourceFile);
 				child.interfaceDecls.push(node);
 
 				if (!child.basicClassObj) {
@@ -168,34 +171,35 @@ export class Parser {
 				}
 			} else if (ts.isFunctionDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name!);
-				const child = self.get(interfaceName, name);
+				const child = self.get(interfaceName, name, sourceFile);
 				child.funcDecl = node;
 			} else if (ts.isVariableStatement(node)) {
 				for (const decl of node.declarationList.declarations) {
 					const [interfaceName, name] = getName(decl.name);
-					const child = self.get(interfaceName, name);
+					const child = self.get(interfaceName, name, sourceFile);
 					child.varDecl = decl;
 				}
 			} else if (ts.isTypeAliasDeclaration(node)) {
 				const type = this.typeChecker.getTypeAtLocation(node);
 				const [interfaceName, name] = getName(node.name);
-				const child = self.get(interfaceName, name);
+				const child = self.get(interfaceName, name, sourceFile);
 				child.typeDecl = node;
 				child.basicTypeObj = new TypeAlias(name, VOID_TYPE);
 
 				if (node.typeParameters && node.typeParameters.length > 0) {
+					// TODO: generic type aliases
 					// child.genericTypeObj = new TypeAlias(`T${name}`, VOID_TYPE);
 				}
 			} else if (ts.isModuleDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name);
-				const child = self.get(interfaceName, name);
-				this.discover(child, node.body!);
+				const child = self.get(interfaceName, name, sourceFile);
+				this.discover(child, node.body!, sourceFile);
 			}
 		});
 	}
 
 	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo): void {
-		// TODO: type literals and literal types
+		// TODO: type literals
 
 		const basicDeclaredType = types.get(type) ?? this.basicDeclaredTypes.get(type);
 		const genericDeclaredType = this.genericDeclaredTypes.get(type);
@@ -482,11 +486,13 @@ export class Parser {
 		for (const member of members) {
 			if (ts.isMethodSignature(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
+					funcObj.setDefaultLib(node.defaultLib);
 					funcObj.addFlags(Flags.Static);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isConstructSignatureDeclaration(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward, classObj.getName())) {
+					funcObj.setDefaultLib(node.defaultLib);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member)) {
@@ -503,6 +509,7 @@ export class Parser {
 					}
 				} else {
 					const varObj = this.createVar(member, types, true);
+					varObj.setDefaultLib(node.defaultLib);
 					varObj.addFlags(Flags.Static);
 					classObj.addMember(varObj, Visibility.Public);
 				}
@@ -546,6 +553,7 @@ export class Parser {
 		for (const member of members) {
 			if (ts.isMethodSignature(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
+					funcObj.setDefaultLib(node.defaultLib);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member)) {
@@ -559,12 +567,14 @@ export class Parser {
 				}
 
 				const funcObj = new Function(`get_${name}`, info.asReturnType());
+				funcObj.setDefaultLib(node.defaultLib);
 				classObj.addMember(funcObj, Visibility.Public);
 
 				if (!readOnly) {
 					for (const parameter of info.asParameterTypes()) {
 						const funcObj = new Function(`set_${name}`, VOID_TYPE);
 						funcObj.addParameter(parameter, name);
+						funcObj.setDefaultLib(node.defaultLib);
 						classObj.addMember(funcObj, Visibility.Public);
 					}
 				}
@@ -596,11 +606,13 @@ export class Parser {
 				}
 			} else if (child.funcDecl) {
 				for (const funcObj of this.createFuncs(child.funcDecl, types, typeId, forward)) {
+					funcObj.setDefaultLib(child.defaultLib);
 					funcObj.addFlags(Flags.Static);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (child.varDecl) {
 				const varObj = this.createVar(child.varDecl, types, true);
+				varObj.setDefaultLib(child.defaultLib);
 				varObj.addFlags(Flags.Static);
 				classObj.addMember(varObj, Visibility.Public);
 			} else if (child.typeDecl && child.basicTypeObj) {
@@ -627,6 +639,7 @@ export class Parser {
 			if (type === node.type) {
 				classObj.setName(classObj.getName() + "Class");
 				const varObj = this.createVar(node.varDecl, TYPES_EMPTY, false);
+				varObj.setDefaultLib(node.defaultLib);
 				varObj.addFlags(Flags.Extern);
 
 				if (parent instanceof Class) {
@@ -642,6 +655,7 @@ export class Parser {
 
 		// classObj.removeUnusedTypeParameters();
 		classObj.removeDuplicates();
+		classObj.setDefaultLib(node.defaultLib);
 		this.classes.push(classObj);
 	}
 
@@ -662,6 +676,7 @@ export class Parser {
 			} else if (child.funcDecl) {
 				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY, 0)) {
 					funcObj.setParent(namespace);
+					funcObj.setDefaultLib(child.defaultLib);
 					this.library.addGlobal(funcObj);
 				}
 			} else if (child.varDecl) {
@@ -670,16 +685,19 @@ export class Parser {
 				if (varObj.getType() !== VOID_TYPE) {
 					varObj.setParent(namespace);
 					varObj.addFlags(Flags.Extern);
+					varObj.setDefaultLib(child.defaultLib);
 					this.library.addGlobal(varObj);
 				}
 			} else if (child.typeDecl && child.basicTypeObj) {
 				this.generateType(child.typeDecl, TYPES_EMPTY, 0, child.basicTypeObj, false);
 				child.basicTypeObj.setParent(namespace);
+				child.basicTypeObj.setDefaultLib(child.defaultLib);
 				this.library.addGlobal(child.basicTypeObj);
 
 				if (child.genericTypeObj) {
 					this.generateType(child.typeDecl, TYPES_EMPTY, 0, child.genericTypeObj, true);
 					child.genericTypeObj.setParent(namespace);
+					child.genericTypeObj.setDefaultLib(child.defaultLib);
 					this.library.addGlobal(child.genericTypeObj);
 				}
 			} else {

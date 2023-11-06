@@ -18,11 +18,9 @@ program.parse();
 
 const options = program.opts();
 
-const tsProgram = ts.createProgram(program.args, {
-	noLib: !options.defaultLib,
-});
+const tsProgram = ts.createProgram(program.args, {});
 
-const library = new Library(options.O ?? "cheerp/clientlib.h");
+const library = new Library(options.O ?? "cheerp/clientlib.h", options.defaultLib);
 
 let writerOptions = {
 	pretty: options.pretty,

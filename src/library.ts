@@ -116,9 +116,11 @@ export class Library {
 	private defaultFile: File;
 	private readonly globals: Array<Global> = new Array;
 	private globalIncludes: Array<Include> = new Array;
+	private readonly defaultLib: boolean;
 
-	public constructor(defaultName: string) {
+	public constructor(defaultName: string, defaultLib: boolean) {
 		this.defaultFile = new File(defaultName);
+		this.defaultLib = defaultLib;
 		this.files.set(defaultName, this.defaultFile);
 	}
 
@@ -154,6 +156,10 @@ export class Library {
 
 	public addGlobalInclude(name: string, system: boolean, file?: File) {
 		this.globalIncludes.push(new Include(name, system, file));
+	}
+
+	public isDefaultLib(): boolean {
+		return this.defaultLib;
 	}
 
 	public removeDuplicates(): void {
@@ -299,8 +305,11 @@ export class LibraryWriter {
 			const fileWriter = this.writers[index];
 			const declaration = global.getDeclaration();
 			const namespace = declaration.getNamespace();
-			fileWriter.writeNamespaceChange(namespace);
-			declaration.write(fileWriter.getWriter(), state, namespace);
+			
+			if (!declaration.isDefaultLib() || this.library.isDefaultLib()) {
+				fileWriter.writeNamespaceChange(namespace);
+				declaration.write(fileWriter.getWriter(), state, namespace);
+			}
 			
 			if (state >= global.getTargetState()) {
 				this.getWriter(global).incrementResolve();

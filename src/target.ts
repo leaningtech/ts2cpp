@@ -183,7 +183,7 @@ class DependencyResolver<T extends Target> {
 }
 
 export function setIgnoreErrors(value: boolean): void {
-	ignoreErrors = false;
+	ignoreErrors = value;
 }
 
 export function resolveDependencies<T extends Target>(targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {

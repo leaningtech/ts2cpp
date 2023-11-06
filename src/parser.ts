@@ -187,8 +187,7 @@ export class Parser {
 				child.basicTypeObj = new TypeAlias(name, VOID_TYPE);
 
 				if (node.typeParameters && node.typeParameters.length > 0) {
-					// TODO: generic type aliases
-					// child.genericTypeObj = new TypeAlias(`T${name}`, VOID_TYPE);
+					child.genericTypeObj = new TypeAlias(`T${name}`, VOID_TYPE);
 				}
 			} else if (ts.isModuleDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name);

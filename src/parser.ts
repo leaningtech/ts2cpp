@@ -298,7 +298,12 @@ export class Parser {
 
 	private getTypeNodeInfo(node: ts.TypeNode, types: TypeMap): TypeInfo {
 		const type = this.typeChecker.getTypeFromTypeNode(node);
-		return this.getTypeInfo(type, types);
+
+		if (ts.isThisTypeNode(node)) {
+			return this.getTypeInfo(type.getConstraint()!, types);
+		} else {
+			return this.getTypeInfo(type, types);
+		}
 	}
 
 	private getSymbol(type: ts.Type, types: TypeMap): [ts.Symbol | undefined, TypeMap] {

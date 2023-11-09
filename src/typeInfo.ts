@@ -93,6 +93,7 @@ export class TypeInfo {
 
 	public asReturnType(): Type {
 		// TODO: add more functions to union type
+		// TODO: remove duplicates from union type
 
 		if (this.types.length > 1) {
 			const result = new TemplateType(UNION_TYPE);

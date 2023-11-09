@@ -8,6 +8,12 @@ import { JSHELPER_SOURCE } from "./jshelper.js";
 import { Writer } from "./writer.js";
 import * as ts from "typescript";
 
+// TODO:
+// strict function types
+// arguments by value/reference
+// return value of Int8Array.fill
+// reinterpret_cast for Any::cast
+
 program
 	.option("--pretty")
 	.option("--default-lib")

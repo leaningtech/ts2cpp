@@ -191,9 +191,23 @@ export class Parser {
 				}
 			} else if (ts.isModuleDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name);
-				const child = self.get(interfaceName, name, sourceFile);
-				this.discover(child, node.body!, sourceFile);
+
+				if (name === "global") {
+					this.discover(this.root, node.body!, sourceFile);
+				} else {
+					const child = self.get(interfaceName, name, sourceFile);
+					this.discover(child, node.body!, sourceFile);
+				}
+			} else if (ts.isClassDeclaration(node)) {
+				// TODO: class declarations
 			}
+
+			// other possible nodes:
+			//   ts.SyntaxKind.EndOfFileToken
+			//   ts.SyntaxKind.ExportDeclaration
+			//   ts.SyntaxKind.ImportDeclaration
+			//   ts.SyntaxKind.ExportAssignment
+			//   ts.SyntaxKind.ImportEqualsDeclaration
 		});
 	}
 
@@ -550,6 +564,8 @@ export class Parser {
 		const members = node.interfaceDecls.flatMap(decl => decl.members);
 
 		for (const member of members) {
+			// TODO: implement index signatures
+
 			if (ts.isMethodSignature(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
 					funcObj.setDefaultLib(node.defaultLib);
@@ -579,7 +595,6 @@ export class Parser {
 				}
 			}
 		}
-
 
 		if (classObj.getBases().length === 0) {
 			if (this.objectBuiltin.classObj !== classObj) {
@@ -637,7 +652,7 @@ export class Parser {
 
 			if (type === node.type) {
 				classObj.setName(classObj.getName() + "Class");
-				const varObj = this.createVar(node.varDecl, TYPES_EMPTY, false);
+				const varObj = this.createVar(node.varDecl, types, false);
 				varObj.setDefaultLib(node.defaultLib);
 				varObj.addFlags(Flags.Extern);
 
@@ -686,6 +701,11 @@ export class Parser {
 					varObj.addFlags(Flags.Extern);
 					varObj.setDefaultLib(child.defaultLib);
 					this.library.addGlobal(varObj);
+				}
+
+				if (child.children.size > 0) {
+					// TODO: merge with variable declaration?
+					this.generate(child, new Namespace(child.name + "_", namespace));
 				}
 			} else if (child.typeDecl && child.basicTypeObj) {
 				this.generateType(child.typeDecl, TYPES_EMPTY, 0, child.basicTypeObj, false);

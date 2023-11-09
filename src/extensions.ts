@@ -289,17 +289,16 @@ export function addExtensions(parser: Parser): void {
 				const parameters = child.getParameters();
 				const type = parameters.length === 1 ? parameters[0].getType() : undefined;
 
-				if (name === "get_length" || name === "get_size") {
-					child.addFlags(Flags.Const);
-					child.setType(INT_TYPE);
-				} else if (name === "indexOf" || name === "lastIndexOf") {
-					child.addFlags(Flags.Const);
-					child.setType(INT_TYPE);
-				} else if (name === "charCodeAt") {
-					child.addFlags(Flags.Const);
+				if (name === "get_length" || name === "get_size" || name === "indexOf" || name === "lastIndexOf" || name === "charCodeAt") {
+					if (!(child.getFlags() & Flags.Static)) {
+						child.addFlags(Flags.Const);
+					}
+
 					child.setType(INT_TYPE);
 				} else if (name === "concat") {
-					child.addFlags(Flags.Const);
+					if (!(child.getFlags() & Flags.Static)) {
+						child.addFlags(Flags.Const);
+					}
 				} else if (className === "String" && name === "String") {
 					const keys = [
 						parser.objectBuiltin.type.constReference().key(),

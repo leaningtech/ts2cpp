@@ -51,7 +51,7 @@ if (options.defaultLib) {
 	library.addGlobalInclude("cheerp/clientlib.h", true);
 }
 
-const parser = new Parser(tsProgram, library);
+const parser = new Parser(tsProgram, library, program.args);
 
 if (options.defaultLib) {
 	addExtensions(parser);

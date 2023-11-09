@@ -16,7 +16,7 @@ const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
 class Node {
 	public readonly children: Map<string, Child> = new Map;
 
-	public get(interfaceName: string, name: string, sourceFile: ts.SourceFile): Child {
+	public get(interfaceName: string, name: string, defaultLib: boolean): Child {
 		let node = this.children.get(name);
 
 		if (!node) {
@@ -24,10 +24,7 @@ class Node {
 			this.children.set(name, node);
 		}
 
-		if (sourceFile.hasNoDefaultLib) {
-			node.defaultLib = true;
-		}
-
+		node.defaultLib ||= defaultLib;
 		return node;
 	}
 }
@@ -78,7 +75,7 @@ export class Parser {
 	public readonly bigintBuiltin: BuiltinType;
 	public readonly symbolBuiltin: BuiltinType;
 
-	public constructor(program: ts.Program, library: Library) {
+	public constructor(program: ts.Program, library: Library, files: ReadonlyArray<string>) {
 		this.library = library;
 		this.library.addGlobalInclude("type_traits", true);
 		this.typeChecker = program.getTypeChecker();
@@ -86,7 +83,7 @@ export class Parser {
 		namespace.addAttribute("cheerp::genericjs");
 
 		for (const sourceFile of program.getSourceFiles()) {
-			this.discover(this.root, sourceFile, sourceFile);
+			this.discover(this.root, sourceFile, !files.includes(sourceFile.fileName));
 		}
 
 		this.objectBuiltin = this.getBuiltinType("Object");
@@ -149,11 +146,11 @@ export class Parser {
 		return result as NamedType;
 	}
 
-	private discover(self: Node, parent: ts.Node, sourceFile: ts.SourceFile): void {
+	private discover(self: Node, parent: ts.Node, defaultLib: boolean): void {
 		ts.forEachChild(parent, node => {
 			if (ts.isInterfaceDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name);
-				const child = self.get(interfaceName, name, sourceFile);
+				const child = self.get(interfaceName, name, defaultLib);
 				child.interfaceDecls.push(node);
 
 				if (!child.basicClassObj) {
@@ -171,18 +168,18 @@ export class Parser {
 				}
 			} else if (ts.isFunctionDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name!);
-				const child = self.get(interfaceName, name, sourceFile);
+				const child = self.get(interfaceName, name, defaultLib);
 				child.funcDecl = node;
 			} else if (ts.isVariableStatement(node)) {
 				for (const decl of node.declarationList.declarations) {
 					const [interfaceName, name] = getName(decl.name);
-					const child = self.get(interfaceName, name, sourceFile);
+					const child = self.get(interfaceName, name, defaultLib);
 					child.varDecl = decl;
 				}
 			} else if (ts.isTypeAliasDeclaration(node)) {
 				const type = this.typeChecker.getTypeAtLocation(node);
 				const [interfaceName, name] = getName(node.name);
-				const child = self.get(interfaceName, name, sourceFile);
+				const child = self.get(interfaceName, name, defaultLib);
 				child.typeDecl = node;
 				child.basicTypeObj = new TypeAlias(name, VOID_TYPE);
 
@@ -193,10 +190,10 @@ export class Parser {
 				const [interfaceName, name] = getName(node.name);
 
 				if (name === "global") {
-					this.discover(this.root, node.body!, sourceFile);
+					this.discover(this.root, node.body!, defaultLib);
 				} else {
-					const child = self.get(interfaceName, name, sourceFile);
-					this.discover(child, node.body!, sourceFile);
+					const child = self.get(interfaceName, name, defaultLib);
+					this.discover(child, node.body!, defaultLib);
 				}
 			} else if (ts.isClassDeclaration(node)) {
 				// TODO: class declarations

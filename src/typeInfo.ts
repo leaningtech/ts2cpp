@@ -93,13 +93,19 @@ export class TypeInfo {
 
 	public asReturnType(): Type {
 		// TODO: add more functions to union type
-		// TODO: remove duplicates from union type
 
 		if (this.types.length > 1) {
 			const result = new TemplateType(UNION_TYPE);
+			const keys = new Set;
 
 			for (const type of this.types) {
-				result.addTypeParameter(type.getPointerOrPrimitive());
+				const pointerOrPrimitive = type.getPointerOrPrimitive();
+				const key = pointerOrPrimitive.key();
+
+				if (!keys.has(key)) {
+					result.addTypeParameter(pointerOrPrimitive);
+					keys.add(key);
+				}
 			}
 
 			return result.pointer();

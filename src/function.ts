@@ -98,12 +98,13 @@ export class Function extends TemplateDeclaration {
 	}
 
 	public getDirectDependencies(state: State): Dependencies {
+		const parameterReason = new Dependency(State.Partial, this, ReasonKind.ParameterType);
+		const returnReason = new Dependency(State.Partial, this, ReasonKind.ReturnType);
+
 		return new Dependencies(
 			this.parameters
-				.flatMap(parameter => parameter.getType().getDeclarations().map(declaration => [declaration, ReasonKind.ParameterType]))
-				.concat(this.type?.getDeclarations()?.map(declaration => [declaration, ReasonKind.ReturnType]) ?? [])
-				.filter((declaration): declaration is [Declaration, ReasonKind] => !!declaration[0])
-				.map(([declaration, reasonKind]) => [declaration, new Dependency(State.Partial, this, reasonKind)])
+				.flatMap(parameter => [...parameter.getType().getDependencies(parameterReason)])
+				.concat([...this.type?.getDependencies(returnReason) ?? []])
 		);
 	}
 

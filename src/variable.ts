@@ -25,11 +25,7 @@ export class Variable extends Declaration {
 	}
 
 	public getDirectDependencies(state: State): Dependencies {
-		return new Dependencies(
-			this.type.getDeclarations()
-				.filter((declaration): declaration is Declaration => !!declaration)
-				.map(declaration => [declaration, new Dependency(State.Partial, this, ReasonKind.VariableType)])
-		);
+		return this.type.getDependencies(new Dependency(State.Partial, this, ReasonKind.VariableType));
 	}
 
 	public getDirectNamedTypes(): ReadonlySet<string> {

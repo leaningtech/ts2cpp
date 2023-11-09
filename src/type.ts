@@ -1,9 +1,10 @@
 import { Namespace } from "./namespace.js";
 import { Declaration } from "./declaration.js";
 import { Writer } from "./writer.js";
+import { Dependencies, Dependency, State } from "./target.js";
 
 export abstract class Expression {
-	public abstract getDeclarations(): ReadonlyArray<Declaration>;
+	public abstract getDependencies(reason: Dependency): Dependencies;
 	public abstract getNamedTypes(): ReadonlySet<string>;
 	public abstract write(writer: Writer, namespace?: Namespace): void;
 	public abstract key(): string;
@@ -84,9 +85,10 @@ export class ValueExpression extends Expression {
 			this.children.push(expression);
 		}
 	}
-	
-	public getDeclarations(): ReadonlyArray<Declaration> {
-		return this.children.flatMap(expression => expression.getDeclarations());
+
+	public getDependencies(reason: Dependency): Dependencies {
+		const partialReason = reason.withState(State.Partial);
+		return new Dependencies(this.children.flatMap(expression => [...expression.getDependencies(partialReason)]));
 	}
 	
 	public getNamedTypes(): ReadonlySet<string> {
@@ -199,8 +201,8 @@ export class DeclaredType extends UnqualifiedType {
 		return this.declaration;
 	}
 
-	public getDeclarations(): ReadonlyArray<Declaration> {
-		return [this.declaration];
+	public getDependencies(reason: Dependency): Dependencies {
+		return new Dependencies([[this.declaration, reason]]);
 	}
 	
 	public getNamedTypes(): ReadonlySet<string> {
@@ -228,8 +230,8 @@ export class NamedType extends UnqualifiedType {
 		return this.name;
 	}
 
-	public getDeclarations(): ReadonlyArray<Declaration> {
-		return new Array;
+	public getDependencies(reason: Dependency): Dependencies {
+		return new Dependencies;
 	}
 	
 	public getNamedTypes(): ReadonlySet<string> {
@@ -263,8 +265,8 @@ export class MemberType extends UnqualifiedType {
 		return this.name;
 	}
 
-	public getDeclarations(): ReadonlyArray<Declaration> {
-		return this.inner.getDeclarations();
+	public getDependencies(reason: Dependency): Dependencies {
+		return this.inner.getDependencies(reason.withState(State.Complete));
 	}
 	
 	public getNamedTypes(): ReadonlySet<string> {
@@ -302,8 +304,12 @@ export class QualifiedType extends Type {
 		return this.qualifier;
 	}
 
-	public getDeclarations(): ReadonlyArray<Declaration> {
-		return this.inner.getDeclarations();
+	public getDependencies(reason: Dependency): Dependencies {
+		if (this.qualifier & (TypeQualifier.Pointer | TypeQualifier.Reference)) {
+			return this.inner.getDependencies(reason.withState(State.Partial));
+		} else {
+			return this.inner.getDependencies(reason);
+		}
 	}
 	
 	public getNamedTypes(): ReadonlySet<string> {
@@ -357,10 +363,14 @@ export class TemplateType extends Type {
 		this.typeParameters.push(typeParameter);
 	}
 
-	public getDeclarations(): ReadonlyArray<Declaration> {
-		return this.typeParameters
-			.flatMap(typeParameter => typeParameter.getDeclarations())
-			.concat(this.inner.getDeclarations());
+	public getDependencies(reason: Dependency): Dependencies {
+		const partialReason = reason.withState(State.Partial);
+
+		return new Dependencies(
+			this.typeParameters
+				.flatMap(typeParameter => [...typeParameter.getDependencies(partialReason)])
+				.concat([...this.inner.getDependencies(reason)])
+		);
 	}
 	
 	public getNamedTypes(): ReadonlySet<string> {

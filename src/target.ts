@@ -12,6 +12,8 @@ export enum ReasonKind {
 	VariableType,
 	ReturnType,
 	ParameterType,
+	TypeAliasType,
+	Constraint,
 	Root,
 	Inner,
 	Member,
@@ -43,6 +45,10 @@ export class Dependency {
 
 	public getReasonKind(): ReasonKind {
 		return this.reasonKind;
+	}
+
+	public withState(state: State): Dependency {
+		return new Dependency(state, this.reasonDeclaration, this.reasonKind);
 	}
 }
 
@@ -197,7 +203,7 @@ export function removeDuplicates<T extends Target>(targets: ReadonlyArray<T>): A
 outer:
 	for (const target of targets) {
 		const declaration = target.getDeclaration();
-		const name = declaration.getName();
+		const name = declaration.getPath();
 		let targetList = targetMap.get(name);
 
 		if (!targetList) {

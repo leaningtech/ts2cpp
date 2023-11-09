@@ -40,7 +40,13 @@ export function catchErrors(func: () => void) {
 							console.error(`  because [${prevPath}] is referenced as the *return type* of [${referencedByPath}]`);
 							break;
 						case ReasonKind.ParameterType:
-							console.error(`  because [${prevPath}] is referenced as an *parameter type* of [${referencedByPath}]`);
+							console.error(`  because [${prevPath}] is referenced as a *parameter type* of [${referencedByPath}]`);
+							break;
+						case ReasonKind.TypeAliasType:
+							console.error(`  because [${prevPath}] is referenced as the *alias type* of [${referencedByPath}]`);
+							break;
+						case ReasonKind.Constraint:
+							console.error(`  because [${prevPath}] is referenced as a *constraint* of [${referencedByPath}]`);
 							break;
 						default:
 							console.error(`  because [${prevPath}] is referenced by [${referencedByPath}]`);
@@ -62,7 +68,13 @@ export function catchErrors(func: () => void) {
 					console.error(`required as the *return type* of [${path}]`);
 					break;
 				case ReasonKind.ParameterType:
-					console.error(`required as an *parameter type* of [${path}]`);
+					console.error(`required as a *parameter type* of [${path}]`);
+					break;
+				case ReasonKind.TypeAliasType:
+					console.error(`required as the *alias type* of [${path}]`);
+					break;
+				case ReasonKind.Constraint:
+					console.error(`required as a *constraint* of [${path}]`);
 					break;
 				default:
 					console.error(`required by ${path}`);

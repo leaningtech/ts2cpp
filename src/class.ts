@@ -75,6 +75,10 @@ export class Class extends TemplateDeclaration {
 		return this.members;
 	}
 
+	public hasConstructor(): boolean {
+		return this.members.some(member => member.getDeclaration().getName() == this.getName());
+	}
+
 	public addMember(declaration: Declaration, visibility: Visibility): void {
 		this.members.push(new Member(declaration, visibility));
 		declaration.setParent(this);
@@ -101,6 +105,7 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public removeDuplicates(): void {
+		this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType().key(), base])).values());
 		this.members.splice(0, this.members.length, ...removeDuplicates(this.members));
 	}
 
@@ -114,11 +119,13 @@ export class Class extends TemplateDeclaration {
 
 	public getDirectDependencies(state: State): Dependencies {
 		if (state === State.Complete) {
+			const constraintReason = new Dependency(State.Partial, this, ReasonKind.Constraint);
+			const baseReason = new Dependency(State.Complete, this, ReasonKind.BaseClass);
+
 			return new Dependencies(
 				this.constraints
-					.concat(this.bases.map(base => base.getType()))
-					.flatMap(type => type.getDeclarations())
-					.map(declaration => [declaration, new Dependency(State.Complete, this, ReasonKind.BaseClass)])
+					.flatMap(constraint => [...constraint.getDependencies(constraintReason)])
+					.concat(this.bases.flatMap(base => [...base.getType().getDependencies(baseReason)]))
 			);
 		} else {
 			return new Dependencies;

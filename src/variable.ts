@@ -52,7 +52,7 @@ export class Variable extends Declaration {
 		writer.writeLine(false);
 	}
 
-	public equals(other: Declaration): boolean {
-		return other instanceof Variable && this.getName() === other.getName();
+	public key(): string {
+		return `V${this.getPath()};`;
 	}
 }

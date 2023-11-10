@@ -49,7 +49,7 @@ export class TypeAlias extends TemplateDeclaration {
 		writer.writeLine(false);
 	}
 
-	public equals(other: Declaration): boolean {
-		return other instanceof TypeAlias && this.getName() === other.getName();
+	public key(): string {
+		return `A${this.getPath()};`;
 	}
 }

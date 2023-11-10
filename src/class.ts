@@ -198,8 +198,8 @@ export class Class extends TemplateDeclaration {
 		}
 	}
 
-	public equals(other: Declaration): boolean {
-		return other instanceof Class && this.getName() === other.getName();
+	public key(): string {
+		return `C${this.getPath()};`;
 	}
 
 	private getRecursiveBaseKeys(map: Map<string, number>): void {

@@ -194,29 +194,10 @@ export class Function extends TemplateDeclaration {
 		}
 	}
 
-	public equals(other: Declaration): boolean {
-		if (!(other instanceof Function)) {
-			return false;
-		}
-
-		if (this.getName() !== other.getName()) {
-			return false;
-		}
-
-		if (!this.typeParametersEquals(other)) {
-			return false;
-		}
-
-		if (this.parameters.length !== other.parameters.length) {
-			return false;
-		}
-
-		for (let i = 0; i < this.parameters.length; i++) {
-			if (this.parameters[i].getType().key() !== other.parameters[i].getType().key()) {
-				return false;
-			}
-		}
-
-		return true;
+	public key(): string {
+		const flags = (this.getFlags() & Flags.Const) ? "C" : "M";
+		const parameterKey = this.parameters
+			.map(parameter => parameter.getType().key()).join("");
+		return `F${flags}${this.getPath()};${this.templateKey()};${parameterKey};`;
 	}
 }

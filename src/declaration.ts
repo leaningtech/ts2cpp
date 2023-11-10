@@ -149,7 +149,7 @@ export abstract class Declaration extends Namespace {
 	public abstract getDirectDependencies(state: State): Dependencies;
 	public abstract getDirectNamedTypes(): ReadonlySet<string>;
 	public abstract write(writer: Writer, state: State, namespace?: Namespace): void;
-	public abstract equals(other: Declaration): boolean;
+	public abstract key(): string;
 }
 
 export class TypeParameter {
@@ -217,18 +217,9 @@ export abstract class TemplateDeclaration extends Declaration {
 		}
 	}
 
-	public typeParametersEquals(other: TemplateDeclaration): boolean {
-		if (this.typeParameters.length !== other.typeParameters.length) {
-			return false;
-		}
-
-		for (let i = 0; i < this.typeParameters.length; i++) {
-			if (this.typeParameters[i].isVariadic() !== other.typeParameters[i].isVariadic()) {
-				return false;
-			}
-		}
-
-		return true;
+	public templateKey(): string {
+		return this.typeParameters
+			.map(typeParameter => typeParameter.getName() + ";").join("");
 	}
 
 	public removeUnusedTypeParameters(): void {

@@ -197,29 +197,17 @@ export function resolveDependencies<T extends Target>(targets: ReadonlyArray<T>,
 }
 
 export function removeDuplicates<T extends Target>(targets: ReadonlyArray<T>): Array<T> {
-	const targetMap = new Map<string, Array<T>>;
-	const newTargets = new Array<T>;
+	const keys = new Set;
+	const newTargets = new Array;
 
-outer:
 	for (const target of targets) {
 		const declaration = target.getDeclaration();
-		const name = declaration.getPath();
-		let targetList = targetMap.get(name);
+		const key = declaration.key();
 
-		if (!targetList) {
-			targetList = new Array;
-			targetMap.set(name, targetList);
+		if (!keys.has(key)) {
+			newTargets.push(target);
+			keys.add(key);
 		}
-
-		for (const other of targetList) {
-			if (declaration.equals(other.getDeclaration())) {
-				declaration.setParent(undefined);
-				continue outer;
-			}
-		}
-
-		targetList.push(target);
-		newTargets.push(target);
 	}
 
 	return newTargets;

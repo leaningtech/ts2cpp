@@ -40,8 +40,18 @@ export class Namespace {
 		this.flags |= flags;
 	}
 
-	public getPath(namespace?: Namespace): string {
+	public getPathSafe(namespace?: Namespace): string {
 		return this.parent && this.parent !== namespace ? `${this.parent.getPath(namespace)}::${this.name}` : this.name;
+	}
+
+	public getPath(namespace?: Namespace): string {
+		// TODO: check for name conflicts
+
+		if (this === namespace) {
+			return this.name;
+		}
+
+		return this.getPathSafe(Namespace.getCommonAncestor(this, namespace));
 	}
 
 	public isDescendantOf(ancestor: Namespace): boolean {
@@ -70,7 +80,10 @@ export class Namespace {
 
 	public writeInterfaceName(writer: Writer): void {
 		if (this.interfaceName && this.name !== this.interfaceName) {
-			writer.write(`[[cheerp::interface_name(("${this.interfaceName}"))]]`);
+			const interfaceName = this.interfaceName
+				.replace(/"/g, "\\\"");
+
+			writer.write(`[[cheerp::interface_name(("${interfaceName}"))]]`);
 			writer.writeLine(false);
 		}
 	}

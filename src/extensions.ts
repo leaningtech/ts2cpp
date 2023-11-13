@@ -2,7 +2,7 @@ import { Flags } from "./namespace.js";
 import { Function } from "./function.js";
 import { Class, Visibility } from "./class.js";
 import { Type, DeclaredType, NamedType } from "./type.js";
-import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE } from "./types.js";
+import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./types.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
 
@@ -242,7 +242,6 @@ export function addExtensions(parser: Parser): void {
 	const mapClass = parser.getRootClass("Map");
 	const arrayClass = parser.getRootClass("Array");
 	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
-	const functionClass = parser.getRootClass("Function");
 
 	if (parser.stringBuiltin.classObj) {
 		addStringExtensions(parser, parser.stringBuiltin.classObj);
@@ -254,6 +253,10 @@ export function addExtensions(parser: Parser): void {
 
 	if (parser.objectBuiltin.classObj) {
 		addObjectExtensions(parser, parser.objectBuiltin.classObj);
+	}
+
+	if (parser.functionBuiltin.classObj) {
+		addFunctionExtensions(parser, parser.functionBuiltin.classObj);
 	}
 
 	if (mapClass) {
@@ -276,9 +279,12 @@ export function addExtensions(parser: Parser): void {
 		addTypedArrayExtensions(parser, arrayBufferViewClass, "Float64Array", "double");
 	}
 
-	if (functionClass) {
-		addFunctionExtensions(parser, functionClass);
-	}
+	const keys = [
+		parser.objectBuiltin.type.constReference().key(),
+		parser.objectBuiltin.type.constPointer().key(),
+		ANY_TYPE.constReference().key(),
+		ANY_TYPE.constPointer().key(),
+	];
 
 	for (const classObj of parser.getClasses()) {
 		const className = classObj.getName();
@@ -300,11 +306,6 @@ export function addExtensions(parser: Parser): void {
 						child.addFlags(Flags.Const);
 					}
 				} else if (className === "String" && name === "String") {
-					const keys = [
-						parser.objectBuiltin.type.constReference().key(),
-						parser.objectBuiltin.type.constPointer().key(),
-					];
-
 					if (type && keys.includes(type.key())) {
 						child.addFlags(Flags.Explicit);
 					}

@@ -76,9 +76,9 @@ export class TypeInfo {
 	}
 
 	public asTypeConstraint(type: Type): Expression {
-		return Expression.or(
+		return Expression.isAcceptable(type,
 			...this.getPlural().map(constraint => {
-				return Expression.isAcceptable(type, constraint.getPointerOrPrimitive());
+				return constraint.getPointerOrPrimitive();
 			})
 		);
 	}
@@ -95,20 +95,11 @@ export class TypeInfo {
 		// TODO: add more functions to union type
 
 		if (this.types.length > 1) {
-			const result = new TemplateType(UNION_TYPE);
-			const keys = new Set;
-
-			for (const type of this.types) {
-				const pointerOrPrimitive = type.getPointerOrPrimitive();
-				const key = pointerOrPrimitive.key();
-
-				if (!keys.has(key)) {
-					result.addTypeParameter(pointerOrPrimitive);
-					keys.add(key);
-				}
-			}
-
-			return result.pointer();
+			return Type.union(
+				...this.types.map(type => {
+					return type.getPointerOrPrimitive();
+				})
+			).pointer();
 		} else {
 			return this.getSingle().getPointerOrPrimitive();
 		}

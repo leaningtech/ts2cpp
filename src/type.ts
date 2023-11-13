@@ -3,17 +3,78 @@ import { Declaration } from "./declaration.js";
 import { Writer } from "./writer.js";
 import { Dependencies, Dependency, State } from "./target.js";
 
+function unique(expressions: ReadonlyArray<Expression>): ReadonlyArray<Expression> {
+	const keys = new Set;
+
+	return expressions.filter(expression => {
+		const key = expression.key();
+		return !keys.has(key) && keys.add(key);
+	});
+}
+
 export abstract class Expression {
 	public abstract getDependencies(reason: Dependency): Dependencies;
 	public abstract getNamedTypes(): ReadonlySet<string>;
 	public abstract write(writer: Writer, namespace?: Namespace): void;
 	public abstract key(): string;
 
-	public static enableIf(condition: Expression, type?: Type): TemplateType {
+	public isAlwaysTrue(): boolean {
+		return false;
+	}
+
+	public removeCvRef(): Expression {
+		return this;
+	}
+
+	public static enableIf(condition: Expression, type?: Type): Type {
+		if (condition.isAlwaysTrue()) {
+			return type ?? VOID_TYPE;
+		}
+
 		const result = new TemplateType(ENABLE_IF);
+
+		if (type instanceof TemplateType && type.getInner() === ENABLE_IF) {
+			const [otherCondition, otherType] = type.getTypeParameters();
+			condition = ValueExpression.combine(ExpressionKind.LogicalAnd, condition, otherCondition);
+			type = otherType as Type;
+		}
+
 		result.addTypeParameter(condition);
 
 		if (type) {
+			result.addTypeParameter(type);
+		}
+
+		return result;
+	}
+
+	public static arrayElementType(array: Type): Type {
+		const rawArray = array.removeCvRef();
+
+		if (rawArray instanceof TemplateType) {
+			if (rawArray.getInner() instanceof DeclaredType) {
+				return rawArray.getTypeParameters()[0] as Type;
+			}
+		}
+
+		if (rawArray instanceof DeclaredType) {
+			return ANY_TYPE.pointer();
+		}
+
+		const result = new TemplateType(ARRAY_ELEMENT_TYPE);
+		result.addTypeParameter(array);
+		return result;
+	}
+
+	public static union(...types: ReadonlyArray<Type>): Type {
+		const result = new TemplateType(UNION_TYPE);
+		const anyTypePointerKey = ANY_TYPE.pointer().key();
+
+		for (const type of unique(types)) {
+			if (type.key() === anyTypePointerKey) {
+				return ANY_TYPE;
+			}
+
 			result.addTypeParameter(type);
 		}
 
@@ -34,31 +95,23 @@ export abstract class Expression {
 		return result;
 	}
 
-	public static isAcceptable(from: Type, to: Type): TemplateType {
+	public static isAcceptable(from: Type, ...to: ReadonlyArray<Type>): TemplateType {
 		const result = new TemplateType(IS_ACCEPTABLE);
 		result.addTypeParameter(from);
-		result.addTypeParameter(to);
+
+		for (const type of unique(to)) {
+			result.addTypeParameter(type);
+		}
+
 		return result;
 	}
 
 	public static or(...children: ReadonlyArray<Expression>): ValueExpression {
-		const result = new ValueExpression(ExpressionKind.LogicalOr);
-
-		for (const expression of children) {
-			result.addChild(expression);
-		}
-
-		return result;
+		return ValueExpression.combine(ExpressionKind.LogicalOr, ...children);
 	}
 
 	public static and(...children: ReadonlyArray<Expression>): ValueExpression {
-		const result = new ValueExpression(ExpressionKind.LogicalAnd);
-
-		for (const expression of children) {
-			result.addChild(expression);
-		}
-
-		return result;
+		return ValueExpression.combine(ExpressionKind.LogicalAnd, ...children);
 	}
 }
 
@@ -81,9 +134,11 @@ export class ValueExpression extends Expression {
 	}
 
 	public addChild(expression: Expression): void {
-		if (!this.children.map(child => child.key()).includes(expression.key())) {
-			this.children.push(expression);
-		}
+		this.children.push(expression);
+	}
+
+	public getKind(): ExpressionKind {
+		return this.kind;
 	}
 
 	public getDependencies(reason: Dependency): Dependencies {
@@ -144,6 +199,31 @@ export class ValueExpression extends Expression {
 		case ExpressionKind.LogicalOr:
 			return `|${children};`;
 		}
+	}
+
+	public isAlwaysTrue(): boolean {
+		switch (this.kind) {
+		case ExpressionKind.LogicalAnd:
+			return this.children.every(child => child.isAlwaysTrue());
+		case ExpressionKind.LogicalOr:
+			return this.children.some(child => child.isAlwaysTrue());
+		}
+	}
+
+	public static combine(kind: ExpressionKind, ...members: ReadonlyArray<Expression>): ValueExpression {
+		const result = new ValueExpression(kind);
+
+		for (const member of members) {
+			if (member instanceof ValueExpression && member.getKind() === kind) {
+				for (const child of member.children) {
+					result.addChild(child);
+				}
+			} else {
+				result.addChild(member);
+			}
+		}
+		
+		return result;
 	}
 }
 
@@ -340,6 +420,14 @@ export class QualifiedType extends Type {
 	public key(): string {
 		return `Q${this.qualifier}${this.inner.key()}`;
 	}
+
+	public removeCvRef(): Expression {
+		if (!(this.qualifier & TypeQualifier.Variadic)) {
+			return this.inner.removeCvRef();
+		} else {
+			return this;
+		}
+	}
 }
 
 export class TemplateType extends Type {
@@ -404,6 +492,18 @@ export class TemplateType extends Type {
 			.map(typeParameter => typeParameter.key()).join("");
 
 		return `T${this.inner.key()}${typeParameters};`;
+	}
+
+	public isAlwaysTrue(): boolean {
+		const key = this.inner.key();
+
+		if (key === IS_SAME.key()) {
+			return this.typeParameters[0].key() === this.typeParameters[1].key();
+		} else if (key === IS_ACCEPTABLE.key()) {
+			return this.typeParameters.slice(1).map(typeParameter => typeParameter.key()).includes(ANY_TYPE.pointer().key());
+		} else {
+			return false;
+		}
 	}
 }
 
@@ -472,4 +572,4 @@ export class FunctionType extends Type {
 	}
 }
 
-import { ENABLE_IF, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE } from "./types.js";
+import { ENABLE_IF, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE, ARRAY_ELEMENT_TYPE, VOID_TYPE, UNION_TYPE, ANY_TYPE } from "./types.js";

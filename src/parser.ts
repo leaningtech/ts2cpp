@@ -6,7 +6,7 @@ import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
 import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType } from "./type.js";
-import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ARRAY_ELEMENT_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
+import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import * as ts from "typescript";
@@ -236,6 +236,7 @@ export class Parser {
 		} else if (basicDeclaredType && type.isClassOrInterface()) {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
+			// TODO: Remove non-generic overload?
 			info.addType(this.functionBuiltin.type, TypeKind.Class);
 
 			for (const signature of type.getCallSignatures()) {
@@ -257,6 +258,8 @@ export class Parser {
 		} else if (type.flags & ts.TypeFlags.Undefined) {
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.Any) {
+			// TODO: Use any + double + bool, is there a better alternative?
+			// info.addType(ANY_TYPE, TypeKind.Class);
 			info.addType(this.objectBuiltin.type, TypeKind.Class);
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
@@ -301,8 +304,11 @@ export class Parser {
 				info.addType(this.objectBuiltin.type, TypeKind.Class);
 			}
 		} else if (type.isTypeParameter()) {
+			// TODO: Improve any type
 			info.addType(ANY_TYPE, TypeKind.Class);
 			info.addType(DOUBLE_TYPE, TypeKind.Primitive);
+			// TODO: Add bool type, improve any type?
+			// info.addType(BOOL_TYPE, TypeKind.Primitive);
 			info.setOptional();
 		} else {
 			info.addType(this.objectBuiltin.type, TypeKind.Class);
@@ -448,8 +454,7 @@ export class Parser {
 					const param = ARGS;
 					funcObj.addParameter(param.expand(), name);
 					const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
-					const element = new TemplateType(ARRAY_ELEMENT_TYPE);
-					element.addTypeParameter(type);
+					const element = Type.arrayElementType(type);
 					argsConstraint.addChild(Expression.isAcceptable(param, element));
 					argsConstraint.addChild(ELLIPSES);
 					constraint.addChild(argsConstraint);
@@ -603,12 +608,14 @@ export class Parser {
 				}
 
 				const funcObj = new Function(`get_${name}`, info.asReturnType());
+				funcObj.setInterfaceName(`get_${interfaceName}`);
 				funcObj.setDefaultLib(node.defaultLib);
 				classObj.addMember(funcObj, Visibility.Public);
 
 				if (!readOnly) {
 					for (const parameter of info.asParameterTypes()) {
 						const funcObj = new Function(`set_${name}`, VOID_TYPE);
+						funcObj.setInterfaceName(`set_${interfaceName}`);
 						funcObj.addParameter(parameter, name);
 						funcObj.setDefaultLib(node.defaultLib);
 						classObj.addMember(funcObj, Visibility.Public);

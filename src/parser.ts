@@ -504,6 +504,8 @@ export class Parser {
 			returnType = this.makeTypeConstraint(returnType, typeConstraints);
 		}
 
+		// TODO: use default values for optional parameters across multiple declarations
+
 		for (const parameter of decl.parameters) {
 			if (parameter.name.getText() === "this") {
 				continue;

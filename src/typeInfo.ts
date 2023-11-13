@@ -1,6 +1,11 @@
 import { Parser } from "./parser.js";
-import { Expression, Type, NamedType, TemplateType, TypeQualifier } from "./type.js";
+import { Expression, Type, NamedType, TemplateType, TypeQualifier, DeclaredType } from "./type.js";
 import { ANY_TYPE, UNION_TYPE } from "./types.js";
+
+const REFERENCE_TYPES = [
+	"String",
+	"Function",
+];
 
 export enum TypeKind {
 	Class,
@@ -109,10 +114,14 @@ export class TypeInfo {
 		return this.getPlural().flatMap(type => {
 			if (type.getKind() !== TypeKind.Class) {
 				return [type.getType()];
-			} else if (this.optional) {
-				return [type.getType().constReference(), type.getType().constPointer()];
 			} else {
-				return [type.getType().constReference()];
+				const typeType = type.getType();
+
+				if (typeType instanceof DeclaredType && REFERENCE_TYPES.includes(typeType.getDeclaration().getName())) {
+					return [type.getType().constReference()];
+				} else {
+					return [type.getType().constPointer()];
+				}
 			}
 		});
 	}

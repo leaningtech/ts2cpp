@@ -331,6 +331,62 @@ export class Parser {
 		}
 	}
 
+	private usesType(parent: ts.Type, child: ts.Type, visited?: Set<ts.Type>): boolean {
+		if (visited) {
+			if (visited.has(parent)) {
+				return false;
+			} else {
+				visited.add(parent);
+			}
+		} else {
+			visited = new Set;
+		}
+
+		if (parent === child) {
+			return true;
+		} else if (parent.isClassOrInterface() && parent.typeParameters) {
+			return parent.typeParameters
+				.some(typeParameter => this.usesType(typeParameter, child, visited));
+		} else if (parent.getCallSignatures().length > 0) {
+			for (const signature of parent.getCallSignatures()) {
+				const declaration = signature.getDeclaration();
+				const type = this.typeChecker.getTypeFromTypeNode(declaration.type!);
+
+				if (this.usesType(type, child, visited)) {
+					return true;
+				}
+
+				for (const parameter of declaration.parameters) {
+					const type = this.typeChecker.getTypeFromTypeNode(parameter.type!);
+
+					if (this.usesType(type, child, visited)) {
+						return true;
+					}
+				}
+			}
+		} else if (parent.isUnion()) {
+			return parent.types.some(type => this.usesType(type, child, visited));
+		} else if (parent.flags & ts.TypeFlags.Object) {
+			const objectType = parent as ts.ObjectType;
+
+			if (objectType.objectFlags & ts.ObjectFlags.Reference) {
+				const typeRef = objectType as ts.TypeReference;
+
+				if (this.usesType(typeRef.target, child, visited)) {
+					return true;
+				}
+
+				for (const typeArg of this.typeChecker.getTypeArguments(typeRef)) {
+					if (this.usesType(typeArg, child, visited)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
 	private getSymbol(type: ts.Type, types: TypeMap): [ts.Symbol | undefined, TypeMap] {
 		if (type.flags & ts.TypeFlags.Object) {
 			const objectType = type as ts.ObjectType;
@@ -353,11 +409,43 @@ export class Parser {
 		return [type.getSymbol(), TYPES_EMPTY];
 	}
 
-	private *getConstraints(types: TypeMap, typeParameters?: ReadonlyArray<TypeParamDecl>): Generator<Expression> {
+	private getTypeParametersAndConstraints(types: TypeMap, typeId: number, typeParameters?: ReadonlyArray<TypeParamDecl>, returnType?: ts.Type): [ReadonlyArray<string>, ReadonlyArray<Expression>] {
+		const typeParameterArray = new Array;
+		const constraintArray = new Array;
+		const typeSet = new Set;
+		const typeParameterSet = new Set;
 		const constraintSet = new Set;
 
 		if (typeParameters) {
 			for (const typeParameter of typeParameters) {
+				const type = this.typeChecker.getTypeAtLocation(typeParameter);
+
+				if (!typeSet.has(type)) {
+					if (!returnType || this.usesType(returnType, type)) {
+						typeParameterArray.push(this.getTypeParameter(types, type, typeId++).getName());
+						typeParameterSet.add(type);
+					} else {
+						const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
+
+						if (constraint) {
+							const constraintInfo = this.getTypeNodeInfo(constraint, types);
+							types.set(type, constraintInfo.asTypeParameter()); // TODO: TypeInfoType?
+						} else {
+							types.set(type, ANY_TYPE.pointer());
+						}
+					}
+
+					typeSet.add(type);
+				}
+			}
+
+			for (const typeParameter of typeParameters) {
+				const type = this.typeChecker.getTypeAtLocation(typeParameter);
+
+				if (!typeParameterSet.has(type)) {
+					continue;
+				}
+
 				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
 
 				if (constraint) {
@@ -368,20 +456,18 @@ export class Parser {
 					const key = result.key();
 
 					if (!constraintSet.has(key)) {
-						yield result;
+						constraintArray.push(result);
 						constraintSet.add(key);
 					}
 				}
 			}
 		}
+
+		return [typeParameterArray, constraintArray];
 	}
 
-	private getTypeConstraints(type: Type, types: TypeMap, typeParameters?: ReadonlyArray<TypeParamDecl>): Type {
-		const expression = new ValueExpression(ExpressionKind.LogicalAnd);
-
-		for (const constraint of this.getConstraints(types, typeParameters)) {
-			expression.addChild(constraint);
-		}
+	private makeTypeConstraint(type: Type, constraints: ReadonlyArray<Expression>): Type {
+		const expression = Expression.and(...constraints);
 
 		if (expression.getChildren().length > 0) {
 			return Type.enableIf(expression, type);
@@ -391,19 +477,19 @@ export class Parser {
 	}
 
 	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, forward?: string, className?: string): Generator<Function> {
-		let interfaceName, name, returnType;
+		let interfaceName, name, returnType, tsReturnType;
 		let params = new Array(new Array);
 		let questionParams = new Array;
-		const typeParams = new Array;
 
 		types = new Map(types);
 
-		if (decl.typeParameters) {
-			for (const typeParameter of decl.typeParameters) {
-				const type = this.typeChecker.getTypeAtLocation(typeParameter);
-				typeParams.push(this.getTypeParameter(types, type, typeId++).getName());
-			}
+		if (decl.type) {
+			tsReturnType = this.typeChecker.getTypeFromTypeNode(decl.type);
 		}
+
+		const [typeParams, typeConstraints] = this.getTypeParametersAndConstraints(types, typeId, decl.typeParameters, tsReturnType);
+		
+		typeId += typeParams.length;
 
 		if (ts.isConstructSignatureDeclaration(decl)) {
 			interfaceName = className!;
@@ -415,7 +501,7 @@ export class Parser {
 		}
 
 		if (returnType) {
-			returnType = this.getTypeConstraints(returnType, types, decl.typeParameters);
+			returnType = this.makeTypeConstraint(returnType, typeConstraints);
 		}
 
 		for (const parameter of decl.parameters) {
@@ -499,14 +585,15 @@ export class Parser {
 		types = new Map(types);
 
 		if (generic) {
-			if (decl.typeParameters) {
-				for (const typeParameter of decl.typeParameters) {
-					const type = this.typeChecker.getTypeAtLocation(typeParameter);
-					typeObj.addTypeParameter(this.getTypeParameter(types, type, typeId++).getName());
-				}
+			const [typeParams, typeConstraints] = this.getTypeParametersAndConstraints(types, typeId, decl.typeParameters);
+
+			typeId += typeParams.length;
+
+			for (const typeParam of typeParams) {
+				typeObj.addTypeParameter(typeParam);
 			}
 
-			typeObj.setType(this.getTypeConstraints(info.asTypeAlias(), types, decl.typeParameters));
+			typeObj.setType(this.makeTypeConstraint(info.asTypeAlias(), typeConstraints));
 		} else {
 			typeObj.setType(info.asTypeAlias());
 		}
@@ -570,17 +657,16 @@ export class Parser {
 			}
 
 			if (generic) {
-				const typeParameters = node.interfaceDecls
-					.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
+				const typeParameters = node.interfaceDecls.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
+				const [typeParams, typeConstraints] = this.getTypeParametersAndConstraints(types, typeId, typeParameters);
 
-				if (interfaceType.typeParameters) {
-					for (const typeParameter of interfaceType.typeParameters) {
-						const typeParam = this.getTypeParameter(types, typeParameter, typeId++);
-						classObj.addTypeParameter(typeParam.getName());
-					}
+				typeId += typeParams.length;
+
+				for (const typeParam of typeParams) {
+					classObj.addTypeParameter(typeParam);
 				}
 
-				for (const constraint of this.getConstraints(types, typeParameters)) {
+				for (const constraint of typeConstraints) {
 					classObj.addConstraint(constraint);
 				}
 			}

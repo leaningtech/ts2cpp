@@ -22,5 +22,6 @@ export const IS_ACCEPTABLE = new NamedType("cheerp::IsAcceptableV");
 export const ARRAY_ELEMENT_TYPE = new NamedType("cheerp::ArrayElementTypeT");
 export const ANY_TYPE = new NamedType("client::_Any");
 export const UNION_TYPE = new NamedType("client::_Union");
+export const FUNCTION_TYPE = new NamedType("client::_Function");
 export const ARGS = new NamedType("_Args");
 export const ELLIPSES = new NamedType("...");

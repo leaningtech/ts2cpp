@@ -5,8 +5,8 @@ import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
-import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType } from "./type.js";
-import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ARRAY_ELEMENT_TYPE, ANY_TYPE, ARGS, ELLIPSES } from "./types.js";
+import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType } from "./type.js";
+import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ARRAY_ELEMENT_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import * as ts from "typescript";
@@ -74,6 +74,7 @@ export class Parser {
 	public readonly stringBuiltin: BuiltinType;
 	public readonly bigintBuiltin: BuiltinType;
 	public readonly symbolBuiltin: BuiltinType;
+	public readonly functionBuiltin: BuiltinType;
 
 	public constructor(program: ts.Program, library: Library, files: ReadonlyArray<string>) {
 		this.library = library;
@@ -91,6 +92,7 @@ export class Parser {
 		this.stringBuiltin = this.getBuiltinType("String");
 		this.bigintBuiltin = this.getBuiltinType("BigInt");
 		this.symbolBuiltin = this.getBuiltinType("Symbol");
+		this.functionBuiltin = this.getBuiltinType("Function");
 
 		this.generate(this.root, namespace);
 		this.library.removeDuplicates();
@@ -233,6 +235,23 @@ export class Parser {
 			info.addType(templateType, TypeKind.Class);
 		} else if (basicDeclaredType && type.isClassOrInterface()) {
 			info.addType(basicDeclaredType, TypeKind.Class);
+		} else if (type.getCallSignatures().length > 0) {
+			info.addType(this.functionBuiltin.type, TypeKind.Class);
+
+			for (const signature of type.getCallSignatures()) {
+				const declaration = signature.getDeclaration();
+				const returnInfo = this.getTypeNodeInfo(declaration.type!, types);
+				const funcType = new FunctionType(returnInfo.asReturnType());
+
+				for (const parameter of declaration.parameters) {
+					const parameterInfo = this.getTypeNodeInfo(parameter.type!, types);
+					funcType.addParameter(parameterInfo.asReturnType());
+				}
+
+				const functionType = new TemplateType(FUNCTION_TYPE);
+				functionType.addTypeParameter(funcType);
+				info.addType(functionType, TypeKind.Class);
+			}
 		} else if (basicDeclaredType) {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.flags & ts.TypeFlags.Undefined) {

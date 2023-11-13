@@ -35,6 +35,9 @@ namespace [[cheerp::genericjs]] client {
 			return this->cast<double>();
 		}
 	};
+	template<class F>
+	class [[cheerp::client_layout]] _Function {
+	};
 	template<class T>
 	class TArray;
 }

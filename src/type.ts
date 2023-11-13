@@ -407,4 +407,69 @@ export class TemplateType extends Type {
 	}
 }
 
+export class FunctionType extends Type {
+	private readonly returnType: Type;
+	private readonly parameters: Array<Type> = new Array;
+
+	public constructor(returnType: Type) {
+		super();
+		this.returnType = returnType;
+	}
+
+	public getReturnType(): Type {
+		return this.returnType;
+	}
+
+	public getParameters(): ReadonlyArray<Type> {
+		return this.parameters;
+	}
+
+	public addParameter(parameter: Type): void {
+		this.parameters.push(parameter);
+	}
+
+	public getDependencies(reason: Dependency): Dependencies {
+		const partialReason = reason.withState(State.Partial);
+
+		return new Dependencies(
+			this.parameters
+				.flatMap(typeParameter => [...typeParameter.getDependencies(partialReason)])
+				.concat([...this.returnType.getDependencies(partialReason)])
+		);
+	}
+
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set(
+			this.parameters
+				.flatMap(parameter => [...parameter.getNamedTypes()])
+				.concat([...this.returnType.getNamedTypes()])
+		);
+	}
+
+	public write(writer: Writer, namespace?: Namespace): void {
+		let first = true;
+		this.returnType.write(writer, namespace);
+		writer.write("(");
+
+		for (const parameter of this.parameters) {
+			if (!first) {
+				writer.write(",");
+				writer.writeSpace(false);
+			}
+
+			parameter.write(writer, namespace);
+			first = false;
+		}
+
+		writer.write(")");
+	}
+
+	public key(): string {
+		const parameters = this.parameters
+			.map(parameter => parameter.key()).join("");
+
+		return `f${this.returnType.key()}${parameters};`;
+	}
+}
+
 import { ENABLE_IF, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE } from "./types.js";

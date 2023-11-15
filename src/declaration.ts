@@ -31,7 +31,7 @@ export abstract class Declaration extends Namespace {
 	private referenced: boolean = false;
 	private referenceData?: ReferenceData;
 	private id: number;
-	private defaultLib: boolean = false;
+	private file?: string;
 
 	private static count: number = 0;
 
@@ -56,12 +56,12 @@ export abstract class Declaration extends Namespace {
 		return this.id;
 	}
 
-	public setDefaultLib(value: boolean): void {
-		this.defaultLib = value;
+	public getFile(): string | undefined {
+		return this.file;
 	}
 
-	public isDefaultLib(): boolean {
-		return this.defaultLib;
+	public setFile(file: string): void {
+		this.file = file;
 	}
 
 	public getNamespace(): Namespace | undefined {

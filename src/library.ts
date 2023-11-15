@@ -116,11 +116,11 @@ export class Library {
 	private defaultFile: File;
 	private readonly globals: Array<Global> = new Array;
 	private globalIncludes: Array<Include> = new Array;
-	private readonly defaultLib: boolean;
+	private readonly typescriptFiles: Array<string> = new Array;
 
-	public constructor(defaultName: string, defaultLib: boolean) {
+	public constructor(defaultName: string, typescriptFiles: ReadonlyArray<string>) {
 		this.defaultFile = new File(defaultName);
-		this.defaultLib = defaultLib;
+		this.typescriptFiles = [...typescriptFiles];
 		this.files.set(defaultName, this.defaultFile);
 	}
 
@@ -158,8 +158,8 @@ export class Library {
 		this.globalIncludes.push(new Include(name, system, file));
 	}
 
-	public isDefaultLib(): boolean {
-		return this.defaultLib;
+	public getTypescriptFiles(): ReadonlyArray<string> {
+		return this.typescriptFiles;
 	}
 
 	public removeDuplicates(): void {
@@ -305,8 +305,9 @@ export class LibraryWriter {
 			const fileWriter = this.writers[index];
 			const declaration = global.getDeclaration();
 			const namespace = declaration.getNamespace();
+			const file = declaration.getFile();
 			
-			if (!declaration.isDefaultLib() || this.library.isDefaultLib()) {
+			if (!file || this.library.getTypescriptFiles().includes(file)) {
 				fileWriter.writeNamespaceChange(namespace);
 				declaration.write(fileWriter.getWriter(), state, namespace);
 			}

@@ -240,7 +240,6 @@ export class Parser {
 		} else if (basicDeclaredType && type.isClassOrInterface()) {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
-			// TODO: Remove non-generic overload?
 			// info.addType(this.functionBuiltin.type, TypeKind.Class);
 
 			for (const signature of type.getCallSignatures()) {
@@ -263,8 +262,8 @@ export class Parser {
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.Any) {
 			// TODO: Use any + double + bool, is there a better alternative?
-			// info.addType(ANY_TYPE, TypeKind.Class);
-			info.addType(this.objectBuiltin.type, TypeKind.Class);
+			info.addType(ANY_TYPE, TypeKind.Class);
+			// info.addType(this.objectBuiltin.type, TypeKind.Class);
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
 			info.addType(VOID_TYPE, TypeKind.Primitive);
@@ -308,7 +307,6 @@ export class Parser {
 				info.addType(this.objectBuiltin.type, TypeKind.Class);
 			}
 		} else if (type.isTypeParameter()) {
-			// TODO: Improve any type
 			info.addType(ANY_TYPE, TypeKind.Class);
 			info.addType(DOUBLE_TYPE, TypeKind.Primitive);
 			// TODO: Add bool type, improve any type?
@@ -507,8 +505,6 @@ export class Parser {
 		if (returnType) {
 			returnType = this.makeTypeConstraint(returnType, typeConstraints);
 		}
-
-		// TODO: use default values for optional parameters across multiple declarations
 
 		for (const parameter of decl.parameters) {
 			if (parameter.name.getText() === "this") {

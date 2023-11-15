@@ -98,13 +98,21 @@ export class TypeInfo {
 
 	public asReturnType(): Type {
 		if (this.types.length > 1) {
-			return Type.union(
+			const result = Type.union(
 				...this.types.map(type => {
 					return type.getPointerOrPrimitive();
 				})
-			).pointer();
+			);
+
+			if (result.key() === ANY_TYPE.key()) {
+				return this.objectType.pointer();
+			} else {
+				return result.pointer();
+			}
+		} else if (this.types.length === 1 && this.types[0].getType().key() !== ANY_TYPE.key()) {
+			return this.types[0].getPointerOrPrimitive();
 		} else {
-			return this.getSingle().getPointerOrPrimitive();
+			return this.objectType.pointer();
 		}
 	}
 

@@ -7,9 +7,7 @@ import { program } from "commander";
 import { Writer } from "./writer.js";
 import * as ts from "typescript";
 
-// TODO:
-// strict function types
-// reinterpret_cast for Any::cast
+// TODO: reinterpret_cast for Any::cast
 
 const DEFAULTLIB_FILES = [
 	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es5.d.ts",

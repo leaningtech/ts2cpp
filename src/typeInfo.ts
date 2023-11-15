@@ -1,10 +1,10 @@
 import { Parser } from "./parser.js";
 import { Expression, Type, NamedType, TemplateType, TypeQualifier, DeclaredType } from "./type.js";
-import { ANY_TYPE, UNION_TYPE } from "./types.js";
+import { ANY_TYPE, UNION_TYPE, FUNCTION_TYPE } from "./types.js";
 
 const REFERENCE_TYPES = [
 	"String",
-	"Function",
+	FUNCTION_TYPE.getName(),
 ];
 
 export enum TypeKind {
@@ -97,8 +97,6 @@ export class TypeInfo {
 	}
 
 	public asReturnType(): Type {
-		// TODO: add more functions to union type
-
 		if (this.types.length > 1) {
 			return Type.union(
 				...this.types.map(type => {
@@ -116,8 +114,19 @@ export class TypeInfo {
 				return [type.getType()];
 			} else {
 				const typeType = type.getType();
+				let name;
 
-				if (typeType instanceof DeclaredType && REFERENCE_TYPES.includes(typeType.getDeclaration().getName())) {
+				if (typeType instanceof DeclaredType) {
+					name = typeType.getDeclaration().getName()
+				} else if (typeType instanceof TemplateType) {
+					let inner = typeType.getInner();
+
+					if (inner instanceof NamedType) {
+						name = inner.getName();
+					}
+				}
+
+				if (name && REFERENCE_TYPES.includes(name)) {
 					return [type.getType().constReference()];
 				} else {
 					return [type.getType().constPointer()];

@@ -241,7 +241,7 @@ export class Parser {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
 			// TODO: Remove non-generic overload?
-			info.addType(this.functionBuiltin.type, TypeKind.Class);
+			// info.addType(this.functionBuiltin.type, TypeKind.Class);
 
 			for (const signature of type.getCallSignatures()) {
 				const declaration = signature.getDeclaration();

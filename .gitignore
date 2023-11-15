@@ -1,2 +1,6 @@
 /build
 /node_modules
+/cheerp/jsobject.h
+/cheerp/types.h
+/cheerp/clientlib.h
+/install.sh

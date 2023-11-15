@@ -1,4 +1,3 @@
-export const JSHELPER_SOURCE = `
 #ifndef CHEERP_JSHELPER_H
 #define CHEERP_JSHELPER_H
 #include <type_traits>
@@ -36,8 +35,7 @@ namespace [[cheerp::genericjs]] client {
 		}
 	};
 	template<class F>
-	class [[cheerp::client_layout]] _Function {
-	};
+	class _Function;
 	template<class T>
 	class TArray;
 }
@@ -58,4 +56,3 @@ namespace cheerp {
 	constexpr bool IsAcceptableV = ((std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::_Any> || std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::Object> || std::is_convertible_v<From, To> || std::is_convertible_v<From, const std::remove_pointer_t<To>&>) || ...);
 }
 #endif
-`;

@@ -24,7 +24,7 @@ npm i && npx tsc
 Generating clientlib headers
 ```
 mkdir -p cheerp
-node . --default-lib --pretty node_modules/typescript/lib/lib.d.ts node_modules/typescript/lib/lib.es2017.d.ts node_modules/typescript/lib/lib.es2020.bigint.d.ts
+node . --default-lib --pretty
 ```
 
 Generating headers from a custom declaration file

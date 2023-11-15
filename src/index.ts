@@ -4,13 +4,11 @@ import { Library } from "./library.js";
 import { addExtensions } from "./extensions.js";
 import { setIgnoreErrors } from "./target.js";
 import { program } from "commander";
-import { JSHELPER_SOURCE } from "./jshelper.js";
 import { Writer } from "./writer.js";
 import * as ts from "typescript";
 
 // TODO:
 // strict function types
-// arguments by value/reference
 // reinterpret_cast for Any::cast
 
 const DEFAULTLIB_FILES = [
@@ -92,7 +90,6 @@ let writerOptions = {
 };
 
 if (options.defaultLib) {
-	const jshelperWriter = new Writer("cheerp/jshelper.h", writerOptions);
 	const jsobjectFile = library.addFile("cheerp/jsobject.h");
 	const typesFile = library.addFile("cheerp/types.h");
 	const clientlibFile = library.getDefaultFile();
@@ -105,7 +102,6 @@ if (options.defaultLib) {
 	typesFile.addInclude("jsobject.h", false, jsobjectFile);
 	clientlibFile.addInclude("types.h", false, typesFile);
 	library.addGlobalInclude("jshelper.h", false);
-	jshelperWriter.writeText(JSHELPER_SOURCE);
 } else {
 	library.addGlobalInclude("cheerp/clientlib.h", true);
 }

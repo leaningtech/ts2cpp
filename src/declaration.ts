@@ -1,6 +1,7 @@
 import { State, Dependencies, ReasonKind } from "./target.js";
 import { Namespace } from "./namespace.js";
 import { Writer } from "./writer.js";
+import * as ts from "typescript";
 
 export class ReferenceData {
 	private readonly referencedBy: Declaration;
@@ -62,6 +63,10 @@ export abstract class Declaration extends Namespace {
 
 	public setFile(file: string): void {
 		this.file = file;
+	}
+
+	public setDecl(decl: ts.Node): void {
+		this.file = decl.getSourceFile().fileName;
 	}
 
 	public getNamespace(): Namespace | undefined {

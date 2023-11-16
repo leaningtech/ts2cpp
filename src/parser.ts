@@ -32,7 +32,8 @@ class Child extends Node {
 	public readonly interfaceName: string;
 	public readonly name: string;
 	public readonly interfaceDecls: Array<ts.InterfaceDeclaration> = new Array;
-	public funcDecl?: ts.FunctionDeclaration;
+	public readonly funcDecls: Array<ts.FunctionDeclaration> = new Array;
+	public classDecl?: ts.ClassDeclaration;
 	public varDecl?: ts.VariableDeclaration;
 	public typeDecl?: ts.TypeAliasDeclaration;
 	public basicClassObj?: Class;
@@ -40,13 +41,22 @@ class Child extends Node {
 	public basicTypeObj?: TypeAlias;
 	public genericTypeObj?: TypeAlias;
 	public type?: ts.Type;
-	public file: string;
+	public file: string; // TODO: Refactor this out
 
 	public constructor(interfaceName: string, name: string, file: string) {
 		super();
 		this.interfaceName = interfaceName;
 		this.name = name;
 		this.file = file;
+	}
+
+	public classDecls(): ReadonlyArray<ClassDecl> {
+		if (this.classDecl) {
+			return (this.interfaceDecls as ReadonlyArray<ClassDecl>)
+				.concat([this.classDecl]);
+		} else {
+			return this.interfaceDecls;
+		}
 	}
 }
 
@@ -56,8 +66,9 @@ type BuiltinType = {
 };
 
 type TypeMap = Map<ts.Type, Type>;
+type ClassDecl = ts.InterfaceDeclaration | ts.ClassDeclaration;
 type FuncDecl = ts.SignatureDeclarationBase;
-type VarDecl = ts.VariableDeclaration | ts.PropertySignature;
+type VarDecl = ts.VariableDeclaration | ts.PropertySignature | ts.PropertyDeclaration;
 type TypeDecl = ts.TypeAliasDeclaration;
 type TypeParamDecl = ts.TypeParameterDeclaration;
 
@@ -152,30 +163,33 @@ export class Parser {
 		return this.library.getTypescriptFiles().includes(node.getSourceFile().fileName);
 	}
 
+	private discoverClass(child: Child, node: ts.Node, name: string): void {
+		if (!child.basicClassObj) {
+			child.type = this.typeChecker.getTypeAtLocation(node);
+			const interfaceType = child.type as ts.InterfaceType;
+			child.basicClassObj = new Class(name);
+			const basicClassType = new DeclaredType(child.basicClassObj);
+			this.basicDeclaredTypes.set(child.type, basicClassType);
+
+			if (interfaceType.typeParameters && interfaceType.typeParameters.length > 0) {
+				child.genericClassObj = new Class(`T${name}`);
+				child.genericClassObj.addBase(basicClassType, Visibility.Public);
+				this.genericDeclaredTypes.set(child.type, new DeclaredType(child.genericClassObj));
+			}
+		}
+	}
+
 	private discover(self: Node, parent: ts.Node, file: string): void {
 		ts.forEachChild(parent, node => {
 			if (ts.isInterfaceDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name);
 				const child = self.get(interfaceName, name, file);
 				child.interfaceDecls.push(node);
-
-				if (!child.basicClassObj) {
-					child.type = this.typeChecker.getTypeAtLocation(node);
-					const interfaceType = child.type as ts.InterfaceType;
-					child.basicClassObj = new Class(name);
-					const basicClassType = new DeclaredType(child.basicClassObj);
-					this.basicDeclaredTypes.set(child.type, basicClassType);
-
-					if (interfaceType.typeParameters && interfaceType.typeParameters.length > 0) {
-						child.genericClassObj = new Class(`T${name}`);
-						child.genericClassObj.addBase(basicClassType, Visibility.Public);
-						this.genericDeclaredTypes.set(child.type, new DeclaredType(child.genericClassObj));
-					}
-				}
+				this.discoverClass(child, node, name);
 			} else if (ts.isFunctionDeclaration(node)) {
 				const [interfaceName, name] = getName(node.name!);
 				const child = self.get(interfaceName, name, file);
-				child.funcDecl = node;
+				child.funcDecls.push(node);
 			} else if (ts.isVariableStatement(node)) {
 				for (const decl of node.declarationList.declarations) {
 					const [interfaceName, name] = getName(decl.name);
@@ -202,7 +216,10 @@ export class Parser {
 					this.discover(child, node.body!, file);
 				}
 			} else if (ts.isClassDeclaration(node)) {
-				// TODO: class declarations
+				const [interfaceName, name] = getName(node.name);
+				const child = self.get(interfaceName, name, file);
+				child.classDecl = node;
+				this.discoverClass(child, node, name);
 			}
 
 			// other possible nodes:
@@ -557,7 +574,9 @@ export class Parser {
 				funcObj.setType(Type.enableIf(constraint, returnType));
 			}
 
-			// TODO: forward static methods as well
+			if (ts.isMethodDeclaration(decl) && (ts.getCombinedModifierFlags(decl) & ts.ModifierFlags.Static)) {
+				funcObj.addFlags(Flags.Static);
+			}
 
 			if (forward && ts.isConstructSignatureDeclaration(decl)) {
 				const params = forwardParameters.join(", ");
@@ -608,12 +627,12 @@ export class Parser {
 		const type = this.typeChecker.getTypeFromTypeNode(decl.type!);
 		const [symbol, types] = this.getSymbol(type, classTypes);
 		const members = (symbol?.declarations ?? new Array)
-			.filter(decl => ts.isInterfaceDeclaration(decl))
+			.filter(decl => ts.isInterfaceDeclaration(decl) || ts.isClassDeclaration(decl))
 			.filter(decl => this.includesDeclaration(decl))
 			.flatMap(decl => decl.members);
 
 		for (const member of members) {
-			if (ts.isMethodSignature(member)) {
+			if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
 					funcObj.setFile(node.file);
 					funcObj.addFlags(Flags.Static);
@@ -624,32 +643,34 @@ export class Parser {
 					funcObj.setFile(node.file);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
-			} else if (ts.isPropertySignature(member)) {
+			} else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {
 				const [interfaceName, name] = getName(member.name);
 				const child = node.children.get(name);
 
-				if (child && child.basicClassObj) {
-					if (!generic) {
-						this.generateConstructor(child, child.basicClassObj, types, typeId, member, false);
-						
-						if (child.genericClassObj) {
-							this.generateConstructor(child, child.genericClassObj, types, typeId, member, true);
+				if (!(ts.getCombinedModifierFlags(member) & ts.ModifierFlags.Static)) {
+					if (child && child.basicClassObj) {
+						if (!generic) {
+							this.generateConstructor(child, child.basicClassObj, types, typeId, member, false);
+							
+							if (child.genericClassObj) {
+								this.generateConstructor(child, child.genericClassObj, types, typeId, member, true);
+							}
 						}
+					} else {
+						const varObj = this.createVar(member, types, true);
+						varObj.setFile(node.file);
+						varObj.addFlags(Flags.Static);
+						classObj.addMember(varObj, Visibility.Public);
 					}
-				} else {
-					const varObj = this.createVar(member, types, true);
-					varObj.setFile(node.file);
-					varObj.addFlags(Flags.Static);
-					classObj.addMember(varObj, Visibility.Public);
 				}
 			}
 		}
 	}
 
 	private generateClass(node: Child, classObj: Class, types: TypeMap, typeId: number, generic: boolean, parent?: Namespace): void {
-		if (node.interfaceDecls.length > 0) {
+		if (node.interfaceDecls.length > 0 || node.classDecl) {
 			const baseTypes = new Set(
-				node.interfaceDecls
+				node.classDecls()
 					.filter(decl => this.includesDeclaration(decl))
 					.map(decl => decl.heritageClauses)
 					.filter((heritageClauses): heritageClauses is ts.NodeArray<ts.HeritageClause> => !!heritageClauses)
@@ -666,7 +687,7 @@ export class Parser {
 			}
 
 			if (generic) {
-				const typeParameters = node.interfaceDecls
+				const typeParameters = node.classDecls()
 					.filter(decl => this.includesDeclaration(decl))
 					.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
 
@@ -686,19 +707,19 @@ export class Parser {
 
 		const forward = generic ? node.name : undefined;
 
-		const members = node.interfaceDecls
+		const members = node.classDecls()
 			.filter(decl => this.includesDeclaration(decl))
-			.flatMap(decl => decl.members);
+			.flatMap<ts.ClassElement | ts.TypeElement>(decl => decl.members);
 
 		for (const member of members) {
 			// TODO: implement index signatures
 
-			if (ts.isMethodSignature(member)) {
+			if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
 					funcObj.setFile(node.file);
 					classObj.addMember(funcObj, Visibility.Public);
 				}
-			} else if (ts.isPropertySignature(member)) {
+			} else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {
 				const [interfaceName, name] = getName(member.name);
 				const info = this.getTypeNodeInfo(member.type!, types);
 				const readOnly = !!member.modifiers && member.modifiers
@@ -708,19 +729,26 @@ export class Parser {
 					info.setOptional();
 				}
 
-				const funcObj = new Function(`get_${name}`, info.asReturnType());
-				funcObj.setInterfaceName(`get_${interfaceName}`);
-				funcObj.setFile(node.file);
-				classObj.addMember(funcObj, Visibility.Public);
+				if (!(ts.getCombinedModifierFlags(member) & ts.ModifierFlags.Static)) {
+					const funcObj = new Function(`get_${name}`, info.asReturnType());
+					funcObj.setInterfaceName(`get_${interfaceName}`);
+					funcObj.setFile(node.file);
+					classObj.addMember(funcObj, Visibility.Public);
 
-				if (!readOnly) {
-					for (const parameter of info.asParameterTypes()) {
-						const funcObj = new Function(`set_${name}`, VOID_TYPE);
-						funcObj.setInterfaceName(`set_${interfaceName}`);
-						funcObj.addParameter(parameter, name);
-						funcObj.setFile(node.file);
-						classObj.addMember(funcObj, Visibility.Public);
+					if (!readOnly) {
+						for (const parameter of info.asParameterTypes()) {
+							const funcObj = new Function(`set_${name}`, VOID_TYPE);
+							funcObj.setInterfaceName(`set_${interfaceName}`);
+							funcObj.addParameter(parameter, name);
+							funcObj.setFile(node.file);
+							classObj.addMember(funcObj, Visibility.Public);
+						}
 					}
+				} else {
+					const varObj = this.createVar(member, types, true);
+					varObj.setFile(node.file);
+					varObj.addFlags(Flags.Static);
+					classObj.addMember(varObj, Visibility.Public);
 				}
 			}
 		}
@@ -747,11 +775,13 @@ export class Parser {
 						this.library.addGlobal(child.genericClassObj);
 					}
 				}
-			} else if (child.funcDecl) {
-				for (const funcObj of this.createFuncs(child.funcDecl, types, typeId, forward)) {
-					funcObj.setFile(child.file);
-					funcObj.addFlags(Flags.Static);
-					classObj.addMember(funcObj, Visibility.Public);
+			} else if (child.funcDecls) {
+				for (const funcDecl of child.funcDecls) {
+					for (const funcObj of this.createFuncs(funcDecl, types, typeId, forward)) {
+						funcObj.setFile(child.file);
+						funcObj.addFlags(Flags.Static);
+						classObj.addMember(funcObj, Visibility.Public);
+					}
 				}
 			} else if (child.varDecl) {
 				const varObj = this.createVar(child.varDecl, types, true);
@@ -798,6 +828,18 @@ export class Parser {
 			}
 		}
 
+		if (node.classDecl && !classObj.hasConstructor()) {
+			const funcObj = new Function(classObj.getName());
+			funcObj.setFile(node.file);
+
+			if (forward) {
+				funcObj.addInitializer(forward, "");
+				funcObj.setBody(``);
+			}
+			
+			classObj.addMember(funcObj, Visibility.Public);
+		}
+
 		// classObj.removeUnusedTypeParameters();
 		classObj.removeDuplicates();
 		classObj.setFile(node.file);
@@ -818,11 +860,13 @@ export class Parser {
 					child.genericClassObj.computeReferences();
 					this.library.addGlobal(child.genericClassObj);
 				}
-			} else if (child.funcDecl) {
-				for (const funcObj of this.createFuncs(child.funcDecl, TYPES_EMPTY, 0)) {
-					funcObj.setParent(namespace);
-					funcObj.setFile(child.file);
-					this.library.addGlobal(funcObj);
+			} else if (child.funcDecls.length > 0) {
+				for (const funcDecl of child.funcDecls) {
+					for (const funcObj of this.createFuncs(funcDecl, TYPES_EMPTY, 0)) {
+						funcObj.setParent(namespace);
+						funcObj.setFile(funcDecl.getSourceFile().fileName);
+						this.library.addGlobal(funcObj);
+					}
 				}
 			} else if (child.varDecl) {
 				const varObj = this.createVar(child.varDecl, TYPES_EMPTY, false);

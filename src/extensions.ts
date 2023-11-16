@@ -256,7 +256,7 @@ export function addExtensions(parser: Parser): void {
 	}
 
 	if (parser.functionBuiltin.classObj) {
-		// addFunctionExtensions(parser, parser.functionBuiltin.classObj);
+		addFunctionExtensions(parser, parser.functionBuiltin.classObj);
 	}
 
 	if (mapClass) {

@@ -24,7 +24,7 @@
 namespace [[cheerp::genericjs]] client
 {
 template<class F>
-class _Function : public Object {
+class _Function : public Function, public Object {
 public:
 	_Function(const EventListener* x) : Object(x) {
 	}

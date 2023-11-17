@@ -5,9 +5,11 @@ import { addExtensions } from "./extensions.js";
 import { setIgnoreErrors } from "./target.js";
 import { program } from "commander";
 import { Writer } from "./writer.js";
+import { Timer, setVerbose } from "./timer.js";
 import * as ts from "typescript";
 
 // TODO: reinterpret_cast for Any::cast
+// TODO: generate const reference for everything, add constructors for pointer types?
 
 const DEFAULTLIB_FILES = [
 	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es5.d.ts",
@@ -64,7 +66,8 @@ program
 	.option("--default-lib")
 	.option("--out, -o <file>")
 	.option("--ignore-errors")
-	.option("--list-files");
+	.option("--list-files")
+	.option("--verbose, -v")
 
 program.parse();
 
@@ -74,7 +77,12 @@ if (options.defaultLib) {
 	program.args.push(...DEFAULTLIB_FILES);
 }
 
+setVerbose(options.V);
+
+const createProgramTimer = new Timer("create program");
 const tsProgram = ts.createProgram(program.args, {});
+createProgramTimer.end();
+
 const library = new Library(options.O ?? "cheerp/clientlib.h", program.args);
 
 if (options.listFiles) {
@@ -104,7 +112,9 @@ if (options.defaultLib) {
 	library.addGlobalInclude("cheerp/clientlib.h", true);
 }
 
+const parseTimer = new Timer("parse");
 const parser = new Parser(tsProgram, library);
+parseTimer.end();
 
 if (options.defaultLib) {
 	addExtensions(parser);
@@ -113,5 +123,7 @@ if (options.defaultLib) {
 setIgnoreErrors(options.ignoreErrors);
 
 catchErrors(() => {
+	const writeTimer = new Timer("write");
 	library.write(writerOptions);
+	writeTimer.end();
 });

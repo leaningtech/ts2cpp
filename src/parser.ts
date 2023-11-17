@@ -9,6 +9,7 @@ import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredT
 import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
+import { Timer, isVerbose } from "./timer.js";
 import * as ts from "typescript";
 
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
@@ -78,6 +79,8 @@ export class Parser {
 	private readonly templateDeclaredTypes: TypeMap = new Map;
 	private readonly classes: Array<Class> = new Array;
 	private readonly library: Library;
+	private generateTotal: number = 0;
+	private generateProgress: number = 0;
 	public readonly objectBuiltin: BuiltinType;
 	public readonly numberBuiltin: BuiltinType;
 	public readonly stringBuiltin: BuiltinType;
@@ -92,9 +95,13 @@ export class Parser {
 		const namespace = new Namespace("client");
 		namespace.addAttribute("cheerp::genericjs");
 
+		const discoverTimer = new Timer("discover");
+
 		for (const sourceFile of program.getSourceFiles()) {
 			this.discover(this.root, sourceFile);
 		}
+
+		discoverTimer.end();
 
 		this.objectBuiltin = this.getBuiltinType("Object");
 		this.numberBuiltin = this.getBuiltinType("Number");
@@ -103,12 +110,19 @@ export class Parser {
 		this.symbolBuiltin = this.getBuiltinType("Symbol");
 		this.functionBuiltin = this.getBuiltinType("Function");
 
+		const generateTimer = new Timer("generate");
 		this.generate(this.root, namespace);
+		generateTimer.end();
+
 		this.library.removeDuplicates();
+
+		const computeVirtualBaseClassesTimer = new Timer("compute virtual base classes");
 
 		for (const declaration of this.classes) {
 			declaration.computeVirtualBaseClasses();
 		}
+
+		computeVirtualBaseClassesTimer.end();
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
@@ -346,10 +360,10 @@ export class Parser {
 		return info;
 	}
 
-	private getTypeNodeInfo(node: ts.TypeNode, types: TypeMap): TypeInfo {
-		const type = this.typeChecker.getTypeFromTypeNode(node);
+	private getTypeNodeInfo(node: ts.TypeNode | undefined, types: TypeMap): TypeInfo {
+		const type = node ? this.typeChecker.getTypeFromTypeNode(node) : this.typeChecker.getAnyType();
 
-		if (ts.isThisTypeNode(node)) {
+		if (node && ts.isThisTypeNode(node)) {
 			return this.getTypeInfo(type.getConstraint()!, types);
 		} else {
 			return this.getTypeInfo(type, types);
@@ -598,7 +612,7 @@ export class Parser {
 
 	private createVar(decl: VarDecl, types: TypeMap, member: boolean): Variable {
 		const [interfaceName, name] = getName(decl.name);
-		const info = this.getTypeNodeInfo(decl.type!, types);
+		const info = this.getTypeNodeInfo(decl.type, types);
 
 		if (ts.isPropertySignature(decl) && decl.questionToken) {
 			info.setOptional();
@@ -845,7 +859,15 @@ export class Parser {
 	}
 
 	private generate(node: Node, namespace?: Namespace): void {
+		this.generateTotal += node.children.size;
+
 		for (const child of node.children.values()) {
+			this.generateProgress += 1;
+
+			if (isVerbose()) {
+				console.log(`${this.generateProgress}/${this.generateTotal} ${child.name}`);
+			}
+
 			if (child.basicClassObj) {
 				this.generateClass(child, child.basicClassObj, TYPES_EMPTY, 0, false, namespace);
 				child.basicClassObj.setParent(namespace);

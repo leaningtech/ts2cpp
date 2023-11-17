@@ -2,10 +2,9 @@ import { Parser } from "./parser.js";
 import { catchErrors } from "./error.js";
 import { Library } from "./library.js";
 import { addExtensions } from "./extensions.js";
-import { setIgnoreErrors } from "./target.js";
 import { program } from "commander";
 import { Writer } from "./writer.js";
-import { Timer, setVerbose } from "./timer.js";
+import { Timer, options, parseOptions } from "./options.js";
 import * as ts from "typescript";
 
 // TODO: reinterpret_cast for Any::cast
@@ -61,24 +60,11 @@ const DEFAULTLIB_FILES = [
 	"/home/user/ts2cpp/node_modules/typescript/lib/lib.scripthost.d.ts",
 ];
 
-program
-	.option("--pretty")
-	.option("--default-lib")
-	.option("--out, -o <file>")
-	.option("--ignore-errors")
-	.option("--list-files")
-	.option("--verbose, -v")
-	.option("--namespace <namespace>");
-
-program.parse();
-
-const options = program.opts();
+parseOptions();
 
 if (options.defaultLib) {
 	program.args.push(...DEFAULTLIB_FILES);
 }
-
-setVerbose(options.V);
 
 const createProgramTimer = new Timer("create program");
 const tsProgram = ts.createProgram(program.args, {});
@@ -114,14 +100,12 @@ if (options.defaultLib) {
 }
 
 const parseTimer = new Timer("parse");
-const parser = new Parser(tsProgram, library, options.namespace);
+const parser = new Parser(tsProgram, library);
 parseTimer.end();
 
 if (options.defaultLib) {
 	addExtensions(parser);
 }
-
-setIgnoreErrors(options.ignoreErrors);
 
 catchErrors(() => {
 	const writeTimer = new Timer("write");

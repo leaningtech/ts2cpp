@@ -9,7 +9,8 @@ import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredT
 import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
-import { Timer, isVerbose } from "./timer.js";
+import { Timer, isVerbose } from "./options.js";
+import { options } from "./options.js";
 import * as ts from "typescript";
 
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
@@ -87,7 +88,7 @@ export class Parser {
 	public readonly symbolBuiltin: BuiltinType;
 	public readonly functionBuiltin: BuiltinType;
 
-	public constructor(program: ts.Program, library: Library, customNamespace?: string) {
+	public constructor(program: ts.Program, library: Library) {
 		this.library = library;
 		this.library.addGlobalInclude("type_traits", true);
 		this.typeChecker = program.getTypeChecker();
@@ -111,8 +112,8 @@ export class Parser {
 
 		const generateTimer = new Timer("generate");
 
-		if (customNamespace) {
-			this.generate(this.root, new Namespace(customNamespace, namespace));
+		if (options.namespace) {
+			this.generate(this.root, new Namespace(options.namespace, namespace));
 		} else {
 			this.generate(this.root, namespace);
 		}

@@ -3,6 +3,7 @@ import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
 import { Expression, Type, DeclaredType } from "./type.js";
 import { Writer } from "./writer.js";
+import { classConstraints } from "./options.js";
 
 export enum Visibility {
 	Public,
@@ -171,11 +172,13 @@ export class Class extends TemplateDeclaration {
 
 			writer.writeBlockOpen();
 
-			for (const constraint of this.constraints) {
-				writer.write("static_assert(");
-				constraint.write(writer, namespace);
-				writer.write(");");
-				writer.writeLine(false);
+			if (classConstraints()) {
+				for (const constraint of this.constraints) {
+					writer.write("static_assert(");
+					constraint.write(writer, namespace);
+					writer.write(");");
+					writer.writeLine(false);
+				}
 			}
 
 			resolveDependencies(this.members, (member, state) => {

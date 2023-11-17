@@ -43,6 +43,7 @@ export class TypeData {
 export class TypeInfo {
 	private readonly objectType: Type;
 	private readonly types: Array<TypeData> = new Array;
+	private readonly keys: Set<string> = new Set;
 	private optional: boolean = false;
 
 	public constructor(parser: Parser) {
@@ -54,7 +55,12 @@ export class TypeInfo {
 	}
 
 	public addType(type: Type, kind: TypeKind): void {
-		this.types.push(new TypeData(type, kind));
+		const key = type.key();
+
+		if (!this.keys.has(key)) {
+			this.types.push(new TypeData(type, kind));
+			this.keys.add(key);
+		}
 	}
 
 	public isOptional(): boolean {

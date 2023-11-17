@@ -10,7 +10,7 @@ import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIP
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { Timer, isVerbose } from "./options.js";
-import { options } from "./options.js";
+import { options, useConstraints } from "./options.js";
 import * as ts from "typescript";
 
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
@@ -489,25 +489,27 @@ export class Parser {
 				}
 			}
 
-			for (const typeParameter of typeParameters) {
-				const type = this.typeChecker.getTypeAtLocation(typeParameter);
+			if (useConstraints()) {
+				for (const typeParameter of typeParameters) {
+					const type = this.typeChecker.getTypeAtLocation(typeParameter);
 
-				if (!typeParameterSet.has(type)) {
-					continue;
-				}
+					if (!typeParameterSet.has(type)) {
+						continue;
+					}
 
-				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
+					const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
 
-				if (constraint) {
-					const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);
-					const typeParam = types.get(typeParamType)!;
-					const constraintInfo = this.getTypeNodeInfo(constraint, types);
-					const result = constraintInfo.asTypeConstraint(typeParam);
-					const key = result.key();
+					if (constraint) {
+						const typeParamType = this.typeChecker.getTypeAtLocation(typeParameter);
+						const typeParam = types.get(typeParamType)!;
+						const constraintInfo = this.getTypeNodeInfo(constraint, types);
+						const result = constraintInfo.asTypeConstraint(typeParam);
+						const key = result.key();
 
-					if (!constraintSet.has(key)) {
-						constraintArray.push(result);
-						constraintSet.add(key);
+						if (!constraintSet.has(key)) {
+							constraintArray.push(result);
+							constraintSet.add(key);
+						}
 					}
 				}
 			}
@@ -541,7 +543,7 @@ export class Parser {
 		
 		typeId += typeParams.length;
 
-		if (ts.isConstructSignatureDeclaration(decl)) {
+		if (ts.isConstructSignatureDeclaration(decl) || ts.isConstructorDeclaration(decl)) {
 			interfaceName = className!;
 			name = className!;
 		} else {
@@ -602,7 +604,7 @@ export class Parser {
 				}
 			}
 
-			if (returnType && constraint.getChildren().length > 0) {
+			if (returnType && constraint.getChildren().length > 0 && useConstraints()) {
 				funcObj.setType(Type.enableIf(constraint, returnType));
 			}
 
@@ -610,7 +612,7 @@ export class Parser {
 				funcObj.addFlags(Flags.Static);
 			}
 
-			if (forward && ts.isConstructSignatureDeclaration(decl)) {
+			if (forward && (ts.isConstructSignatureDeclaration(decl) || ts.isConstructorDeclaration(decl))) {
 				const params = forwardParameters.join(", ");
 				funcObj.addInitializer(forward, params);
 				funcObj.setBody(``);
@@ -752,8 +754,8 @@ export class Parser {
 		for (const member of members) {
 			// TODO: implement index signatures
 
-			if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member)) {
-				for (const funcObj of this.createFuncs(member, types, typeId, forward)) {
+			if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member) || ts.isConstructorDeclaration(member)) {
+				for (const funcObj of this.createFuncs(member, types, typeId, forward, classObj.getName())) {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {

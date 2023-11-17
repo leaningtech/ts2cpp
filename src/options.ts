@@ -29,7 +29,7 @@ export function parseOptions() {
 		.option("--list-files")
 		.option("--verbose, -v")
 		.option("--namespace <namespace>")
-		.option("--no-class-constraints");
+		.option("--no-constraints");
 
 	program.parse();
 
@@ -44,6 +44,6 @@ export function ignoreErrors(): boolean {
 	return !!options.ignoreErrors;
 }
 
-export function classConstraints(): boolean {
-	return !!options.classConstraints;
+export function useConstraints(): boolean {
+	return !!options.constraints;
 }

@@ -3,7 +3,7 @@ import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
 import { Expression, Type, DeclaredType } from "./type.js";
 import { Writer } from "./writer.js";
-import { classConstraints } from "./options.js";
+import { useConstraints } from "./options.js";
 
 export enum Visibility {
 	Public,
@@ -98,7 +98,9 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public addBase(type: Type, visibility: Visibility): void {
-		this.bases.push(new Base(type, visibility));
+		if (!(type instanceof DeclaredType) || type.getDeclaration() !== this) {
+			this.bases.push(new Base(type, visibility));
+		}
 	}
 
 	public addConstraint(expression: Expression): void {
@@ -172,7 +174,7 @@ export class Class extends TemplateDeclaration {
 
 			writer.writeBlockOpen();
 
-			if (classConstraints()) {
+			if (useConstraints()) {
 				for (const constraint of this.constraints) {
 					writer.write("static_assert(");
 					constraint.write(writer, namespace);

@@ -340,6 +340,11 @@ export class Parser {
 				cache.set(type, templateType);
 
 				for (const typeArg of this.typeChecker.getTypeArguments(typeRef)) {
+					// TODO: find a better way than casting to any
+					if ((typeArg as any).isThisType) {
+						continue;
+					}
+
 					const info = this.getTypeInfo(typeArg, types, cache);
 					templateType.addTypeParameter(info.asTypeParameter());
 				}
@@ -708,17 +713,17 @@ export class Parser {
 
 			types = new Map(types);
 
-			for (const baseType of baseTypes) {
-				const info = this.getTypeInfo(baseType, types);
-				classObj.addBase(info.asBaseType(), Visibility.Public);
-			}
-
 			if (generic) {
 				const typeParameters = node.classDecls()
 					.filter(decl => this.includesDeclaration(decl))
 					.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
 
 				const [typeParams, typeConstraints] = this.getTypeParametersAndConstraints(types, typeId, typeParameters);
+
+				for (const baseType of baseTypes) {
+					const info = this.getTypeInfo(baseType, types);
+					classObj.addBase(info.asBaseType(), Visibility.Public);
+				}
 
 				typeId += typeParams.length;
 
@@ -728,6 +733,11 @@ export class Parser {
 
 				for (const constraint of typeConstraints) {
 					classObj.addConstraint(constraint);
+				}
+			} else {
+				for (const baseType of baseTypes) {
+					const info = this.getTypeInfo(baseType, types);
+					classObj.addBase(info.asBaseType(), Visibility.Public);
 				}
 			}
 		}

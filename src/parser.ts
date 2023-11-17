@@ -5,7 +5,7 @@ import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
-import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType } from "./type.js";
+import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType, QualifiedType } from "./type.js";
 import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
@@ -243,7 +243,11 @@ export class Parser {
 		if (templateDeclaredType) {
 			info.addType(templateDeclaredType, TypeKind.Class);
 		} else if (basicDeclaredType && type.isTypeParameter()) {
-			info.addType(basicDeclaredType, TypeKind.Generic);
+			if (basicDeclaredType instanceof QualifiedType) {
+				info.addType(basicDeclaredType.getInner(), TypeKind.Class);
+			} else {
+				info.addType(basicDeclaredType, TypeKind.Generic);
+			}
 		} else if (genericDeclaredType && type.isClassOrInterface()) {
 			const templateType = new TemplateType(genericDeclaredType);
 			this.templateDeclaredTypes.set(type, templateType);

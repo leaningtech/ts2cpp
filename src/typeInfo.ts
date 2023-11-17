@@ -125,7 +125,9 @@ export class TypeInfo {
 				const typeType = type.getType();
 				let name;
 
-				if (typeType instanceof DeclaredType) {
+				if (typeType instanceof NamedType) {
+					name = typeType.getName();
+				} else if (typeType instanceof DeclaredType) {
 					name = typeType.getDeclaration().getName()
 				} else if (typeType instanceof TemplateType) {
 					let inner = typeType.getInner();

@@ -68,6 +68,7 @@ program
 	.option("--ignore-errors")
 	.option("--list-files")
 	.option("--verbose, -v")
+	.option("--namespace <namespace>");
 
 program.parse();
 
@@ -113,7 +114,7 @@ if (options.defaultLib) {
 }
 
 const parseTimer = new Timer("parse");
-const parser = new Parser(tsProgram, library);
+const parser = new Parser(tsProgram, library, options.namespace);
 parseTimer.end();
 
 if (options.defaultLib) {

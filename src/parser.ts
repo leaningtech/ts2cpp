@@ -88,7 +88,7 @@ export class Parser {
 	public readonly symbolBuiltin: BuiltinType;
 	public readonly functionBuiltin: BuiltinType;
 
-	public constructor(program: ts.Program, library: Library) {
+	public constructor(program: ts.Program, library: Library, customNamespace?: string) {
 		this.library = library;
 		this.library.addGlobalInclude("type_traits", true);
 		this.typeChecker = program.getTypeChecker();
@@ -111,7 +111,13 @@ export class Parser {
 		this.functionBuiltin = this.getBuiltinType("Function");
 
 		const generateTimer = new Timer("generate");
-		this.generate(this.root, namespace);
+
+		if (customNamespace) {
+			this.generate(this.root, new Namespace(customNamespace, namespace));
+		} else {
+			this.generate(this.root, namespace);
+		}
+
 		generateTimer.end();
 
 		this.library.removeDuplicates();

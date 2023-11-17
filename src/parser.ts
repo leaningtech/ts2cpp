@@ -76,7 +76,6 @@ export class Parser {
 	private readonly root: Node = new Node;
 	private readonly basicDeclaredTypes: TypeMap = new Map;
 	private readonly genericDeclaredTypes: TypeMap = new Map;
-	private readonly templateDeclaredTypes: TypeMap = new Map;
 	private readonly classes: Array<Class> = new Array;
 	private readonly library: Library;
 	private generateTotal: number = 0;
@@ -253,15 +252,15 @@ export class Parser {
 		});
 	}
 
-	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo): void {
+	private addTypeInfo(type: ts.Type, types: TypeMap, info: TypeInfo, cache: TypeMap): void {
 		// TODO: type literals
 
 		const basicDeclaredType = types.get(type) ?? this.basicDeclaredTypes.get(type);
 		const genericDeclaredType = this.genericDeclaredTypes.get(type);
-		const templateDeclaredType = this.templateDeclaredTypes.get(type);
+		const cachedType = cache.get(type);
 
-		if (templateDeclaredType) {
-			info.addType(templateDeclaredType, TypeKind.Class);
+		if (cachedType) {
+			info.addType(cachedType, TypeKind.Class);
 		} else if (basicDeclaredType && type.isTypeParameter()) {
 			if (basicDeclaredType instanceof QualifiedType) {
 				info.addType(basicDeclaredType.getInner(), TypeKind.Class);
@@ -270,11 +269,11 @@ export class Parser {
 			}
 		} else if (genericDeclaredType && type.isClassOrInterface()) {
 			const templateType = new TemplateType(genericDeclaredType);
-			this.templateDeclaredTypes.set(type, templateType);
+			cache.set(type, templateType);
 
 			if (type.typeParameters) {
 				for (const typeParam of type.typeParameters) {
-					const info = this.getTypeInfo(typeParam, types);
+					const info = this.getTypeInfo(typeParam, types, cache);
 					templateType.addTypeParameter(info.asTypeParameter());
 				}
 			}
@@ -287,11 +286,11 @@ export class Parser {
 
 			for (const signature of type.getCallSignatures()) {
 				const declaration = signature.getDeclaration();
-				const returnInfo = this.getTypeNodeInfo(declaration.type!, types);
+				const returnInfo = this.getTypeNodeInfo(declaration.type!, types, cache);
 				const funcType = new FunctionType(returnInfo.asReturnType());
 
 				for (const parameter of declaration.parameters) {
-					const parameterInfo = this.getTypeNodeInfo(parameter.type!, types);
+					const parameterInfo = this.getTypeNodeInfo(parameter.type!, types, cache);
 					funcType.addParameter(parameterInfo.asReturnType());
 				}
 
@@ -322,7 +321,7 @@ export class Parser {
 			info.addType(this.symbolBuiltin.type, TypeKind.Class);
 		} else if (type.isUnion()) {
 			for (const inner of type.types) {
-				this.addTypeInfo(inner, types, info);
+				this.addTypeInfo(inner, types, info, cache);
 			}
 		} else if (type.flags & ts.TypeFlags.Object) {
 			const objectType = type as ts.ObjectType;
@@ -338,10 +337,10 @@ export class Parser {
 				}
 
 				const templateType = new TemplateType(target);
-				this.templateDeclaredTypes.set(type, templateType);
+				cache.set(type, templateType);
 
 				for (const typeArg of this.typeChecker.getTypeArguments(typeRef)) {
-					const info = this.getTypeInfo(typeArg, types);
+					const info = this.getTypeInfo(typeArg, types, cache);
 					templateType.addTypeParameter(info.asTypeParameter());
 				}
 		
@@ -360,19 +359,19 @@ export class Parser {
 		}
 	}
 
-	private getTypeInfo(type: ts.Type, types: TypeMap): TypeInfo {
+	private getTypeInfo(type: ts.Type, types: TypeMap, cache?: TypeMap): TypeInfo {
 		const info = new TypeInfo(this);
-		this.addTypeInfo(type, types, info);
+		this.addTypeInfo(type, types, info, cache ?? new Map);
 		return info;
 	}
 
-	private getTypeNodeInfo(node: ts.TypeNode | undefined, types: TypeMap): TypeInfo {
+	private getTypeNodeInfo(node: ts.TypeNode | undefined, types: TypeMap, cache?: TypeMap): TypeInfo {
 		const type = node ? this.typeChecker.getTypeFromTypeNode(node) : this.typeChecker.getAnyType();
 
 		if (node && ts.isThisTypeNode(node)) {
-			return this.getTypeInfo(type.getConstraint()!, types);
+			return this.getTypeInfo(type.getConstraint()!, types, cache);
 		} else {
-			return this.getTypeInfo(type, types);
+			return this.getTypeInfo(type, types, cache);
 		}
 	}
 
@@ -541,7 +540,7 @@ export class Parser {
 			name = className!;
 		} else {
 			[interfaceName, name] = getName(decl.name);
-			const returnInfo = this.getTypeNodeInfo(decl.type!, types);
+			const returnInfo = this.getTypeNodeInfo(decl.type, types);
 			returnType = returnInfo.asReturnType();
 		}
 

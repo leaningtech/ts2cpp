@@ -320,6 +320,8 @@ export class Parser {
 			info.addType(this.bigintBuiltin.type, TypeKind.Class);
 		} else if (type.flags & ts.TypeFlags.ESSymbolLike) {
 			info.addType(this.symbolBuiltin.type, TypeKind.Class);
+		} else if (type.isIntersection()) {
+			this.addTypeInfo(type.types[0], types, info, cache);
 		} else if (type.isUnion()) {
 			for (const inner of type.types) {
 				this.addTypeInfo(inner, types, info, cache);

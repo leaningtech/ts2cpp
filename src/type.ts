@@ -13,7 +13,7 @@ function unique(expressions: ReadonlyArray<Expression>): ReadonlyArray<Expressio
 }
 
 export abstract class Expression {
-	public abstract getDependencies(reason: Dependency): Dependencies;
+	public abstract getDependencies(reason: Dependency, innerState?: State): Dependencies;
 	public abstract getNamedTypes(): ReadonlySet<string>;
 	public abstract write(writer: Writer, namespace?: Namespace): void;
 	public abstract key(): string;
@@ -141,7 +141,7 @@ export class ValueExpression extends Expression {
 		return this.kind;
 	}
 
-	public getDependencies(reason: Dependency): Dependencies {
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		const partialReason = reason.withState(State.Partial);
 		return new Dependencies(this.children.flatMap(expression => [...expression.getDependencies(partialReason)]));
 	}
@@ -281,7 +281,7 @@ export class DeclaredType extends UnqualifiedType {
 		return this.declaration;
 	}
 
-	public getDependencies(reason: Dependency): Dependencies {
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return new Dependencies([[this.declaration, reason]]);
 	}
 	
@@ -310,7 +310,7 @@ export class NamedType extends UnqualifiedType {
 		return this.name;
 	}
 
-	public getDependencies(reason: Dependency): Dependencies {
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return new Dependencies;
 	}
 	
@@ -345,7 +345,7 @@ export class MemberType extends UnqualifiedType {
 		return this.name;
 	}
 
-	public getDependencies(reason: Dependency): Dependencies {
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return this.inner.getDependencies(reason.withState(State.Complete));
 	}
 	
@@ -384,9 +384,9 @@ export class QualifiedType extends Type {
 		return this.qualifier;
 	}
 
-	public getDependencies(reason: Dependency): Dependencies {
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		if (this.qualifier & (TypeQualifier.Pointer | TypeQualifier.Reference)) {
-			return this.inner.getDependencies(reason.withState(State.Partial));
+			return this.inner.getDependencies(reason.withState(innerState ?? State.Partial), innerState);
 		} else {
 			return this.inner.getDependencies(reason);
 		}
@@ -451,12 +451,10 @@ export class TemplateType extends Type {
 		this.typeParameters.push(typeParameter);
 	}
 
-	public getDependencies(reason: Dependency): Dependencies {
-		const partialReason = reason.withState(State.Partial);
-
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return new Dependencies(
 			this.typeParameters
-				.flatMap(typeParameter => [...typeParameter.getDependencies(partialReason)])
+				.flatMap(typeParameter => [...typeParameter.getDependencies(reason, reason.getState())])
 				.concat([...this.inner.getDependencies(reason)])
 		);
 	}
@@ -528,7 +526,7 @@ export class FunctionType extends Type {
 		this.parameters.push(parameter);
 	}
 
-	public getDependencies(reason: Dependency): Dependencies {
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		const partialReason = reason.withState(State.Partial);
 
 		return new Dependencies(

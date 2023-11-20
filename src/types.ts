@@ -1,4 +1,4 @@
-import { NamedType } from "./type.js";
+import { NamedType, EllipsesExpression } from "./type.js";
 
 export const VOID_TYPE = new NamedType("void");
 export const BOOL_TYPE = new NamedType("bool");
@@ -24,4 +24,4 @@ export const ANY_TYPE = new NamedType("_Any");
 export const UNION_TYPE = new NamedType("_Union");
 export const FUNCTION_TYPE = new NamedType("_Function");
 export const ARGS = new NamedType("_Args");
-export const ELLIPSES = new NamedType("...");
+export const ELLIPSES = new EllipsesExpression();

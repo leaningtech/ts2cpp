@@ -233,6 +233,28 @@ export class ValueExpression extends Expression {
 	}
 }
 
+export class EllipsesExpression extends Expression {
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
+		return new Dependencies;
+	}
+
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set;
+	}
+
+	public write(writer: Writer, namespace?: Namespace): void {
+		writer.write("...");
+	}
+
+	public key(): string {
+		return `E`;
+	}
+
+	public isAlwaysTrue(): boolean {
+		return true;
+	}
+}
+
 export enum TypeQualifier {
 	Pointer = 1,
 	Reference = 2,

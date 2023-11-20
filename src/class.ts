@@ -1,7 +1,7 @@
 import { Namespace } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
-import { Expression, Type, DeclaredType } from "./type.js";
+import { Expression, Type, DeclaredType, TemplateType } from "./type.js";
 import { Writer } from "./writer.js";
 import { useConstraints } from "./options.js";
 
@@ -52,6 +52,16 @@ export class Base {
 
 	public getType(): Type {
 		return this.type;
+	}
+
+	public getInnerType(): Type {
+		let type = this.type;
+
+		while (type instanceof TemplateType) {
+			type = type.getInner();
+		}
+
+		return type;
 	}
 
 	public getVisibility(): Visibility {
@@ -209,7 +219,7 @@ export class Class extends TemplateDeclaration {
 
 	private getRecursiveBaseKeys(map: Map<string, number>): void {
 		for (const base of this.bases) {
-			const type = base.getType();
+			const type = base.getInnerType();
 			const key = type.key();
 			const value = map.get(key) ?? 0;
 			map.set(key, value + 1);
@@ -237,7 +247,7 @@ export class Class extends TemplateDeclaration {
 		}
 
 		for (const base of this.bases) {
-			if (keys.has(base.getType().key())) {
+			if (keys.has(base.getInnerType().key())) {
 				base.setVirtual(true);
 			}
 		}

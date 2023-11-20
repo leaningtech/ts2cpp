@@ -480,8 +480,6 @@ export class Parser {
 						if (constraint) {
 							const constraintInfo = this.getTypeNodeInfo(constraint, types);
 							types.set(type, constraintInfo.asTypeParameter()); // TODO: TypeInfoType?
-						} else {
-							types.set(type, ANY_TYPE.pointer());
 						}
 					}
 
@@ -516,6 +514,27 @@ export class Parser {
 		}
 
 		return [typeParameterArray, constraintArray];
+	}
+
+	private addTypeConstraints(types: TypeMap, typeParameters?: ReadonlyArray<TypeParamDecl>): void {
+		const typeSet = new Set;
+
+		if (typeParameters) {
+			for (const typeParameter of typeParameters) {
+				const type = this.typeChecker.getTypeAtLocation(typeParameter);
+
+				if (!typeSet.has(type)) {
+					const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
+
+					if (constraint) {
+						const constraintInfo = this.getTypeNodeInfo(constraint, types);
+						types.set(type, constraintInfo.asTypeParameter()); // TODO: TypeInfoType?
+					}
+
+					typeSet.add(type);
+				}
+			}
+		}
 	}
 
 	private makeTypeConstraint(type: Type, constraints: ReadonlyArray<Expression>): Type {
@@ -653,6 +672,7 @@ export class Parser {
 
 			typeObj.setType(this.makeTypeConstraint(info.asTypeAlias(), typeConstraints));
 		} else {
+			this.addTypeConstraints(types, decl.typeParameters);
 			typeObj.setType(info.asTypeAlias());
 		}
 
@@ -716,19 +736,19 @@ export class Parser {
 
 			types = new Map(types);
 
-			if (generic) {
-				const typeParameters = node.classDecls()
-					.filter(decl => this.includesDeclaration(decl))
-					.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
+			const typeParameters = node.classDecls()
+				.filter(decl => this.includesDeclaration(decl))
+				.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
 
+			if (generic) {
 				const [typeParams, typeConstraints] = this.getTypeParametersAndConstraints(types, typeId, typeParameters);
+
+				typeId += typeParams.length;
 
 				for (const baseType of baseTypes) {
 					const info = this.getTypeInfo(baseType, types);
 					classObj.addBase(info.asBaseType(), Visibility.Public);
 				}
-
-				typeId += typeParams.length;
 
 				for (const typeParam of typeParams) {
 					classObj.addTypeParameter(typeParam);
@@ -738,6 +758,8 @@ export class Parser {
 					classObj.addConstraint(constraint);
 				}
 			} else {
+				this.addTypeConstraints(types, typeParameters);
+
 				for (const baseType of baseTypes) {
 					const info = this.getTypeInfo(baseType, types);
 					classObj.addBase(info.asBaseType(), Visibility.Public);

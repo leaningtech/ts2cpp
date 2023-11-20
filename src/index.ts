@@ -3,12 +3,11 @@ import { catchErrors } from "./error.js";
 import { Library } from "./library.js";
 import { addExtensions } from "./extensions.js";
 import { program } from "commander";
-import { Writer } from "./writer.js";
 import { Timer, options, parseOptions } from "./options.js";
 import * as ts from "typescript";
 
-// TODO: reinterpret_cast for Any::cast
-// TODO: generate const reference for everything, add constructors for pointer types?
+// TODO: generate function types for classes that only have a call signature
+// TODO: make console.log("hello") work
 
 const DEFAULTLIB_FILES = [
 	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es5.d.ts",

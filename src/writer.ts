@@ -8,8 +8,7 @@ export interface Options {
 	space: string;
 }
 
-export class Writer {
-	private readonly stream: Writable;
+export abstract class Writer {
 	private depth: number = 0;
 	private line: boolean = true;
 
@@ -20,23 +19,24 @@ export class Writer {
 		space: " ",
 	};
 
-	public constructor(path: fs.PathLike, options?: Partial<Options>) {
-		this.stream = fs.createWriteStream(path);
+	public constructor(options?: Partial<Options>) {
 		Object.assign(this.options, options);
 	}
 
+	public abstract writeStream(string: string): void;
+	
 	public write(string: string, depth: number = 0): void {
 		if (this.line && this.options.pretty) {
-			this.stream.write(this.options.tab.repeat(this.depth + depth));
+			this.writeStream(this.options.tab.repeat(this.depth + depth));
 		}
 
-		this.stream.write(string);
+		this.writeStream(string);
 		this.line = false;
 	}
 
 	public writeLine(required: boolean = true): void {
 		if (required || this.options.pretty) {
-			this.stream.write(this.options.line);
+			this.writeStream(this.options.line);
 			this.line = true;
 		}
 	}
@@ -49,7 +49,7 @@ export class Writer {
 
 	public writeSpace(required: boolean = true): void {
 		if (required || this.options.pretty) {
-			this.stream.write(this.options.space);
+			this.writeStream(this.options.space);
 		}
 	}
 
@@ -90,5 +90,30 @@ export class Writer {
 		}
 
 		this.writeBlockClose(semicolon);
+	}
+}
+
+export class StreamWriter extends Writer {
+	private readonly stream: Writable;
+
+	public constructor(path: fs.PathLike, options?: Partial<Options>) {
+		super(options);
+		this.stream = fs.createWriteStream(path);
+	}
+	
+	public writeStream(string: string): void {
+		this.stream.write(string);
+	}
+}
+
+export class StringWriter extends Writer {
+	private data: string = "";
+
+	public writeStream(string: string): void {
+		this.data += string;
+	}
+
+	public getString(): string {
+		return this.data;
 	}
 }

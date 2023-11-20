@@ -1,6 +1,6 @@
 import { Namespace } from "./namespace.js";
 import { Declaration } from "./declaration.js";
-import { Writer } from "./writer.js";
+import { Writer, StringWriter } from "./writer.js";
 import { Dependencies, Dependency, State } from "./target.js";
 
 function unique(expressions: ReadonlyArray<Expression>): ReadonlyArray<Expression> {
@@ -24,6 +24,12 @@ export abstract class Expression {
 
 	public removeCvRef(): Expression {
 		return this;
+	}
+
+	public toString(): string {
+		const writer = new StringWriter();
+		this.write(writer);
+		return writer.getString();
 	}
 
 	public static enableIf(condition: Expression, type?: Type): Type {

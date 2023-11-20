@@ -60,19 +60,16 @@ namespace cheerp {
 	};
 	template<class From, template<class...> class To, class... T>
 	struct IsAcceptable<From*, To<T...>*> {
-		[[cheerp::genericjs]]
-		struct InvalidCast;
 		template<class... U>
 		[[cheerp::genericjs]]
-		constexpr static To<U...>* as_to(To<U...>* x) {
-			return x;
+		constexpr static bool test(To<U...>* x) {
+			return IsAcceptable<To<U...>*, To<T...>*>::value;
 		}
 		[[cheerp::genericjs]]
-		constexpr static InvalidCast as_to(void*) {
-			return {};
+		constexpr static bool test(void*) {
+			return false;
 		}
-		using from_type = decltype(as_to((From*) nullptr));
-		constexpr static bool value = IsAcceptableImplV<From*, To<T...>*> || (!std::is_same_v<from_type, InvalidCast> && IsAcceptable<from_type, To<T...>*>::value);
+		constexpr static bool value = IsAcceptableImplV<From*, To<T...>*> || test((From*) nullptr);
 	};
 	template<template<class...> class Class, class... T, class... U>
 	struct IsAcceptable<Class<T...>*, Class<U...>*> {

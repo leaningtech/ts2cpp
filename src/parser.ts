@@ -547,6 +547,58 @@ export class Parser {
 		}
 	}
 
+	private createFunc(decl: FuncDecl, name: string, parameters: ReadonlyArray<any>, typeParams: ReadonlyArray<string>, interfaceName?: string, returnType?: Type, forward?: string): Function {
+		const funcObj = new Function(name, returnType);
+
+		if (interfaceName) {
+			funcObj.setInterfaceName(interfaceName);
+		}
+
+		funcObj.setDecl(decl);
+		const constraint = new ValueExpression(ExpressionKind.LogicalAnd);
+		const forwardParameters = [];
+
+		for (const typeParam of typeParams) {
+			funcObj.addTypeParameter(typeParam);
+		}
+		
+		for (const [parameter, type] of parameters) {
+			const [interfaceName, name] = getName(parameter.name);
+
+			if (parameter.dotDotDotToken) {
+				funcObj.addVariadicTypeParameter("_Args");
+				const param = ARGS;
+				funcObj.addParameter(param.expand(), name);
+				const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
+				const element = Type.arrayElementType(type);
+				argsConstraint.addChild(Expression.isAcceptable(param, element));
+				argsConstraint.addChild(ELLIPSES);
+				constraint.addChild(argsConstraint);
+				forwardParameters.push(name + "...");
+			} else {
+				funcObj.addParameter(type, name);
+				forwardParameters.push(name);
+			}
+		}
+
+		if (returnType && constraint.getChildren().length > 0 && useConstraints()) {
+			funcObj.setType(Type.enableIf(constraint, returnType));
+		}
+
+		if (ts.isMethodDeclaration(decl) && (ts.getCombinedModifierFlags(decl) & ts.ModifierFlags.Static)) {
+			funcObj.addFlags(Flags.Static);
+		}
+
+		if (forward && (ts.isConstructSignatureDeclaration(decl) || ts.isConstructorDeclaration(decl))) {
+			const params = forwardParameters.join(", ");
+			funcObj.addInitializer(forward, params);
+			funcObj.setBody(``);
+		}
+
+		funcObj.removeUnusedTypeParameters();
+		return funcObj;
+	}
+
 	private *createFuncs(decl: FuncDecl, types: TypeMap, typeId: number, forward?: string, className?: string): Generator<Function> {
 		let interfaceName, name, returnType, tsReturnType;
 		let params = new Array(new Array);
@@ -563,8 +615,11 @@ export class Parser {
 		typeId += typeParams.length;
 
 		if (ts.isConstructSignatureDeclaration(decl) || ts.isConstructorDeclaration(decl)) {
-			interfaceName = className!;
 			name = className!;
+		} else if (ts.isIndexSignatureDeclaration(decl)) {
+			name = "operator[]";
+			const returnInfo = this.getTypeNodeInfo(decl.type, types);
+			returnType = returnInfo.asReturnType();
 		} else {
 			[interfaceName, name] = getName(decl.name);
 			const returnInfo = this.getTypeNodeInfo(decl.type, types);
@@ -593,52 +648,26 @@ export class Parser {
 
 		params = params.concat(questionParams);
 
-		for (const parameters of params) {
-			const funcObj = new Function(name, returnType);
-			funcObj.setInterfaceName(interfaceName);
-			funcObj.setDecl(decl);
-			const constraint = new ValueExpression(ExpressionKind.LogicalAnd);
-			const forwardParameters = [];
-
-			for (const typeParam of typeParams) {
-				funcObj.addTypeParameter(typeParam);
-			}
-			
-			for (const [parameter, type] of parameters) {
-				const [interfaceName, name] = getName(parameter.name);
-
-				if (parameter.dotDotDotToken) {
-					funcObj.addVariadicTypeParameter("_Args");
-					const param = ARGS;
-					funcObj.addParameter(param.expand(), name);
-					const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
-					const element = Type.arrayElementType(type);
-					argsConstraint.addChild(Expression.isAcceptable(param, element));
-					argsConstraint.addChild(ELLIPSES);
-					constraint.addChild(argsConstraint);
-					forwardParameters.push(name + "...");
-				} else {
-					funcObj.addParameter(type, name);
-					forwardParameters.push(name);
-				}
+		if (ts.isIndexSignatureDeclaration(decl)) {
+			for (const parameters of params) {
+				const funcObj = this.createFunc(decl, name, parameters, typeParams, interfaceName, returnType, forward);
+				funcObj.addFlags(Flags.Const);
+				yield funcObj;
 			}
 
-			if (returnType && constraint.getChildren().length > 0 && useConstraints()) {
-				funcObj.setType(Type.enableIf(constraint, returnType));
-			}
+			// TODO: mutable index signature
+			/*
+			returnType = returnType?.reference();
 
-			if (ts.isMethodDeclaration(decl) && (ts.getCombinedModifierFlags(decl) & ts.ModifierFlags.Static)) {
-				funcObj.addFlags(Flags.Static);
+			for (const parameters of params) {
+				const funcObj = this.createFunc(decl, name, parameters, typeParams, interfaceName, returnType, forward);
+				yield funcObj;
 			}
-
-			if (forward && (ts.isConstructSignatureDeclaration(decl) || ts.isConstructorDeclaration(decl))) {
-				const params = forwardParameters.join(", ");
-				funcObj.addInitializer(forward, params);
-				funcObj.setBody(``);
+			*/
+		} else {
+			for (const parameters of params) {
+				yield this.createFunc(decl, name, parameters, typeParams, interfaceName, returnType, forward);
 			}
-
-			funcObj.removeUnusedTypeParameters();
-			yield funcObj;
 		}
 	}
 
@@ -774,10 +803,12 @@ export class Parser {
 			.flatMap<ts.ClassElement | ts.TypeElement>(decl => decl.members);
 
 		for (const member of members) {
-			// TODO: implement index signatures
-
 			if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member) || ts.isConstructorDeclaration(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward, classObj.getName())) {
+					classObj.addMember(funcObj, Visibility.Public);
+				}
+			} else if (ts.isIndexSignatureDeclaration(member)) {
+				for (const funcObj of this.createFuncs(member, types, typeId)) {
 					classObj.addMember(funcObj, Visibility.Public);
 				}
 			} else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {

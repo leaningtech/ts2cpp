@@ -1,6 +1,6 @@
 import { Declaration } from "./declaration.js";
 import { State, Target, resolveDependencies, removeDuplicates } from "./target.js";
-import { Options, Writer } from "./writer.js";
+import { Options, StreamWriter } from "./writer.js";
 import { Namespace } from "./namespace.js";
 
 export class Global implements Target {
@@ -75,12 +75,12 @@ export class File {
 
 export class FileWriter {
 	private readonly file: File;
-	private readonly writer: Writer;
+	private readonly writer: StreamWriter;
 	private namespace?: Namespace;
 	private targetCount: number = 0;
 	private resolveCount: number = 0;
 
-	public constructor(file: File, writer: Writer) {
+	public constructor(file: File, writer: StreamWriter) {
 		this.file = file;
 		this.writer = writer;
 	}
@@ -89,7 +89,7 @@ export class FileWriter {
 		return this.file;
 	}
 
-	public getWriter(): Writer {
+	public getWriter(): StreamWriter {
 		return this.writer;
 	}
 
@@ -200,7 +200,7 @@ export class LibraryWriter {
 		let defaultWriter: FileWriter | undefined;
 
 		for (const [name, file] of library.getFiles()) {
-			const writer = new Writer(name, options);
+			const writer = new StreamWriter(name, options);
 			const fileWriter = new FileWriter(file, writer);
 			this.writers.push(fileWriter);
 

@@ -53,8 +53,7 @@ namespace cheerp {
 	template<class T>
 	using ArrayElementTypeT = typename ArrayElementType<RemoveCvRefT<T>>::type;
 	template<class From, class To>
-	// TODO: remove "std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::Object>" case
-	constexpr bool IsAcceptableImplV = std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::_Any> || std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::Object> || std::is_same_v<std::remove_pointer_t<RemoveCvRefT<From>>, client::_Any> || std::is_convertible_v<From, To> || std::is_convertible_v<From, const std::remove_pointer_t<To>&>;
+	constexpr bool IsAcceptableImplV = std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::_Any> || std::is_same_v<std::remove_pointer_t<RemoveCvRefT<From>>, client::_Any> || std::is_convertible_v<From, To> || std::is_convertible_v<From, const std::remove_pointer_t<To>&>;
 	template<class From, class To>
 	struct IsAcceptable {
 		constexpr static bool value = IsAcceptableImplV<From, To>;

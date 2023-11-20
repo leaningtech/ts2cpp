@@ -229,6 +229,22 @@ function addFunctionExtensions(parser: Parser, functionClass: Class) {
 	}
 }
 
+function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: string) {
+	const logFunc = new Function(`_${name}`, VOID_TYPE);
+	logFunc.setInterfaceName(name);
+	logFunc.addVariadicTypeParameter("_Args");
+	logFunc.addParameter(new NamedType("_Args").expand(), "data");
+	consoleClass.addMember(logFunc, Visibility.Private);
+
+	for (const member of consoleClass.getMembers()) {
+		const decl = member.getDeclaration();
+
+		if (decl instanceof Function && decl.getName() === name) {
+			decl.setBody(`_${name}(static_cast<const String&>(data)...);`);
+		}
+	}
+}
+
 export function addExtensions(parser: Parser): void {
 	const library = parser.getLibrary();
 	const jsobjectFile = library.getFile("cheerp/jsobject.h")!;
@@ -242,6 +258,7 @@ export function addExtensions(parser: Parser): void {
 	const mapClass = parser.getRootClass("Map");
 	const arrayClass = parser.getRootClass("Array");
 	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
+	const consoleClass = parser.getRootClass("Console");
 
 	if (parser.stringBuiltin.classObj) {
 		addStringExtensions(parser, parser.stringBuiltin.classObj);
@@ -277,6 +294,14 @@ export function addExtensions(parser: Parser): void {
 		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint32Array", "unsigned int");
 		addTypedArrayExtensions(parser, arrayBufferViewClass, "Float32Array", "float");
 		addTypedArrayExtensions(parser, arrayBufferViewClass, "Float64Array", "double");
+	}
+
+	if (consoleClass) {
+		addConsoleLogExtensions(parser, consoleClass, "debug");
+		addConsoleLogExtensions(parser, consoleClass, "error");
+		addConsoleLogExtensions(parser, consoleClass, "info");
+		addConsoleLogExtensions(parser, consoleClass, "log");
+		addConsoleLogExtensions(parser, consoleClass, "warn");
 	}
 
 	const keys = [

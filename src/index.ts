@@ -7,7 +7,6 @@ import { Timer, options, parseOptions } from "./options.js";
 import * as ts from "typescript";
 
 // TODO: generate function types for classes that only have a call signature
-// TODO: make console.log("hello") work
 
 const DEFAULTLIB_FILES = [
 	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es5.d.ts",

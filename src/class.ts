@@ -113,6 +113,14 @@ export class Class extends TemplateDeclaration {
 		}
 	}
 
+	public getConstraints(): ReadonlyArray<Expression> {
+		return this.constraints;
+	}
+
+	public hasConstraints(): boolean {
+		return this.constraints.length > 0;
+	}
+
 	public addConstraint(expression: Expression): void {
 		this.constraints.push(expression);
 	}

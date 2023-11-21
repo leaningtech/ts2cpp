@@ -1,5 +1,6 @@
 import { Namespace } from "./namespace.js";
 import { Declaration } from "./declaration.js";
+import { Class } from "./class.js";
 import { Writer, StringWriter } from "./writer.js";
 import { Dependencies, Dependency, State } from "./target.js";
 
@@ -480,9 +481,20 @@ export class TemplateType extends Type {
 	}
 
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
+		let hasConstraints = false;
+		let state: State | undefined = undefined;
+
+		if (this.inner instanceof DeclaredType) {
+			const declaration = this.inner.getDeclaration();
+
+			if (declaration instanceof Class && declaration.hasConstraints()) {
+				state = reason.getState();
+			}
+		}
+
 		return new Dependencies(
 			this.typeParameters
-				.flatMap(typeParameter => [...typeParameter.getDependencies(reason, reason.getState())])
+				.flatMap(typeParameter => [...typeParameter.getDependencies(reason, state)])
 				.concat([...this.inner.getDependencies(reason)])
 		);
 	}

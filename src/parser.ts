@@ -464,28 +464,26 @@ export class Parser {
 	private getTypeParametersAndConstraints(types: TypeMap, typeId: number, typeParameters?: ReadonlyArray<TypeParamDecl>, returnType?: ts.Type): [ReadonlyArray<string>, ReadonlyArray<Expression>] {
 		const typeParameterArray = new Array;
 		const constraintArray = new Array;
-		const typeSet = new Set;
 		const typeParameterSet = new Set;
 		const constraintSet = new Set;
 
 		if (typeParameters) {
 			for (const typeParameter of typeParameters) {
 				const type = this.typeChecker.getTypeAtLocation(typeParameter);
+				const typeName = type.symbol.name;
 
-				if (!typeSet.has(type)) {
-					if (!returnType || this.usesType(returnType, type)) {
+				if (!returnType || this.usesType(returnType, type)) {
+					if (!typeParameterSet.has(typeName)) {
 						typeParameterArray.push(this.getTypeParameter(types, type, typeId++).getName());
-						typeParameterSet.add(type);
-					} else {
-						const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
-
-						if (constraint) {
-							const constraintInfo = this.getTypeNodeInfo(constraint, types);
-							types.set(type, constraintInfo.asTypeParameter()); // TODO: TypeInfoType?
-						}
+						typeParameterSet.add(typeName);
 					}
+				} else {
+					const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
 
-					typeSet.add(type);
+					if (constraint) {
+						const constraintInfo = this.getTypeNodeInfo(constraint, types);
+						types.set(type, constraintInfo.asTypeParameter()); // TODO: TypeInfoType?
+					}
 				}
 			}
 
@@ -519,21 +517,14 @@ export class Parser {
 	}
 
 	private addTypeConstraints(types: TypeMap, typeParameters?: ReadonlyArray<TypeParamDecl>): void {
-		const typeSet = new Set;
-
 		if (typeParameters) {
 			for (const typeParameter of typeParameters) {
 				const type = this.typeChecker.getTypeAtLocation(typeParameter);
+				const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
 
-				if (!typeSet.has(type)) {
-					const constraint = ts.getEffectiveConstraintOfTypeParameter(typeParameter);
-
-					if (constraint) {
-						const constraintInfo = this.getTypeNodeInfo(constraint, types);
-						types.set(type, constraintInfo.asTypeParameter()); // TODO: TypeInfoType?
-					}
-
-					typeSet.add(type);
+				if (constraint && !types.has(type)) {
+					const constraintInfo = this.getTypeNodeInfo(constraint, types);
+					types.set(type, constraintInfo.asTypeParameter()); // TODO: TypeInfoType?
 				}
 			}
 		}

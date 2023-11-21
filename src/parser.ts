@@ -944,7 +944,7 @@ export class Parser {
 					child.genericClassObj.computeReferences();
 					this.library.addGlobal(child.genericClassObj);
 				}
-			} else if (child.funcDecls.length > 0) {
+			} else if (child.funcDecls.length > 0 && child.children.size == 0) {
 				for (const funcDecl of child.funcDecls) {
 					for (const funcObj of this.createFuncs(funcDecl, TYPES_EMPTY, 0)) {
 						funcObj.setParent(namespace);

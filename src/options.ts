@@ -29,7 +29,8 @@ export function parseOptions() {
 		.option("--list-files")
 		.option("--verbose, -v")
 		.option("--namespace <namespace>")
-		.option("--no-constraints");
+		.option("--no-constraints")
+		.option("--full-names");
 
 	program.parse();
 
@@ -46,4 +47,8 @@ export function ignoreErrors(): boolean {
 
 export function useConstraints(): boolean {
 	return !!options.constraints;
+}
+
+export function useFullNames(): boolean {
+	return !!options.fullNames;
 }

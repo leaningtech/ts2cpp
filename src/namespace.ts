@@ -1,4 +1,5 @@
 import { Writer } from "./writer.js";
+import { useFullNames } from "./options.js";
 
 export enum Flags {
 	Static = 1,
@@ -46,6 +47,10 @@ export class Namespace {
 
 	public getPath(namespace?: Namespace): string {
 		// TODO: check for name conflicts
+
+		if (useFullNames()) {
+			return this.getPathSafe(namespace);
+		}
 
 		if (this === namespace) {
 			return this.name;

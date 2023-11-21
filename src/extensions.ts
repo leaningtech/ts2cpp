@@ -1,7 +1,7 @@
 import { Flags } from "./namespace.js";
 import { Function } from "./function.js";
 import { Class, Visibility } from "./class.js";
-import { Type, DeclaredType, NamedType } from "./type.js";
+import { Type, DeclaredType, NamedType, QualifiedType, TypeQualifier } from "./type.js";
 import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./types.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
@@ -240,7 +240,29 @@ function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: stri
 		const decl = member.getDeclaration();
 
 		if (decl instanceof Function && decl.getName() === name) {
-			decl.setBody(`_${name}(static_cast<const String&>(data)...);`);
+			const parameters = new Array;
+
+			for (const parameter of decl.getParameters()) {
+				const parameterType = parameter.getType();
+				let name = parameter.getName();
+				let suffix = "";
+
+				if (parameterType instanceof QualifiedType) {
+					const qualifier = parameterType.getQualifier();
+
+					if (qualifier & TypeQualifier.Pointer) {
+						name = `*${name}`;
+					}
+
+					if (qualifier & TypeQualifier.Variadic) {
+						suffix = "...";
+					}
+				}
+
+				parameters.push(`static_cast<const String&>(${name})${suffix}`);
+			}
+
+			decl.setBody(`_${name}(${parameters.join(", ")});`);
 		}
 	}
 }

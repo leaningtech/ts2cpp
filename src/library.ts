@@ -2,6 +2,20 @@ import { Declaration } from "./declaration.js";
 import { State, Target, resolveDependencies, removeDuplicates } from "./target.js";
 import { Options, StreamWriter } from "./writer.js";
 import { Namespace } from "./namespace.js";
+import * as fs from "fs";
+
+const REALPATH_CACHE = new Map;
+
+function realpath(file: string): string {
+	let result = REALPATH_CACHE.get(file);
+
+	if (!result) {
+		result = fs.realpathSync(file);
+		REALPATH_CACHE.set(file, result);
+	}
+
+	return result;
+}
 
 export class Global implements Target {
 	private readonly declaration: Declaration;
@@ -120,7 +134,7 @@ export class Library {
 
 	public constructor(defaultName: string, typescriptFiles: ReadonlyArray<string>) {
 		this.defaultFile = new File(defaultName);
-		this.typescriptFiles = [...typescriptFiles];
+		this.typescriptFiles = typescriptFiles.map(realpath);
 		this.files.set(defaultName, this.defaultFile);
 	}
 
@@ -160,6 +174,10 @@ export class Library {
 
 	public getTypescriptFiles(): ReadonlyArray<string> {
 		return this.typescriptFiles;
+	}
+
+	public hasFile(file: string): boolean {
+		return this.typescriptFiles.includes(realpath(file));
 	}
 
 	public removeDuplicates(): void {
@@ -307,7 +325,7 @@ export class LibraryWriter {
 			const namespace = declaration.getNamespace();
 			const file = declaration.getFile();
 			
-			if (!file || this.library.getTypescriptFiles().includes(file)) {
+			if (!file || this.library.hasFile(file)) {
 				fileWriter.writeNamespaceChange(namespace);
 				declaration.write(fileWriter.getWriter(), state, namespace);
 			}

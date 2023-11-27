@@ -178,7 +178,7 @@ export class Parser {
 	}
 
 	private includesDeclaration(node: ts.Node): boolean {
-		return this.library.getTypescriptFiles().includes(node.getSourceFile().fileName);
+		return this.library.hasFile(node.getSourceFile().fileName);
 	}
 
 	private discoverClass(child: Child, node: ts.Node, name: string): void {

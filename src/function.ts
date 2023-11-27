@@ -49,6 +49,7 @@ export class Initializer {
 export class Function extends TemplateDeclaration {
 	private readonly parameters: Array<Parameter> = new Array;
 	private readonly initializers: Array<Initializer> = new Array;
+	private readonly extraDependencies: Dependencies = new Dependencies;
 	private type?: Type;
 	private body?: string;
 
@@ -71,6 +72,14 @@ export class Function extends TemplateDeclaration {
 
 	public addInitializer(name: string, value: string): void {
 		this.initializers.push(new Initializer(name, value));
+	}
+
+	public getExtraDependencies(): Dependencies {
+		return this.extraDependencies;
+	}
+
+	public addExtraDependency(declaration: Declaration, state: State, reason: ReasonKind = ReasonKind.Extra): void {
+		this.extraDependencies.add(declaration, new Dependency(state, this, reason));
 	}
 
 	public getType(): Type | undefined {
@@ -105,6 +114,7 @@ export class Function extends TemplateDeclaration {
 			this.parameters
 				.flatMap(parameter => [...parameter.getType().getDependencies(parameterReason)])
 				.concat([...this.type?.getDependencies(returnReason) ?? []])
+				.concat([...this.extraDependencies])
 		);
 	}
 

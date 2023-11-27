@@ -16,6 +16,7 @@ export enum ReasonKind {
 	Root,
 	Inner,
 	Member,
+	Extra,
 }
 
 export interface Target {

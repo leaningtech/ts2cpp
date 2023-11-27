@@ -5,6 +5,7 @@ import { Type, DeclaredType, NamedType, QualifiedType, TypeQualifier } from "./t
 import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./types.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
+import { State } from "./target.js";
 
 // TODO: add constraints for type parameters in this file
 
@@ -12,6 +13,15 @@ function addConversionConstructor(classObj: Class, type: Type): void {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addParameter(type, "x");
 	classObj.addMember(funcObj, Visibility.Public);
+}
+
+function addObjectInitializerConstructor(classObj: Class, type: Type): Function {
+	const funcObj = new Function(classObj.getName());
+	funcObj.addParameter(type, "x");
+	funcObj.addInitializer("Object", "cheerp::identity(x)");
+	funcObj.setBody(``);
+	classObj.addMember(funcObj, Visibility.Public);
+	return funcObj;
 }
 
 function addStringExtensions(parser: Parser, stringClass: Class): void {
@@ -221,12 +231,10 @@ function addFunctionExtensions(parser: Parser, functionClass: Class) {
 	const eventListenerClass = parser.getRootClass("EventListener");
 
 	if (eventListenerClass) {
-		const eventListenerConstructor = new Function(functionClass.getName());
-		eventListenerConstructor.addParameter(new DeclaredType(eventListenerClass).pointer(), "x");
-		eventListenerConstructor.addInitializer("Object", "reinterpret_cast<Object*>(x)");
-		eventListenerConstructor.setBody(``);
-
-		functionClass.addMember(eventListenerConstructor, Visibility.Public);
+		const constEventListenerConstructor = addObjectInitializerConstructor(functionClass, new DeclaredType(eventListenerClass).constPointer());
+		constEventListenerConstructor.addExtraDependency(eventListenerClass, State.Complete);
+		const eventListenerConstructor = addObjectInitializerConstructor(functionClass, new DeclaredType(eventListenerClass).pointer());
+		eventListenerConstructor.addExtraDependency(eventListenerClass, State.Complete);
 	}
 }
 
@@ -251,16 +259,12 @@ function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: stri
 				if (parameterType instanceof QualifiedType) {
 					const qualifier = parameterType.getQualifier();
 
-					if (qualifier & TypeQualifier.Pointer) {
-						name = `*${name}`;
-					}
-
 					if (qualifier & TypeQualifier.Variadic) {
 						suffix = "...";
 					}
 				}
 
-				parameters.push(`static_cast<const String&>(${name})${suffix}`);
+				parameters.push(`new String(${name})${suffix}`);
 			}
 
 			decl.setBody(`_${name}(${parameters.join(", ")});`);
@@ -325,6 +329,7 @@ export function addExtensions(parser: Parser): void {
 		addConsoleLogExtensions(parser, consoleClass, "info");
 		addConsoleLogExtensions(parser, consoleClass, "log");
 		addConsoleLogExtensions(parser, consoleClass, "warn");
+		addConsoleLogExtensions(parser, consoleClass, "trace");
 	}
 
 	const keys = [

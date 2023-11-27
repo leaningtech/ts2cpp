@@ -104,14 +104,6 @@ export class Class extends TemplateDeclaration {
 		return this.bases;
 	}
 
-	public getBaseClasses(): ReadonlyArray<Class> {
-		return this.bases
-			.map(base => base.getType())
-			.filter((type): type is DeclaredType => type instanceof DeclaredType)
-			.map(type => type.getDeclaration())
-			.filter((declaration): declaration is Class => declaration instanceof Class);
-	}
-
 	public addBase(type: Type, visibility: Visibility): void {
 		if (!(type instanceof DeclaredType) || type.getDeclaration() !== this) {
 			this.bases.push(new Base(type, visibility));
@@ -265,8 +257,16 @@ export class Class extends TemplateDeclaration {
 			}
 		}
 
-		for (const declaration of this.getBaseClasses()) {
-			declaration.computeVirtualBaseClasses(keys);
+		for (const base of this.bases) {
+			const type = base.getInnerType();
+
+			if (type instanceof DeclaredType) {
+				const declaration = type.getDeclaration();
+
+				if (declaration instanceof Class) {
+					declaration.computeVirtualBaseClasses(keys);
+				}
+			}
 		}
 	}
 }

@@ -758,19 +758,13 @@ export class Parser {
 
 			types = new Map(types);
 
-			const typeParameters = node.classDecls()
-				.filter(decl => this.includesDeclaration(decl))
-				.flatMap(decl => ts.getEffectiveTypeParameterDeclarations(decl));
+			const firstDecl = node.classDecls().filter(decl => this.includesDeclaration(decl))[0];
+			const typeParameters = firstDecl ? ts.getEffectiveTypeParameterDeclarations(firstDecl) : [];
 
 			if (generic) {
 				const [typeParams, typeConstraints] = this.getTypeParametersAndConstraints(types, typeId, typeParameters);
 
 				typeId += typeParams.length;
-
-				for (const baseType of baseTypes) {
-					const info = this.getTypeInfo(baseType, types);
-					classObj.addBase(info.asBaseType(), Visibility.Public);
-				}
 
 				for (const typeParam of typeParams) {
 					classObj.addTypeParameter(typeParam);
@@ -781,11 +775,11 @@ export class Parser {
 				}
 			} else {
 				this.addTypeConstraints(types, typeParameters);
+			}
 
-				for (const baseType of baseTypes) {
-					const info = this.getTypeInfo(baseType, types);
-					classObj.addBase(info.asBaseType(), Visibility.Public);
-				}
+			for (const baseType of baseTypes) {
+				const info = this.getTypeInfo(baseType, types);
+				classObj.addBase(info.asBaseType(), Visibility.Public);
 			}
 		}
 

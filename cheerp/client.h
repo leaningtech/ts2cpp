@@ -134,7 +134,7 @@ class Closure<R(Args...)>
 		static constexpr bool value = V;
 	};
 	template <class _Tp> struct _must_destroy
-	    : public _bool_const<!__has_trivial_destructor(typename std::remove_reference<_Tp>::type)> {};
+	    : public _bool_const<!__is_trivially_destructible(typename std::remove_reference<_Tp>::type)> {};
 
 	template<class T>
 	static void do_delete(void* o)

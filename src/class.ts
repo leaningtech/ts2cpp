@@ -2,6 +2,7 @@ import { Namespace } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
 import { Expression, Type, DeclaredType, TemplateType } from "./type.js";
+import { Function } from "./function.js";
 import { Writer } from "./writer.js";
 import { useConstraints } from "./options.js";
 
@@ -91,8 +92,12 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public addMember(declaration: Declaration, visibility: Visibility): void {
-		this.members.push(new Member(declaration, visibility));
-		declaration.setParent(this);
+		// TODO: emit a warning, maybe?
+
+		if (declaration instanceof Function || declaration.getName() !== this.getName()) {
+			this.members.push(new Member(declaration, visibility));
+			declaration.setParent(this);
+		}
 	}
 
 	public getBases(): ReadonlyArray<Base> {

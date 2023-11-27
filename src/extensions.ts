@@ -23,6 +23,7 @@ function addStringExtensions(parser: Parser, stringClass: Class): void {
 	addConversionConstructor(stringClass, UNSIGNED_LONG_TYPE);
 	addConversionConstructor(stringClass, INT_TYPE);
 	addConversionConstructor(stringClass, UNSIGNED_INT_TYPE);
+	addConversionConstructor(stringClass, DOUBLE_TYPE);
 
 	const fromUtf8 = new Function("fromUtf8", stringType.pointer());
 	fromUtf8.addFlags(Flags.Static);

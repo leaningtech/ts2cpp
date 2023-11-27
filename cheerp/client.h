@@ -21,16 +21,6 @@
 #include <utility>
 #endif
 
-namespace [[cheerp::genericjs]] client
-{
-template<class F>
-class _Function : public Function, public Object {
-public:
-	_Function(const EventListener* x) : Object(x) {
-	}
-};
-}
-
 namespace [[cheerp::genericjs]] cheerp
 {
 

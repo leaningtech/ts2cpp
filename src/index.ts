@@ -7,7 +7,7 @@ import { Timer, options, parseOptions } from "./options.js";
 import * as ts from "typescript";
 
 // TODO: generate function types for classes that only have a call signature
-//
+
 // TODO: unhardcode these paths
 const DEFAULTLIB_FILES = [
 	"/home/user/ts2cpp/node_modules/typescript/lib/lib.es5.d.ts",
@@ -93,6 +93,7 @@ if (options.defaultLib) {
 	typesFile.addName("client::Function");
 	typesFile.addInclude("jsobject.h", false, jsobjectFile);
 	clientlibFile.addInclude("types.h", false, typesFile);
+	clientlibFile.addInclude("function.h", false, typesFile);
 	library.addGlobalInclude("jshelper.h", false);
 } else {
 	library.addGlobalInclude("cheerp/clientlib.h", true);

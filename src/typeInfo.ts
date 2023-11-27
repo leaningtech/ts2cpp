@@ -1,6 +1,6 @@
 import { Parser } from "./parser.js";
 import { Expression, Type, NamedType, TemplateType, TypeQualifier, DeclaredType } from "./type.js";
-import { ANY_TYPE, UNION_TYPE, FUNCTION_TYPE } from "./types.js";
+import { ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE } from "./types.js";
 
 const REFERENCE_TYPES = [
 	"String",
@@ -36,6 +36,14 @@ export class TypeData {
 			return this.type.pointer();
 		} else {
 			return this.type;
+		}
+	}
+
+	public getNonVoidPointerOrPrimitive(): Type {
+		if (this.type.key() === VOID_TYPE.key()) {
+			return ANY_TYPE.pointer();
+		} else {
+			return this.getPointerOrPrimitive();
 		}
 	}
 }
@@ -90,13 +98,13 @@ export class TypeInfo {
 	public asTypeConstraint(type: Type): Expression {
 		return Expression.isAcceptable(type,
 			...this.getPlural().map(constraint => {
-				return constraint.getPointerOrPrimitive();
+				return constraint.getNonVoidPointerOrPrimitive();
 			})
 		);
 	}
 
 	public asTypeParameter(): Type {
-		return this.getSingle().getPointerOrPrimitive();
+		return this.getSingle().getNonVoidPointerOrPrimitive();
 	}
 
 	public asBaseType(): Type {

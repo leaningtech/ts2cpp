@@ -18,7 +18,7 @@ function addConversionConstructor(classObj: Class, type: Type): void {
 function addObjectInitializerConstructor(classObj: Class, type: Type): Function {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addParameter(type, "x");
-	funcObj.addInitializer("Object", "cheerp::identity(x)");
+	funcObj.addInitializer("Object", "x");
 	funcObj.setBody(``);
 	classObj.addMember(funcObj, Visibility.Public);
 	return funcObj;

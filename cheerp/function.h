@@ -6,7 +6,7 @@ namespace [[cheerp::genericjs]] client {
 	template<class F>
 	class _Function : public Function {
 	public:
-		_Function(const EventListener* x): Function(cheerp::identity(x)) {
+		_Function(const EventListener* x): Function(x) {
 		}
 	};
 }

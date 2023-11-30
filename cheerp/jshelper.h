@@ -77,8 +77,6 @@ namespace cheerp {
 	};
 	template<class From, class... To>
 	constexpr bool IsAcceptableV = (IsAcceptable<From, To>::value || ...);
-	// TODO: Fix cheerp crash when passing parameters to base initializers
-	// unmodified so identity is no longer needed
 	template<class T>
 	[[cheerp::genericjs]]
 	T identity(T value) {

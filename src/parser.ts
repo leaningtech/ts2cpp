@@ -5,7 +5,7 @@ import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
-import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType, QualifiedType } from "./type.js";
+import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType, QualifiedType, TypeQualifier } from "./type.js";
 import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
@@ -540,6 +540,52 @@ export class Parser {
 		}
 	}
 
+	private createVariadicHelper(decl: Function): void {
+		const type = decl.getType();
+
+		if (!decl.isVariadic() || type === undefined) {
+			return;
+		}
+
+		const helperFunc = new Function(`_${decl.getName()}`, ANY_TYPE.pointer());
+		helperFunc.setInterfaceName(decl.getName());
+		helperFunc.addVariadicTypeParameter("_Args");
+		helperFunc.addParameter(new NamedType("_Args").expand(), "data");
+		helperFunc.addFlags(decl.getFlags());
+
+		const parameters = new Array;
+
+		for (const parameter of decl.getParameters()) {
+			const parameterType = parameter.getType();
+			const name = parameter.getName();
+			let suffix = "";
+
+			if (parameterType instanceof QualifiedType) {
+				const qualifier = parameterType.getQualifier();
+
+				if (qualifier & TypeQualifier.Variadic) {
+					suffix = "...";
+				}
+			}
+
+			parameters.push(`cheerp::clientCast(${name})${suffix}`);
+		}
+
+		if (type.isVoidLike()) {
+			decl.setBody(`_${decl.getName()}(${parameters.join(", ")});`);
+		} else {
+			decl.setBody(`return _${decl.getName()}(${parameters.join(", ")})->template cast<${type.toString()}>();`);
+		}
+
+		const parent = decl.getParent();
+
+		if (parent instanceof Class) {
+			parent.addMember(helperFunc, Visibility.Private);
+		} else {
+			helperFunc.setParent(parent);
+		}
+	}
+
 	private createFunc(decl: FuncDecl, name: string, parameters: ReadonlyArray<any>, typeParams: ReadonlyArray<string>, interfaceName?: string, returnType?: Type, forward?: string): Function {
 		const funcObj = new Function(name, returnType);
 
@@ -564,7 +610,7 @@ export class Parser {
 				funcObj.addParameter(param.expand(), name);
 				const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
 				const element = Type.arrayElementType(type);
-				argsConstraint.addChild(Expression.isAcceptable(param, element));
+				argsConstraint.addChild(Expression.isAcceptableArgs(param, element));
 				argsConstraint.addChild(ELLIPSES);
 				constraint.addChild(argsConstraint);
 				forwardParameters.push(name + "...");
@@ -793,6 +839,7 @@ export class Parser {
 			if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member) || ts.isConstructorDeclaration(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId, forward, classObj.getName())) {
 					classObj.addMember(funcObj, Visibility.Public);
+					this.createVariadicHelper(funcObj);
 				}
 			} else if (ts.isIndexSignatureDeclaration(member)) {
 				for (const funcObj of this.createFuncs(member, types, typeId)) {
@@ -938,7 +985,7 @@ export class Parser {
 					child.genericClassObj.computeReferences();
 					this.library.addGlobal(child.genericClassObj);
 				}
-			} else if (child.funcDecls.length > 0 && child.children.size == 0) {
+			} else if (child.funcDecls.length > 0 && child.children.size === 0) {
 				for (const funcDecl of child.funcDecls) {
 					for (const funcObj of this.createFuncs(funcDecl, TYPES_EMPTY, 0)) {
 						funcObj.setParent(namespace);
@@ -949,7 +996,7 @@ export class Parser {
 			} else if (child.varDecl) {
 				const varObj = this.createVar(child.varDecl, TYPES_EMPTY, false);
 
-				if (varObj.getType() !== VOID_TYPE) {
+				if (varObj.getType().key() !== VOID_TYPE.key()) {
 					varObj.setParent(namespace);
 					varObj.addFlags(Flags.Extern);
 					this.library.addGlobal(varObj);

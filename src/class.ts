@@ -88,7 +88,7 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public hasConstructor(): boolean {
-		return this.members.some(member => member.getDeclaration().getName() == this.getName());
+		return this.members.some(member => member.getDeclaration().getName() === this.getName());
 	}
 
 	public addMember(declaration: Declaration, visibility: Visibility): void {

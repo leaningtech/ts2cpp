@@ -90,6 +90,7 @@ if (options.defaultLib) {
 	typesFile.addName("client::Map");
 	typesFile.addName("client::Number");
 	typesFile.addName("client::Function");
+	typesFile.addName("cheerp::makeString");
 	typesFile.addInclude("jsobject.h", false, jsobjectFile);
 	clientlibFile.addInclude("types.h", false, typesFile);
 	clientlibFile.addInclude("function.h", false, typesFile);

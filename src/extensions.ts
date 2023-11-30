@@ -1,4 +1,4 @@
-import { Flags } from "./namespace.js";
+import { Flags, Namespace } from "./namespace.js";
 import { Function } from "./function.js";
 import { Class, Visibility } from "./class.js";
 import { Type, DeclaredType, NamedType, QualifiedType, TypeQualifier } from "./type.js";
@@ -108,6 +108,15 @@ return this->toUtf8();
 	stringClass.addMember(toUtf8, Visibility.Public);
 	stringClass.addMember(charConstructor, Visibility.Public);
 	stringClass.addMember(stringConversion, Visibility.Public);
+
+	const cheerpNamespace = new Namespace("cheerp");
+	cheerpNamespace.addAttribute("cheerp::genericjs");
+
+	const makeStringFunc = new Function("makeString", stringType.pointer(), cheerpNamespace);
+	makeStringFunc.addParameter(CONST_CHAR_POINTER_TYPE, "str");
+	makeStringFunc.setBody(`return new client::String(str);`);
+
+	parser.getLibrary().addGlobal(makeStringFunc);
 }
 
 function addNumberExtensions(parser: Parser, numberClass: Class): void {
@@ -242,7 +251,7 @@ function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: stri
 	const logFunc = new Function(`_${name}`, VOID_TYPE);
 	logFunc.setInterfaceName(name);
 	logFunc.addVariadicTypeParameter("_Args");
-	logFunc.addParameter(new NamedType("_Args").expand(), "data");
+	logFunc.addParameter(new NamedType("_Args").rValueReference().expand(), "data");
 	consoleClass.addMember(logFunc, Visibility.Private);
 
 	for (const member of consoleClass.getMembers()) {
@@ -264,7 +273,7 @@ function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: stri
 					}
 				}
 
-				parameters.push(`new String(${name})${suffix}`);
+				parameters.push(`cheerp::clientCast(${name})${suffix}`);
 			}
 
 			decl.setBody(`_${name}(${parameters.join(", ")});`);
@@ -324,12 +333,14 @@ export function addExtensions(parser: Parser): void {
 	}
 
 	if (consoleClass) {
+		/*
 		addConsoleLogExtensions(parser, consoleClass, "debug");
 		addConsoleLogExtensions(parser, consoleClass, "error");
 		addConsoleLogExtensions(parser, consoleClass, "info");
 		addConsoleLogExtensions(parser, consoleClass, "log");
 		addConsoleLogExtensions(parser, consoleClass, "warn");
 		addConsoleLogExtensions(parser, consoleClass, "trace");
+		*/
 	}
 
 	const keys = [
@@ -354,7 +365,7 @@ export function addExtensions(parser: Parser): void {
 					}
 
 					child.setType(INT_TYPE);
-				} else if (name === "concat") {
+				} else if (name === "concat" || name === "_concat") {
 					if (!(child.getFlags() & Flags.Static)) {
 						child.addFlags(Flags.Const);
 					}

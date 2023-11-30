@@ -19,6 +19,7 @@ export const ENABLE_IF = new NamedType("std::enable_if_t");
 export const IS_SAME = new NamedType("std::is_same_v");
 export const IS_CONVERTIBLE = new NamedType("std::is_convertible_v");
 export const IS_ACCEPTABLE = new NamedType("cheerp::IsAcceptableV");
+export const IS_ACCEPTABLE_ARGS = new NamedType("cheerp::IsAcceptableArgsV");
 export const ARRAY_ELEMENT_TYPE = new NamedType("cheerp::ArrayElementTypeT");
 export const ANY_TYPE = new NamedType("_Any");
 export const UNION_TYPE = new NamedType("_Union");

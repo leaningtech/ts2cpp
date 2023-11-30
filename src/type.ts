@@ -23,6 +23,10 @@ export abstract class Expression {
 		return false;
 	}
 
+	public isVoidLike(): boolean {
+		return this.key() === VOID_TYPE.key();
+	}
+
 	public removeCvRef(): Expression {
 		return this;
 	}
@@ -104,6 +108,17 @@ export abstract class Expression {
 
 	public static isAcceptable(from: Type, ...to: ReadonlyArray<Type>): TemplateType {
 		const result = new TemplateType(IS_ACCEPTABLE);
+		result.addTypeParameter(from);
+
+		for (const type of unique(to)) {
+			result.addTypeParameter(type);
+		}
+
+		return result;
+	}
+
+	public static isAcceptableArgs(from: Type, ...to: ReadonlyArray<Type>): TemplateType {
+		const result = new TemplateType(IS_ACCEPTABLE_ARGS);
 		result.addTypeParameter(from);
 
 		for (const type of unique(to)) {
@@ -261,6 +276,7 @@ export enum TypeQualifier {
 	Reference = 2,
 	Const = 4,
 	Variadic = 8,
+	RValueReference = 16,
 	ConstPointer = Const | Pointer,
 	ConstReference = Const | Reference,
 }
@@ -288,6 +304,10 @@ export abstract class Type extends Expression {
 
 	public expand(): QualifiedType {
 		return this.qualify(TypeQualifier.Variadic);
+	}
+
+	public rValueReference(): QualifiedType {
+		return this.qualify(TypeQualifier.RValueReference);
 	}
 
 	public getMemberType(name: string) {
@@ -414,7 +434,7 @@ export class QualifiedType extends Type {
 	}
 
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
-		if (this.qualifier & (TypeQualifier.Pointer | TypeQualifier.Reference)) {
+		if (this.qualifier & (TypeQualifier.Pointer | TypeQualifier.Reference | TypeQualifier.RValueReference)) {
 			return this.inner.getDependencies(reason.withState(innerState ?? State.Partial), innerState);
 		} else {
 			return this.inner.getDependencies(reason);
@@ -436,13 +456,17 @@ export class QualifiedType extends Type {
 		if (this.qualifier & TypeQualifier.Pointer) {
 			writer.write("*");
 		}
-		
+
 		if (this.qualifier & TypeQualifier.Reference) {
 			writer.write("&");
 		}
 
 		if (this.qualifier & TypeQualifier.Variadic) {
 			writer.write("...");
+		}
+
+		if (this.qualifier & TypeQualifier.RValueReference) {
+			writer.write("&&");
 		}
 	}
 	
@@ -543,6 +567,16 @@ export class TemplateType extends Type {
 			return false;
 		}
 	}
+
+	public isVoidLike(): boolean {
+		const key = this.inner.key();
+
+		if (key == ENABLE_IF.key()) {
+			return this.typeParameters[1].isVoidLike();
+		} else {
+			return false;
+		}
+	}
 }
 
 export class FunctionType extends Type {
@@ -610,4 +644,4 @@ export class FunctionType extends Type {
 	}
 }
 
-import { ENABLE_IF, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE, ARRAY_ELEMENT_TYPE, VOID_TYPE, UNION_TYPE, ANY_TYPE } from "./types.js";
+import { ENABLE_IF, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE, IS_ACCEPTABLE_ARGS, ARRAY_ELEMENT_TYPE, VOID_TYPE, UNION_TYPE, ANY_TYPE } from "./types.js";

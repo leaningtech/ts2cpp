@@ -177,6 +177,7 @@ export class TypeParameter {
 
 export abstract class TemplateDeclaration extends Declaration {
 	private readonly typeParameters: Array<TypeParameter> = new Array;
+	private variadic: boolean = false;
 
 	public getTypeParameters(): ReadonlyArray<TypeParameter> {
 		return this.typeParameters;
@@ -188,6 +189,11 @@ export abstract class TemplateDeclaration extends Declaration {
 
 	public addVariadicTypeParameter(name: string): void {
 		this.typeParameters.push(new TypeParameter(name, true));
+		this.variadic = true;
+	}
+
+	public isVariadic(): boolean {
+		return this.variadic;
 	}
 
 	public static writeParameters(writer: Writer, parameters: ReadonlyArray<TypeParameter>): void {

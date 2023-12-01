@@ -5,7 +5,6 @@ import { ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE } from "./types.js";
 const REFERENCE_TYPES = [
 	"String",
 	"Function",
-	FUNCTION_TYPE.getName(),
 ];
 
 export enum TypeKind {

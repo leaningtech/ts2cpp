@@ -88,6 +88,7 @@ export class Parser {
 	public readonly bigintBuiltin: BuiltinType;
 	public readonly symbolBuiltin: BuiltinType;
 	public readonly functionBuiltin: BuiltinType;
+	public readonly eventListenerBuiltin: BuiltinType;
 
 	public constructor(program: ts.Program, library: Library, defaultLib: boolean) {
 		this.library = library;
@@ -110,6 +111,7 @@ export class Parser {
 		this.bigintBuiltin = this.getBuiltinType("BigInt");
 		this.symbolBuiltin = this.getBuiltinType("Symbol");
 		this.functionBuiltin = this.getBuiltinType("Function");
+		this.eventListenerBuiltin = this.getBuiltinType("EventListener");
 
 		const generateTimer = new Timer("generate");
 
@@ -296,21 +298,26 @@ export class Parser {
 		} else if (basicDeclaredType && type.isClassOrInterface()) {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
-			// info.addType(this.functionBuiltin.type, TypeKind.Class);
+			info.addType(this.eventListenerBuiltin.type, TypeKind.Class);
 
 			for (const signature of type.getCallSignatures()) {
 				const declaration = signature.getDeclaration();
 				const returnInfo = this.getTypeNodeInfo(declaration.type!, types, cache);
-				const funcType = new FunctionType(returnInfo.asReturnType());
 
-				for (const parameter of declaration.parameters) {
-					const parameterInfo = this.getTypeNodeInfo(parameter.type!, types, cache);
-					funcType.addParameter(parameterInfo.asReturnType());
+				for (const returnType of returnInfo.asParameterTypes()) {
+					for (let i = 0; i <= declaration.parameters.length; i++) {
+						const funcType = new FunctionType(returnType);
+
+						for (const parameter of declaration.parameters.slice(0, i)) {
+							const parameterInfo = this.getTypeNodeInfo(parameter.type!, types, cache);
+							funcType.addParameter(parameterInfo.asReturnType());
+						}
+
+						const functionType = new TemplateType(FUNCTION_TYPE);
+						functionType.addTypeParameter(funcType);
+						info.addType(functionType, TypeKind.Class);
+					}
 				}
-
-				const functionType = new TemplateType(FUNCTION_TYPE);
-				functionType.addTypeParameter(funcType);
-				info.addType(functionType, TypeKind.Class);
 			}
 		} else if (basicDeclaredType) {
 			info.addType(basicDeclaredType, TypeKind.Class);

@@ -6,6 +6,10 @@ import { Function } from "./function.js";
 import { Writer } from "./writer.js";
 import { useConstraints } from "./options.js";
 
+const USE_BASE_FUNCTIONS = [
+	"operator[]",
+];
+
 export enum Visibility {
 	Public,
 	Protected,
@@ -82,6 +86,7 @@ export class Class extends TemplateDeclaration {
 	private readonly members: Array<Member> = new Array;
 	private readonly bases: Array<Base> = new Array;
 	private readonly constraints: Array<Expression> = new Array;
+	private readonly usingDeclarations: Set<string> = new Set;
 
 	public getMembers(): ReadonlyArray<Member> {
 		return this.members;
@@ -211,6 +216,20 @@ export class Class extends TemplateDeclaration {
 				member.getDeclaration().write(writer, state, this);
 			});
 
+			if (this.usingDeclarations.size > 0) {
+				writer.write(VISIBILITY_STRINGS[Visibility.Public], -1);
+				writer.write(":");
+				writer.writeLine(false);
+
+				for (const declaration of this.usingDeclarations) {
+					writer.write("using");
+					writer.writeSpace(true);
+					writer.write(declaration);
+					writer.write(";");
+					writer.writeLine(false);
+				}
+			}
+
 			writer.writeBlockClose(true);
 		} else {
 			writer.write(";");
@@ -239,6 +258,20 @@ export class Class extends TemplateDeclaration {
 		}
 	}
 
+	private *getBaseClasses(): Generator<[Base, Class]> {
+		for (const base of this.bases) {
+			const type = base.getInnerType();
+
+			if (type instanceof DeclaredType) {
+				const declaration = type.getDeclaration();
+
+				if (declaration instanceof Class) {
+					yield [base, declaration];
+				}
+			}
+		}
+	}
+
 	public computeVirtualBaseClasses(keys?: ReadonlySet<string>): void {
 		if (!keys) {
 			const map = new Map<string, number>;
@@ -257,14 +290,53 @@ export class Class extends TemplateDeclaration {
 			}
 		}
 
-		for (const base of this.bases) {
-			const type = base.getInnerType();
+		for (const [base, declaration] of this.getBaseClasses()) {
+			declaration.computeVirtualBaseClasses(keys);
+		}
+	}
 
-			if (type instanceof DeclaredType) {
-				const declaration = type.getDeclaration();
+	private getRecursiveBaseMemberNames(map: Map<string, Set<string>>): void {
+		for (const [base, declaration] of this.getBaseClasses()) {
+			for (const member of declaration.members) {
+				const declaration = member.getDeclaration();
 
-				if (declaration instanceof Class) {
-					declaration.computeVirtualBaseClasses(keys);
+				if (declaration instanceof Function && member.getVisibility() === Visibility.Public) {
+					const name = declaration.getName();
+					let set = map.get(name);
+
+					if (!set) {
+						set = new Set;
+						map.set(name, set);
+					}
+
+					set.add(`${base.getType().toString()}::${name}`);
+				}
+			}
+
+			declaration.getRecursiveBaseMemberNames(map);
+		}
+	}
+
+	public useBaseMembers(): void {
+		const baseNames = new Map;
+
+		const names = new Set(
+			this.members
+				.map(member => member.getDeclaration())
+				.filter(declaration => declaration instanceof Function)
+				.map(declaration => declaration.getName())
+		);
+
+		this.getRecursiveBaseMemberNames(baseNames);
+
+		for (const name of names) {
+			if (USE_BASE_FUNCTIONS.includes(name)) {
+				const set = baseNames.get(name);
+
+				if (set) {
+					for (const declaration of set) {
+						this.usingDeclarations.add(declaration);
+					}
 				}
 			}
 		}

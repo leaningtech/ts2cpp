@@ -11,6 +11,7 @@ import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { Timer, isVerbose } from "./options.js";
 import { options, useConstraints } from "./options.js";
+import { addExtensions } from "./extensions.js";
 import * as ts from "typescript";
 
 const TYPES_EMPTY: Map<ts.Type, Type> = new Map;
@@ -88,7 +89,7 @@ export class Parser {
 	public readonly symbolBuiltin: BuiltinType;
 	public readonly functionBuiltin: BuiltinType;
 
-	public constructor(program: ts.Program, library: Library) {
+	public constructor(program: ts.Program, library: Library, defaultLib: boolean) {
 		this.library = library;
 		this.library.addGlobalInclude("type_traits", true);
 		this.typeChecker = program.getTypeChecker();
@@ -129,6 +130,18 @@ export class Parser {
 		}
 
 		computeVirtualBaseClassesTimer.end();
+
+		if (defaultLib) {
+			addExtensions(this);
+		}
+
+		const useBaseMembersTimer = new Timer("use base members");
+
+		for (const declaration of this.classes) {
+			declaration.useBaseMembers();
+		}
+
+		useBaseMembersTimer.end();
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");

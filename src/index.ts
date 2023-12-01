@@ -1,7 +1,6 @@
 import { Parser } from "./parser.js";
 import { catchErrors } from "./error.js";
 import { Library } from "./library.js";
-import { addExtensions } from "./extensions.js";
 import { program } from "commander";
 import { Timer, options, parseOptions } from "./options.js";
 import * as ts from "typescript";
@@ -100,12 +99,8 @@ if (options.defaultLib) {
 }
 
 const parseTimer = new Timer("parse");
-const parser = new Parser(tsProgram, library);
+const parser = new Parser(tsProgram, library, options.defaultLib);
 parseTimer.end();
-
-if (options.defaultLib) {
-	addExtensions(parser);
-}
 
 catchErrors(() => {
 	const writeTimer = new Timer("write");

@@ -103,6 +103,7 @@ const RESERVED = [
 	"xor",
 	"xor_eq",
 	// reserved identifiers
+	"assert",
 	"EOF",
 	"F_OK",
 	"R_OK",

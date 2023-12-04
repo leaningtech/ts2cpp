@@ -130,7 +130,10 @@ export class Function extends TemplateDeclaration {
 		const flags = this.getFlags();
 		let first = true;
 		this.writeTemplate(writer);
-		this.writeInterfaceName(writer);
+
+		if (this.body === undefined) {
+			this.writeInterfaceName(writer);
+		}
 
 		if (flags & Flags.Explicit) {
 			writer.write("explicit");

@@ -377,7 +377,7 @@ export function addExtensions(parser: Parser): void {
 					}
 
 					child.setType(INT_TYPE);
-				} else if (name === "concat" || name === "_concat") {
+				} else if (name === "concat" || name === "_concat" || name === "localeCompare") {
 					if (!(child.getFlags() & Flags.Static)) {
 						child.addFlags(Flags.Const);
 					}

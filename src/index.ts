@@ -53,6 +53,7 @@ const DEFAULTLIB_FILES = [
 	"node_modules/typescript/lib/lib.decorators.d.ts",
 	"node_modules/typescript/lib/lib.decorators.legacy.d.ts",
 	"node_modules/typescript/lib/lib.dom.d.ts",
+	"node_modules/typescript/lib/lib.webworker.d.ts",
 	"node_modules/typescript/lib/lib.webworker.importscripts.d.ts",
 	"node_modules/typescript/lib/lib.scripthost.d.ts",
 ];

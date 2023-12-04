@@ -784,7 +784,7 @@ export class Parser {
 		const type = this.typeChecker.getTypeFromTypeNode(decl.type!);
 		const [symbol, types] = this.getSymbol(type, classTypes);
 		const members = (symbol?.declarations ?? new Array)
-			.filter(decl => ts.isInterfaceDeclaration(decl) || ts.isClassDeclaration(decl))
+			.filter(decl => ts.isInterfaceDeclaration(decl) || ts.isClassDeclaration(decl) || ts.isTypeLiteralNode(decl))
 			.filter(decl => this.includesDeclaration(decl))
 			.flatMap(decl => decl.members);
 

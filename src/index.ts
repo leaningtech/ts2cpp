@@ -87,7 +87,9 @@ if (options.defaultLib) {
 	jsobjectFile.addName("client::Object");
 	typesFile.addName("client::String");
 	typesFile.addName("client::Array");
+	typesFile.addName("client::TArray");
 	typesFile.addName("client::Map");
+	typesFile.addName("client::TMap");
 	typesFile.addName("client::Number");
 	typesFile.addName("client::Function");
 	typesFile.addName("cheerp::makeString");

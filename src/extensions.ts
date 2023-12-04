@@ -232,8 +232,12 @@ return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 		`);
 
+		const copyConstructor = new Function(typedArrayClass.getName());
+		copyConstructor.addParameter(new DeclaredType(typedArrayClass).constPointer(), "array");
+
 		typedArrayClass.addMember(indexFunc, Visibility.Public);
 		typedArrayClass.addMember(indexRefFunc, Visibility.Public);
+		typedArrayClass.addMember(copyConstructor, Visibility.Public);
 	}
 }
 

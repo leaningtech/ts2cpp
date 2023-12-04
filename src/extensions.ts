@@ -193,18 +193,18 @@ return out;
 	mapClass.addMember(deleteFunc, Visibility.Public);
 }
 
-function addArrayExtensions(parser: Parser, arrayClass: Class): void {
-	const indexFunc = new Function("operator[]", parser.objectBuiltin.type.pointer());
+function addArrayExtensions(parser: Parser, arrayClass: Class, type: Type): void {
+	const indexFunc = new Function("operator[]", type);
 	indexFunc.addFlags(Flags.Const);
 	indexFunc.addParameter(INT_TYPE, "index");
 	indexFunc.setBody(`
-return __builtin_cheerp_make_regular<Object*>(this, 0)[index];
+return __builtin_cheerp_make_regular<${type.toString()}>(this, 0)[index];
 	`);
 	
-	const indexRefFunc = new Function("operator[]", parser.objectBuiltin.type.pointer().reference());
+	const indexRefFunc = new Function("operator[]", type.reference());
 	indexRefFunc.addParameter(INT_TYPE, "index");
 	indexRefFunc.setBody(`
-return __builtin_cheerp_make_regular<Object*>(this, 0)[index];
+return __builtin_cheerp_make_regular<${type.toString()}>(this, 0)[index];
 	`);
 
 	arrayClass.addMember(indexFunc, Visibility.Public);
@@ -217,18 +217,19 @@ function addTypedArrayExtensions(parser: Parser, arrayBufferViewClass: Class, na
 	if (typedArrayClass) {
 		typedArrayClass.addBase(new DeclaredType(arrayBufferViewClass), Visibility.Public);
 		typedArrayClass.computeVirtualBaseClasses();
+		typedArrayClass.removeMember("operator[]");
 
 		const indexFunc = new Function("operator[]", new NamedType(type));
 		indexFunc.addFlags(Flags.Const);
-		indexFunc.addParameter(INT_TYPE, "index");
+		indexFunc.addParameter(DOUBLE_TYPE, "index");
 		indexFunc.setBody(`
-return __builtin_cheerp_make_regular<${type}>(this, 0)[index];
+return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 		`);
 		
 		const indexRefFunc = new Function("operator[]", new NamedType(type).reference());
-		indexRefFunc.addParameter(INT_TYPE, "index");
+		indexRefFunc.addParameter(DOUBLE_TYPE, "index");
 		indexRefFunc.setBody(`
-return __builtin_cheerp_make_regular<${type}>(this, 0)[index];
+return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 		`);
 
 		typedArrayClass.addMember(indexFunc, Visibility.Public);
@@ -293,6 +294,7 @@ export function addExtensions(parser: Parser): void {
 
 	const mapClass = parser.getRootClass("Map");
 	const arrayClass = parser.getRootClass("Array");
+	const tArrayClass = parser.getGenericRootClass("Array");
 	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
 	const consoleClass = parser.getRootClass("Console");
 
@@ -316,9 +318,15 @@ export function addExtensions(parser: Parser): void {
 		addMapExtensions(parser, mapClass);
 	}
 
+	/*
 	if (arrayClass) {
-		addArrayExtensions(parser, arrayClass);
+		addArrayExtensions(parser, arrayClass, parser.objectBuiltin.type.pointer());
 	}
+
+	if (tArrayClass) {
+		addArrayExtensions(parser, tArrayClass, new NamedType("_To"));
+	}
+	*/
 
 	if (arrayBufferViewClass) {
 		addTypedArrayExtensions(parser, arrayBufferViewClass, "Int8Array", "char");

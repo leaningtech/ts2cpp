@@ -166,6 +166,14 @@ export class Parser {
 		}
 	}
 
+	public getGenericRootClass(name: string): Class | undefined {
+		const child = this.root.children.get(name);
+
+		if (child && child.genericClassObj) {
+			return child.genericClassObj;
+		}
+	}
+
 	private getBuiltinType(name: string): BuiltinType {
 		const child = this.root.children.get(name);
 
@@ -714,15 +722,18 @@ export class Parser {
 				yield funcObj;
 			}
 
-			// TODO: mutable index signature
-			/*
-			returnType = returnType?.reference();
-
 			for (const parameters of params) {
-				const funcObj = this.createFunc(decl, name, parameters, typeParams, interfaceName, returnType, forward);
-				yield funcObj;
+				if (returnType && parameters.length === 1) {
+					const [indexParameter, indexType] = parameters[0];
+
+					if (indexType.key() === DOUBLE_TYPE.key()) {
+						const [indexInterfaceName, indexName] = getName(indexParameter.name);
+						const funcObj = this.createFunc(decl, name, parameters, typeParams, interfaceName, returnType.reference(), forward);
+						funcObj.setBody(`return __builtin_cheerp_make_regular<${returnType.toString()}>(this, 0)[static_cast<int>(${indexName})];`);
+						yield funcObj;
+					}
+				}
 			}
-			*/
 		} else {
 			for (const parameters of params) {
 				yield this.createFunc(decl, name, parameters, typeParams, interfaceName, returnType, forward);

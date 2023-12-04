@@ -132,6 +132,10 @@ export class Class extends TemplateDeclaration {
 		this.members.splice(0, this.members.length, ...removeDuplicates(this.members));
 	}
 
+	public removeMember(name: string): void {
+		this.members.splice(0, this.members.length, ...this.members.filter(member => member.getDeclaration().getName() !== name));
+	}
+
 	public maxState(): State {
 		return State.Complete;
 	}

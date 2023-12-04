@@ -86,7 +86,7 @@ namespace cheerp {
 		return value;
 	}
 	[[cheerp::genericjs]]
-	client::String* makeString(const char* str);
+	inline client::String* makeString(const char* str);
 	template<class T>
 	[[cheerp::genericjs]]
 	std::conditional_t<std::is_convertible_v<T, const char*>, client::String*, T&&> clientCast(T&& value) {

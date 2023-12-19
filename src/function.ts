@@ -5,7 +5,7 @@ import { Writer } from "./writer.js";
 import { Type } from "./type.js";
 
 export class Parameter {
-	private readonly type: Type;
+	private type: Type;
 	private readonly name: string;
 	private readonly defaultValue?: string;
 
@@ -17,6 +17,10 @@ export class Parameter {
 
 	public getType(): Type {
 		return this.type;
+	}
+
+	public setType(type: Type): void {
+		this.type = type;
 	}
 
 	public getName(): string {
@@ -212,5 +216,15 @@ export class Function extends TemplateDeclaration {
 		const parameterKey = this.parameters
 			.map(parameter => parameter.getType().key()).join("");
 		return `F${flags}${this.getPath()};${this.templateKey()};${parameterKey};`;
+	}
+
+	public rewriteParameterTypes(map: Map<string, Type>): void {
+		for (const parameter of this.parameters) {
+			const newType = map.get(parameter.getType().key());
+
+			if (newType) {
+				parameter.setType(newType);
+			}
+		}
 	}
 }

@@ -79,6 +79,7 @@ export class Parser {
 	private readonly basicDeclaredTypes: TypeMap = new Map;
 	private readonly genericDeclaredTypes: TypeMap = new Map;
 	private readonly classes: Array<Class> = new Array;
+	private readonly functions: Array<Function> = new Array;
 	private readonly library: Library;
 	private generateTotal: number = 0;
 	private generateProgress: number = 0;
@@ -144,6 +145,35 @@ export class Parser {
 		}
 
 		useBaseMembersTimer.end();
+
+		const parameterTypesMap = new Map;
+		const basicArray = this.getRootClass("Array");
+		const genericArray = this.getGenericRootClass("Array");
+		const basicMap = this.getRootClass("Map");
+		const genericMap = this.getGenericRootClass("Map");
+
+		if (basicArray && genericArray) {
+			const anyArray = new TemplateType(new DeclaredType(genericArray));
+			anyArray.addTypeParameter(ANY_TYPE.pointer());
+			parameterTypesMap.set(anyArray.pointer().key(), new DeclaredType(basicArray).pointer());
+			parameterTypesMap.set(anyArray.constPointer().key(), new DeclaredType(basicArray).constPointer());
+		}
+
+		if (basicMap && genericMap) {
+			const anyMap = new TemplateType(new DeclaredType(genericMap));
+			anyMap.addTypeParameter(ANY_TYPE.pointer());
+			anyMap.addTypeParameter(ANY_TYPE.pointer());
+			parameterTypesMap.set(anyMap.pointer().key(), new DeclaredType(basicMap).pointer());
+			parameterTypesMap.set(anyMap.constPointer().key(), new DeclaredType(basicMap).constPointer());
+		}
+
+		const rewriteParameterTypesTimer = new Timer("rewrite parameter types");
+
+		for (const declaration of this.functions) {
+			declaration.rewriteParameterTypes(parameterTypesMap);
+		}
+
+		rewriteParameterTypesTimer.end();
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
@@ -580,6 +610,7 @@ export class Parser {
 		helperFunc.addVariadicTypeParameter("_Args");
 		helperFunc.addParameter(new NamedType("_Args").expand(), "data");
 		helperFunc.addFlags(decl.getFlags());
+		this.functions.push(helperFunc);
 
 		const parameters = new Array;
 
@@ -616,6 +647,7 @@ export class Parser {
 
 	private createFunc(decl: FuncDecl, name: string, parameters: ReadonlyArray<any>, typeParams: ReadonlyArray<string>, interfaceName?: string, returnType?: Type, forward?: string): Function {
 		const funcObj = new Function(name, returnType);
+		this.functions.push(funcObj);
 
 		if (interfaceName) {
 			funcObj.setInterfaceName(interfaceName);
@@ -888,12 +920,14 @@ export class Parser {
 
 				if (!(ts.getCombinedModifierFlags(member) & ts.ModifierFlags.Static)) {
 					const funcObj = new Function(`get_${name}`, info.asReturnType());
+					this.functions.push(funcObj);
 					funcObj.setInterfaceName(`get_${interfaceName}`);
 					classObj.addMember(funcObj, Visibility.Public);
 
 					if (!readOnly) {
 						for (const parameter of info.asParameterTypes()) {
 							const funcObj = new Function(`set_${name}`, VOID_TYPE);
+							this.functions.push(funcObj);
 							funcObj.setInterfaceName(`set_${interfaceName}`);
 							funcObj.addParameter(parameter, name);
 							classObj.addMember(funcObj, Visibility.Public);
@@ -979,6 +1013,7 @@ export class Parser {
 
 		if (node.classDecl && !classObj.hasConstructor()) {
 			const funcObj = new Function(classObj.getName());
+			this.functions.push(funcObj);
 
 			if (forward) {
 				funcObj.addInitializer(forward, "");

@@ -9,6 +9,7 @@ const REFERENCE_TYPES = [
 
 export enum TypeKind {
 	Class,
+	Function,
 	Primitive,
 	Generic,
 }
@@ -31,7 +32,7 @@ export class TypeData {
 	}
 
 	public getPointerOrPrimitive(): Type {
-		if (this.kind === TypeKind.Class) {
+		if (this.kind === TypeKind.Class || this.kind === TypeKind.Function) {
 			return this.type.pointer();
 		} else {
 			return this.type;
@@ -112,10 +113,17 @@ export class TypeInfo {
 
 	public asReturnType(): Type {
 		if (this.types.length > 1) {
+			const types = this.types.filter(type => type.getKind() !== TypeKind.Function);
+
+			if (types.length === 1) {
+				return types[0].getPointerOrPrimitive();
+			}
+
 			const result = Type.union(
-				...this.types.map(type => {
-					return type.getPointerOrPrimitive();
-				})
+				...types
+					.map(type => {
+						return type.getPointerOrPrimitive();
+					})
 			);
 
 			if (result.key() === ANY_TYPE.key()) {
@@ -132,7 +140,7 @@ export class TypeInfo {
 
 	public asParameterTypes(): ReadonlyArray<Type> {
 		return this.getPlural().flatMap(type => {
-			if (type.getKind() !== TypeKind.Class) {
+			if (type.getKind() !== TypeKind.Class && type.getKind() !== TypeKind.Function) {
 				return [type.getType()];
 			} else {
 				const typeType = type.getType();

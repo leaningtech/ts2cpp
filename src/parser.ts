@@ -306,7 +306,7 @@ export class Parser {
 		} else if (basicDeclaredType && type.isClassOrInterface()) {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
-			info.addType(this.eventListenerBuiltin.type, TypeKind.Class);
+			info.addType(this.eventListenerBuiltin.type, TypeKind.Function);
 
 			for (const signature of type.getCallSignatures()) {
 				const declaration = signature.getDeclaration();
@@ -323,7 +323,7 @@ export class Parser {
 
 						const functionType = new TemplateType(FUNCTION_TYPE);
 						functionType.addTypeParameter(funcType);
-						info.addType(functionType, TypeKind.Class);
+						info.addType(functionType, i === declaration.parameters.length ? TypeKind.Class : TypeKind.Function);
 					}
 				}
 			}

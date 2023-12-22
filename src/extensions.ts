@@ -286,6 +286,22 @@ function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: stri
 	}
 }
 
+function addDocumentExtensions(parser: Parser, documentClass: Class) {
+	const htmlElementClass = parser.getRootClass("HTMLElement");
+
+	if (htmlElementClass) {
+		const htmlElementType = new DeclaredType(htmlElementClass).pointer();
+
+		for (const member of documentClass.getMembers()) {
+			const decl = member.getDeclaration();
+
+			if (decl instanceof Function && decl.getName() === "createElement") {
+				decl.setType(htmlElementType);
+			}
+		}
+	}
+}
+
 export function addExtensions(parser: Parser): void {
 	const library = parser.getLibrary();
 	const jsobjectFile = library.getFile("cheerp/jsobject.h")!;
@@ -301,6 +317,7 @@ export function addExtensions(parser: Parser): void {
 	const tArrayClass = parser.getGenericRootClass("Array");
 	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
 	const consoleClass = parser.getRootClass("Console");
+	const documentClass = parser.getRootClass("Document");
 
 	if (parser.stringBuiltin.classObj) {
 		addStringExtensions(parser, parser.stringBuiltin.classObj);
@@ -353,6 +370,10 @@ export function addExtensions(parser: Parser): void {
 		addConsoleLogExtensions(parser, consoleClass, "warn");
 		addConsoleLogExtensions(parser, consoleClass, "trace");
 		*/
+	}
+
+	if (documentClass) {
+		addDocumentExtensions(parser, documentClass);
 	}
 
 	const keys = [

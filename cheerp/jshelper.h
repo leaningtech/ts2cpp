@@ -5,12 +5,23 @@ namespace [[cheerp::genericjs]] client {
 	class Object;
 	class String;
 	class [[cheerp::client_layout]] _Any {
+		struct [[cheerp::client_layout]] Cast {
+			template<class T>
+			operator T() const {
+				T out;
+				asm("%1" : "=r"(out) : "r"(this));
+				return out;
+			}
+		};
 	public:
 		template<class T>
 		T cast() const {
 			T out;
 			asm("%1" : "=r"(out) : "r"(this));
 			return out;
+		}
+		const Cast& cast() const {
+			return *this->cast<const Cast*>();
 		}
 		explicit operator double() const {
 			return this->cast<double>();
@@ -28,11 +39,9 @@ namespace [[cheerp::genericjs]] client {
 			asm("%1" : "=r"(out) : "r"(this));
 			return out;
 		}
-		explicit operator double() const {
-			return this->cast<double>();
-		}
-		explicit operator int() const {
-			return this->cast<double>();
+		template<class T>
+		operator T() const {
+			return this->cast<T>();
 		}
 	};
 	template<class F>

@@ -1,5 +1,6 @@
 import { Flags, Namespace } from "./namespace.js";
 import { Function } from "./function.js";
+import { Variable } from "./variable.js";
 import { Class, Visibility } from "./class.js";
 import { Type, DeclaredType, NamedType, QualifiedType, TypeQualifier } from "./type.js";
 import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./types.js";
@@ -216,7 +217,6 @@ function addTypedArrayExtensions(parser: Parser, arrayBufferViewClass: Class, na
 
 	if (typedArrayClass) {
 		typedArrayClass.addBase(new DeclaredType(arrayBufferViewClass), Visibility.Public);
-		typedArrayClass.computeVirtualBaseClasses();
 		typedArrayClass.removeMember("operator[]");
 
 		const indexFunc = new Function("operator[]", new NamedType(type));
@@ -302,6 +302,23 @@ function addDocumentExtensions(parser: Parser, documentClass: Class) {
 	}
 }
 
+function addExtern(parser: Parser, name: string) {
+	const declaration = parser.getRootClass(name);
+
+	if (declaration) {
+		const file = declaration.getFile();
+		const varDecl = new Variable(name, new DeclaredType(declaration));
+
+		if (file) {
+			varDecl.setFile(file);
+		}
+
+		varDecl.addFlags(Flags.Extern);
+		varDecl.setParent(declaration.getParent());
+		parser.getLibrary().addGlobal(varDecl);
+	}
+}
+
 export function addExtensions(parser: Parser): void {
 	const library = parser.getLibrary();
 	const jsobjectFile = library.getFile("cheerp/jsobject.h")!;
@@ -375,6 +392,8 @@ export function addExtensions(parser: Parser): void {
 	if (documentClass) {
 		addDocumentExtensions(parser, documentClass);
 	}
+
+	addExtern(parser, "URL");
 
 	const keys = [
 		parser.objectBuiltin.type.constReference().key(),

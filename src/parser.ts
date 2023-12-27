@@ -337,6 +337,7 @@ export class Parser {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
 			info.addType(this.eventListenerBuiltin.type, TypeKind.Function);
+			info.addType(NULLPTR_TYPE, TypeKind.Function);
 
 			for (const signature of type.getCallSignatures()) {
 				const declaration = signature.getDeclaration();

@@ -1,4 +1,4 @@
-import { Namespace } from "./namespace.js";
+import { Namespace, Flags } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
 import { Expression, Type, DeclaredType, TemplateType } from "./type.js";
@@ -90,6 +90,10 @@ export class Class extends TemplateDeclaration {
 
 	public getMembers(): ReadonlyArray<Member> {
 		return this.members;
+	}
+
+	public hasStaticMembers(): boolean {
+		return this.members.some(member => member.getDeclaration().getFlags() & Flags.Static);
 	}
 
 	public hasConstructor(): boolean {

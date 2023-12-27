@@ -6,7 +6,7 @@ import { Variable } from "./variable.js";
 import { TypeAlias } from "./typeAlias.js";
 import { Library } from "./library.js";
 import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType, QualifiedType, TypeQualifier } from "./type.js";
-import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
+import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, NULLPTR_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { Timer, isVerbose } from "./options.js";
@@ -126,6 +126,10 @@ export class Parser {
 
 		this.library.removeDuplicates();
 
+		if (defaultLib) {
+			addExtensions(this);
+		}
+
 		const computeVirtualBaseClassesTimer = new Timer("compute virtual base classes");
 
 		for (const declaration of this.classes) {
@@ -133,10 +137,6 @@ export class Parser {
 		}
 
 		computeVirtualBaseClassesTimer.end();
-
-		if (defaultLib) {
-			addExtensions(this);
-		}
 
 		const useBaseMembersTimer = new Timer("use base members");
 

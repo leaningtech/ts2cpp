@@ -1,6 +1,6 @@
 import { Parser } from "./parser.js";
 import { Expression, Type, NamedType, TemplateType, TypeQualifier, DeclaredType } from "./type.js";
-import { ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE } from "./types.js";
+import { ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "./types.js";
 
 const REFERENCE_TYPES = [
 	"String",
@@ -31,8 +31,12 @@ export class TypeData {
 		return this.kind;
 	}
 
+	public needsPointer(): boolean {
+		return (this.kind === TypeKind.Class || this.kind === TypeKind.Function) && this.type.key() !== NULLPTR_TYPE.key();
+	}
+
 	public getPointerOrPrimitive(): Type {
-		if (this.kind === TypeKind.Class || this.kind === TypeKind.Function) {
+		if (this.needsPointer()) {
 			return this.type.pointer();
 		} else {
 			return this.type;
@@ -140,7 +144,7 @@ export class TypeInfo {
 
 	public asParameterTypes(): ReadonlyArray<Type> {
 		return this.getPlural().flatMap(type => {
-			if (type.getKind() !== TypeKind.Class && type.getKind() !== TypeKind.Function) {
+			if (!type.needsPointer()) {
 				return [type.getType()];
 			} else {
 				const typeType = type.getType();

@@ -14,6 +14,7 @@ export const CHAR_TYPE = new NamedType("char");
 export const UNSIGNED_CHAR_TYPE = new NamedType("unsigned char");
 export const CONST_CHAR_POINTER_TYPE = CHAR_TYPE.constPointer();
 export const SIZE_TYPE = new NamedType("std::size_t");
+export const NULLPTR_TYPE = new NamedType("std::nullptr_t");
 export const STRING_TYPE = new NamedType("std::string");
 export const ENABLE_IF = new NamedType("std::enable_if_t");
 export const IS_SAME = new NamedType("std::is_same_v");

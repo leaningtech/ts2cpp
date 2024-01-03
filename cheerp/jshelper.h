@@ -7,6 +7,7 @@ namespace [[cheerp::genericjs]] client {
 	class [[cheerp::client_layout]] _Any {
 		struct [[cheerp::client_layout]] Cast {
 			template<class T>
+			[[gnu::always_inline]]
 			operator T() const {
 				T out;
 				asm("%1" : "=r"(out) : "r"(this));
@@ -15,17 +16,21 @@ namespace [[cheerp::genericjs]] client {
 		};
 	public:
 		template<class T>
+		[[gnu::always_inline]]
 		T cast() const {
 			T out;
 			asm("%1" : "=r"(out) : "r"(this));
 			return out;
 		}
+		[[gnu::always_inline]]
 		const Cast& cast() const {
 			return *this->cast<const Cast*>();
 		}
+		[[gnu::always_inline]]
 		explicit operator double() const {
 			return this->cast<double>();
 		}
+		[[gnu::always_inline]]
 		explicit operator int() const {
 			return this->cast<double>();
 		}
@@ -34,12 +39,14 @@ namespace [[cheerp::genericjs]] client {
 	class [[cheerp::client_layout]] _Union {
 	public:
 		template<class T>
+		[[gnu::always_inline]]
 		std::enable_if_t<(std::is_same_v<T, Variants> || ...), T> cast() const {
 			T out;
 			asm("%1" : "=r"(out) : "r"(this));
 			return out;
 		}
 		template<class T>
+		[[gnu::always_inline]]
 		operator T() const {
 			return this->cast<T>();
 		}
@@ -94,10 +101,10 @@ namespace cheerp {
 	T identity(T value) {
 		return value;
 	}
-	[[cheerp::genericjs]]
+	[[cheerp::genericjs, gnu::always_inline]]
 	inline client::String* makeString(const char* str);
 	template<class T>
-	[[cheerp::genericjs]]
+	[[cheerp::genericjs, gnu::always_inline]]
 	std::conditional_t<std::is_convertible_v<T, const char*>, client::String*, T&&> clientCast(T&& value) {
 		if constexpr (std::is_convertible_v<T, const char*>)
 			return makeString(value);

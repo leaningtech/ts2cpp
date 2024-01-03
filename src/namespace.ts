@@ -6,6 +6,7 @@ export enum Flags {
 	Extern = 2,
 	Explicit = 4,
 	Const = 8,
+	Inline = 16,
 }
 
 export class Namespace {

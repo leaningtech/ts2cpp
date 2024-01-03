@@ -606,6 +606,8 @@ export class Parser {
 			return;
 		}
 
+		decl.addAttribute("gnu::always_inline");
+
 		const helperFunc = new Function(`_${decl.getName()}`, ANY_TYPE.pointer());
 		helperFunc.setInterfaceName(decl.getName());
 		helperFunc.addVariadicTypeParameter("_Args");

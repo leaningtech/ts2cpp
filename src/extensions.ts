@@ -37,6 +37,7 @@ function addStringExtensions(parser: Parser, stringClass: Class): void {
 	addConversionConstructor(stringClass, DOUBLE_TYPE);
 
 	const fromUtf8 = new Function("fromUtf8", stringType.pointer());
+	fromUtf8.addAttribute("gnu::always_inline");
 	fromUtf8.addFlags(Flags.Static);
 	fromUtf8.addParameter(CONST_CHAR_POINTER_TYPE, "in");
 	fromUtf8.addParameter(SIZE_TYPE, "len", "SIZE_MAX");

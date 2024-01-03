@@ -139,6 +139,11 @@ export class Function extends TemplateDeclaration {
 			this.writeInterfaceName(writer);
 		}
 
+		if (this.getAttributes().length > 0) {
+			this.writeAttributes(writer);
+			writer.writeLine(false);
+		}
+
 		if (flags & Flags.Explicit) {
 			writer.write("explicit");
 			writer.writeSpace();
@@ -146,6 +151,11 @@ export class Function extends TemplateDeclaration {
 
 		if (flags & Flags.Static) {
 			writer.write("static");
+			writer.writeSpace();
+		}
+
+		if (flags & Flags.Inline) {
+			writer.write("inline");
 			writer.writeSpace();
 		}
 
@@ -184,11 +194,6 @@ export class Function extends TemplateDeclaration {
 		if (flags & Flags.Const) {
 			writer.writeSpace(false);
 			writer.write("const");
-		}
-
-		if (this.getAttributes().length > 0) {
-			writer.writeSpace(false);
-			this.writeAttributes(writer);
 		}
 
 		first = true;

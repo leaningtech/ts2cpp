@@ -105,8 +105,8 @@ namespace cheerp {
 	inline client::String* makeString(const char* str);
 	template<class T>
 	[[cheerp::genericjs, gnu::always_inline]]
-	std::conditional_t<std::is_convertible_v<T, const char*>, client::String*, T&&> clientCast(T&& value) {
-		if constexpr (std::is_convertible_v<T, const char*>)
+	std::conditional_t<std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, char*>, client::String*, T&&> clientCast(T&& value) {
+		if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, char*>)
 			return makeString(value);
 		else
 			return value;

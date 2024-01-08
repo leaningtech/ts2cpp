@@ -2,7 +2,7 @@ import { Flags, Namespace } from "./namespace.js";
 import { Function } from "./function.js";
 import { Variable } from "./variable.js";
 import { Class, Visibility } from "./class.js";
-import { Type, DeclaredType, NamedType, QualifiedType, TypeQualifier } from "./type.js";
+import { Type, DeclaredType, NamedType, QualifiedType, TypeQualifier, TemplateType } from "./type.js";
 import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./types.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
@@ -289,15 +289,27 @@ function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: stri
 
 function addDocumentExtensions(parser: Parser, documentClass: Class) {
 	const htmlElementClass = parser.getRootClass("HTMLElement");
+	const htmlCollectionOfClass = parser.getGenericRootClass("HTMLCollectionOf");
 
-	if (htmlElementClass) {
+	if (htmlElementClass && htmlCollectionOfClass) {
 		const htmlElementType = new DeclaredType(htmlElementClass).pointer();
+		const htmlCollectionOfTemplate = new TemplateType(new DeclaredType(htmlCollectionOfClass));
+
+		htmlCollectionOfTemplate.addTypeParameter(htmlElementType);
+
+		const htmlCollectionOfType = htmlCollectionOfTemplate.pointer();
 
 		for (const member of documentClass.getMembers()) {
 			const decl = member.getDeclaration();
 
-			if (decl instanceof Function && decl.getName() === "createElement") {
-				decl.setType(htmlElementType);
+			if (decl instanceof Function) {
+				if (decl.getName() === "createElement") {
+					decl.setType(htmlElementType);
+				}
+
+				if (decl.getName() === "getElementsByTagName") {
+					decl.setType(htmlCollectionOfType);
+				}
 			}
 		}
 	}
@@ -418,7 +430,7 @@ export function addExtensions(parser: Parser): void {
 					}
 
 					child.setType(INT_TYPE);
-				} else if (name === "concat" || name === "_concat" || name === "localeCompare") {
+				} else if (name === "concat" || name === "_concat" || name === "localeCompare" || name === "split" || name == "replace" || name == "substring") {
 					if (!(child.getFlags() & Flags.Static)) {
 						child.addFlags(Flags.Const);
 					}

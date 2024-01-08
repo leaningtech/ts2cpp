@@ -106,9 +106,14 @@ export abstract class Expression {
 		return result;
 	}
 
-	public static isAcceptable(from: Type, ...to: ReadonlyArray<Type>): TemplateType {
+	public static isAcceptable(from: Type, ...to: ReadonlyArray<Type>): Expression {
+		const anyTypePointerKey = ANY_TYPE.pointer().key();
 		const result = new TemplateType(IS_ACCEPTABLE);
 		result.addTypeParameter(from);
+		
+		if (to.some(type => type.key() === anyTypePointerKey)) {
+			return new LiteralExpression("true");
+		}
 
 		for (const type of unique(to)) {
 			result.addTypeParameter(type);
@@ -117,9 +122,14 @@ export abstract class Expression {
 		return result;
 	}
 
-	public static isAcceptableArgs(from: Type, ...to: ReadonlyArray<Type>): TemplateType {
+	public static isAcceptableArgs(from: Type, ...to: ReadonlyArray<Type>): Expression {
+		const anyTypePointerKey = ANY_TYPE.pointer().key();
 		const result = new TemplateType(IS_ACCEPTABLE_ARGS);
 		result.addTypeParameter(from);
+		
+		if (to.some(type => type.key() === anyTypePointerKey)) {
+			return new LiteralExpression("true");
+		}
 
 		for (const type of unique(to)) {
 			result.addTypeParameter(type);
@@ -134,6 +144,35 @@ export abstract class Expression {
 
 	public static and(...children: ReadonlyArray<Expression>): ValueExpression {
 		return ValueExpression.combine(ExpressionKind.LogicalAnd, ...children);
+	}
+}
+
+export class LiteralExpression extends Expression {
+	private readonly token: string;
+
+	public constructor(token: string) {
+		super();
+		this.token = token;
+	}
+	
+	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
+		return new Dependencies;
+	}
+	
+	public getNamedTypes(): ReadonlySet<string> {
+		return new Set;
+	}
+
+	public write(writer: Writer, namespace?: Namespace): void {
+		writer.write(this.token);
+	}
+
+	public key(): string {
+		return `L${this.token};`;
+	}
+
+	public isAlwaysTrue(): boolean {
+		return this.token === "true";
 	}
 }
 

@@ -9,8 +9,7 @@ import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredT
 import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, NULLPTR_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES, ENABLE_IF } from "./types.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
-import { Timer, isVerbose } from "./options.js";
-import { options, useConstraints } from "./options.js";
+import { withTimer, options } from "./options.js";
 import { addExtensions } from "./extensions.js";
 import * as ts from "typescript";
 
@@ -99,13 +98,11 @@ export class Parser {
 		this.namespace = new Namespace("client");
 		this.namespace.addAttribute("cheerp::genericjs");
 
-		const discoverTimer = new Timer("discover");
-
-		for (const sourceFile of program.getSourceFiles()) {
-			this.discover(this.root, sourceFile);
-		}
-
-		discoverTimer.end();
+		withTimer("discover", () => {
+			for (const sourceFile of program.getSourceFiles()) {
+				this.discover(this.root, sourceFile);
+			}
+		});
 
 		this.objectBuiltin = this.getBuiltinType("Object");
 		this.numberBuiltin = this.getBuiltinType("Number");
@@ -115,45 +112,37 @@ export class Parser {
 		this.functionBuiltin = this.getBuiltinType("Function");
 		this.eventListenerBuiltin = this.getBuiltinType("EventListener");
 
-		const generateTimer = new Timer("generate");
+		withTimer("generate", () => {
+			if (options.namespace) {
+				this.generate(this.root, new Namespace(options.namespace, this.namespace));
+			} else {
+				this.generate(this.root, this.namespace);
+			}
+		});
 
-		if (options.namespace) {
-			this.generate(this.root, new Namespace(options.namespace, this.namespace));
-		} else {
-			this.generate(this.root, this.namespace);
-		}
+		withTimer("remove duplicates", () => {
+			this.library.removeDuplicates();
 
-		generateTimer.end();
-
-		const removeDuplicatesTimer = new Timer("remove duplicates");
-
-		this.library.removeDuplicates();
-
-		for (const declaration of this.classes) {
-			declaration.removeDuplicates();
-		}
-
-		removeDuplicatesTimer.end();
+			for (const declaration of this.classes) {
+				declaration.removeDuplicates();
+			}
+		});
 
 		if (defaultLib) {
 			addExtensions(this);
 		}
 
-		const computeVirtualBaseClassesTimer = new Timer("compute virtual base classes");
+		withTimer("compute virtual base classes", () => {
+			for (const declaration of this.classes) {
+				declaration.computeVirtualBaseClasses();
+			}
+		});
 
-		for (const declaration of this.classes) {
-			declaration.computeVirtualBaseClasses();
-		}
-
-		computeVirtualBaseClassesTimer.end();
-
-		const useBaseMembersTimer = new Timer("use base members");
-
-		for (const declaration of this.classes) {
-			declaration.useBaseMembers();
-		}
-
-		useBaseMembersTimer.end();
+		withTimer("use base members", () => {
+			for (const declaration of this.classes) {
+				declaration.useBaseMembers();
+			}
+		});
 
 		const parameterTypesMap = new Map;
 		const basicArray = this.getRootClass("Array");
@@ -176,13 +165,11 @@ export class Parser {
 			parameterTypesMap.set(anyMap.constPointer().key(), new DeclaredType(basicMap).constPointer());
 		}
 
-		const rewriteParameterTypesTimer = new Timer("rewrite parameter types");
-
-		for (const declaration of this.functions) {
-			declaration.rewriteParameterTypes(parameterTypesMap);
-		}
-
-		rewriteParameterTypesTimer.end();
+		withTimer("rewrite parameter types", () => {
+			for (const declaration of this.functions) {
+				declaration.rewriteParameterTypes(parameterTypesMap);
+			}
+		});
 
 		if (this.objectBuiltin.classObj) {
 			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
@@ -556,7 +543,7 @@ export class Parser {
 				}
 			}
 
-			if (useConstraints()) {
+			if (options.useConstraints) {
 				for (const typeParameter of typeParameters) {
 					const type = this.typeChecker.getTypeAtLocation(typeParameter);
 
@@ -697,7 +684,7 @@ export class Parser {
 			}
 		}
 
-		if (returnType && constraint.getChildren().length > 0 && useConstraints()) {
+		if (returnType && constraint.getChildren().length > 0 && options.useConstraints) {
 			funcObj.setType(Type.enableIf(constraint, returnType));
 		}
 
@@ -1064,7 +1051,7 @@ export class Parser {
 		for (const child of node.children.values()) {
 			this.generateProgress += 1;
 
-			if (isVerbose()) {
+			if (options.isVerbose) {
 				console.log(`${this.generateProgress}/${this.generateTotal} ${child.name}`);
 			}
 

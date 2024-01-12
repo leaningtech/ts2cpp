@@ -1,3 +1,5 @@
+// Utilities for escaping names that may not be valid identifiers in c++.
+
 import * as ts from "typescript";
 
 const DIGITS = "0123456789";
@@ -151,6 +153,9 @@ const RESERVED = [
 	"UV_FS_O_FILEMAP",
 ];
 
+// If a character is not in the charset, or it is a digit at the start of the
+// identifier, then it is replaced with `_${charCode}_`. If the result is a
+// reserved word it will have an underscore prepended to it.
 export function escapeName(name: string): string {
 	let result = "";
 
@@ -171,6 +176,7 @@ export function escapeName(name: string): string {
 
 type Name = ts.Identifier | ts.BindingName | ts.ModuleName | ts.PropertyName;
 
+// Returns both the unescaped and escaped name of an identifier.
 export function getName(identifier?: Name): [string, string] {
 	const name = identifier!.getText();
 	return [name, escapeName(name)];

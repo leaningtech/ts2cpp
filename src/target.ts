@@ -1,5 +1,5 @@
 import { Declaration } from "./declaration.js";
-import { ignoreErrors } from "./options.js";
+import { options } from "./options.js";
 
 export enum State {
 	Partial,
@@ -141,7 +141,7 @@ class DependencyResolver<T extends Target> {
 			const pendingState = pendingStates[pendingStates.length - 1];
 
 			if (pendingState !== undefined && state >= pendingState) {
-				if (ignoreErrors()) {
+				if (options.ignoreErrors) {
 					this.resolve(target, state);
 					declaration.setState(state);
 					return;

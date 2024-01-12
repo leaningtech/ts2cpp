@@ -1,8 +1,7 @@
 import { Parser } from "./parser.js";
 import { catchErrors } from "./error.js";
 import { Library } from "./library.js";
-import { program } from "commander";
-import { Timer, options, parseOptions } from "./options.js";
+import { withTimer, parseOptions, options } from "./options.js";
 import * as ts from "typescript";
 
 // TODO: generate function types for classes that only have a call signature
@@ -58,17 +57,17 @@ const DEFAULTLIB_FILES = [
 	"node_modules/typescript/lib/lib.scripthost.d.ts",
 ];
 
-parseOptions();
+const args = parseOptions();
 
-if (options.defaultLib) {
-	program.args.push(...DEFAULTLIB_FILES);
+if (options.isDefaultLib) {
+	args.push(...DEFAULTLIB_FILES);
 }
 
-const createProgramTimer = new Timer("create program");
-const tsProgram = ts.createProgram(program.args, {});
-createProgramTimer.end();
+const tsProgram = withTimer("create program", () => {
+	return ts.createProgram(args, {});
+});
 
-const library = new Library(options.O ?? "cheerp/clientlib.h", program.args);
+const library = new Library(options.outputFile ?? "cheerp/clientlib.h", args);
 
 if (options.listFiles) {
 	for (const sourceFile of tsProgram.getSourceFiles()) {
@@ -76,11 +75,7 @@ if (options.listFiles) {
 	}
 }
 
-let writerOptions = {
-	pretty: options.pretty,
-};
-
-if (options.defaultLib) {
+if (options.isDefaultLib) {
 	const jsobjectFile = library.addFile("cheerp/jsobject.h");
 	const typesFile = library.addFile("cheerp/types.h");
 	const clientlibFile = library.getDefaultFile();
@@ -101,12 +96,12 @@ if (options.defaultLib) {
 	library.addGlobalInclude("cheerp/clientlib.h", true);
 }
 
-const parseTimer = new Timer("parse");
-const parser = new Parser(tsProgram, library, options.defaultLib);
-parseTimer.end();
+const parser = withTimer("parse", () => {
+	return new Parser(tsProgram, library, options.isDefaultLib);
+});
 
 catchErrors(() => {
-	const writeTimer = new Timer("write");
-	library.write(writerOptions);
-	writeTimer.end();
+	withTimer("write", () => {
+		library.write({ pretty: options.isPretty });
+	});
 });

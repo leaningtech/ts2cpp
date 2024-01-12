@@ -1,5 +1,5 @@
 import { Writer } from "./writer.js";
-import { useFullNames } from "./options.js";
+import { options } from "./options.js";
 
 export enum Flags {
 	Static = 1,
@@ -9,8 +9,20 @@ export enum Flags {
 	Inline = 16,
 }
 
+// A `Namespace` is anything that has a name, it is the root base class of all
+// other declarations. Even declarations that do not have any children, such as
+// `Function`, are still subclasses of `Namespace`. When used directly this
+// class represents a c++ namespace.
+// 
+// A `Namespace` does not store its children, in this sense it is better to
+// think of a namespace as an element in a linked list that describes the
+// namespace of a declaration, rather than as an AST node.
 export class Namespace {
+	// The [[cheerp::interface_name]] attribute is stored separately so that
+	// it can be freely modified, and can be omited at write time when it turns
+	// out to be the same as the real name.
 	private interfaceName?: string;
+
 	private name: string;
 	private flags: Flags = 0 as Flags;
 	private parent?: Namespace;
@@ -42,14 +54,18 @@ export class Namespace {
 		this.flags |= flags;
 	}
 
+	// The path of a declaration starting at the namespace `namespace`.
 	public getPathSafe(namespace?: Namespace): string {
 		return this.parent && this.parent !== namespace ? `${this.parent.getPath(namespace)}::${this.name}` : this.name;
 	}
 
+	// `getPathSafe` generates a full path when this is not a descendant of
+	// `namespace`. This function tries to generate a shorter path by using
+	// the common ancestor as the base.
 	public getPath(namespace?: Namespace): string {
 		// TODO: check for name conflicts
 
-		if (useFullNames()) {
+		if (options.useFullNames) {
 			return this.getPathSafe(namespace);
 		}
 
@@ -86,9 +102,7 @@ export class Namespace {
 
 	public writeInterfaceName(writer: Writer): void {
 		if (this.interfaceName && this.name !== this.interfaceName) {
-			const interfaceName = this.interfaceName
-				.replace(/"/g, "\\\"");
-
+			const interfaceName = this.interfaceName.replace(/"/g, "\\\"");
 			writer.write(`[[cheerp::interface_name(("${interfaceName}"))]]`);
 			writer.writeLine(false);
 		}
@@ -146,6 +160,11 @@ export class Namespace {
 
 		return lhs;
 	}
+
+	// Global declarations may be reordered such that not all members of a
+	// namespace are consecutive. The `writeOpen`, `writeClose`, and
+	// `writeChange` functions are used to efficiently change from one
+	// namespace to another when they have a common ancestor.
 
 	public static writeOpen(writer: Writer, from?: Namespace, to?: Namespace): void {
 		if (to && to !== from) {

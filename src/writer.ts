@@ -1,3 +1,6 @@
+// Utilities for automatically formatting code as it's being written to a file.
+// Also supports writing to strings.
+
 import * as fs from "fs";
 import { Writable } from "stream";
 

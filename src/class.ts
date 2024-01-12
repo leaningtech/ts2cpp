@@ -4,7 +4,7 @@ import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencie
 import { Expression, Type, DeclaredType, TemplateType } from "./type.js";
 import { Function } from "./function.js";
 import { Writer } from "./writer.js";
-import { useConstraints } from "./options.js";
+import { options } from "./options.js";
 
 const USE_BASE_FUNCTIONS = [
 	"operator[]",
@@ -202,7 +202,7 @@ export class Class extends TemplateDeclaration {
 
 			writer.writeBlockOpen();
 
-			if (useConstraints()) {
+			if (options.useConstraints) {
 				for (const constraint of this.constraints) {
 					writer.write("static_assert(");
 					constraint.write(writer, namespace);

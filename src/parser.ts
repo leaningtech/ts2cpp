@@ -76,6 +76,7 @@ type TypeParamDecl = ts.TypeParameterDeclaration;
 export class Parser {
 	private readonly typeChecker: ts.TypeChecker;
 	private readonly root: Node = new Node;
+	private readonly namespace: Namespace;
 	private readonly basicDeclaredTypes: TypeMap = new Map;
 	private readonly genericDeclaredTypes: TypeMap = new Map;
 	private readonly classes: Array<Class> = new Array;
@@ -95,8 +96,8 @@ export class Parser {
 		this.library = library;
 		this.library.addGlobalInclude("type_traits", true);
 		this.typeChecker = program.getTypeChecker();
-		const namespace = new Namespace("client");
-		namespace.addAttribute("cheerp::genericjs");
+		this.namespace = new Namespace("client");
+		this.namespace.addAttribute("cheerp::genericjs");
 
 		const discoverTimer = new Timer("discover");
 
@@ -117,14 +118,22 @@ export class Parser {
 		const generateTimer = new Timer("generate");
 
 		if (options.namespace) {
-			this.generate(this.root, new Namespace(options.namespace, namespace));
+			this.generate(this.root, new Namespace(options.namespace, this.namespace));
 		} else {
-			this.generate(this.root, namespace);
+			this.generate(this.root, this.namespace);
 		}
 
 		generateTimer.end();
 
+		const removeDuplicatesTimer = new Timer("remove duplicates");
+
 		this.library.removeDuplicates();
+
+		for (const declaration of this.classes) {
+			declaration.removeDuplicates();
+		}
+
+		removeDuplicatesTimer.end();
 
 		if (defaultLib) {
 			addExtensions(this);
@@ -1032,9 +1041,21 @@ export class Parser {
 		}
 
 		// classObj.removeUnusedTypeParameters();
-		classObj.removeDuplicates();
 		classObj.setDecl(node.classDecl ?? node.interfaceDecls[0]);
 		this.classes.push(classObj);
+	}
+
+	private *getGlobalClasses(): Generator<Class> {
+		const windowClass = this.getRootClass("Window");
+		const workerGlobalScopeClass = this.getRootClass("WorkerGlobalScope");
+
+		if (windowClass) {
+			yield windowClass;
+		}
+
+		if (workerGlobalScopeClass) {
+			yield workerGlobalScopeClass;
+		}
 	}
 
 	private generate(node: Node, namespace?: Namespace): void {
@@ -1061,10 +1082,21 @@ export class Parser {
 				}
 			} else if (child.funcDecls.length > 0 && child.children.size === 0) {
 				for (const funcDecl of child.funcDecls) {
+					const fileName = funcDecl.getSourceFile().fileName;
+
 					for (const funcObj of this.createFuncs(funcDecl, TYPES_EMPTY, 0)) {
 						funcObj.setParent(namespace);
-						funcObj.setFile(funcDecl.getSourceFile().fileName);
+						funcObj.setFile(fileName);
 						this.library.addGlobal(funcObj);
+					}
+
+					for (const globalClass of this.getGlobalClasses()) {
+						if (namespace === this.namespace && this.includesDeclaration(funcDecl)) {
+							for (const funcObj of this.createFuncs(funcDecl, TYPES_EMPTY, 0)) {
+								globalClass.addMember(funcObj, Visibility.Public);
+								funcObj.setFile(fileName);
+							}
+						}
 					}
 				}
 			} else if (child.varDecl) {

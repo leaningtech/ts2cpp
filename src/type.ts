@@ -4,7 +4,7 @@ import { Class } from "./class.js";
 import { Writer, StringWriter } from "./writer.js";
 import { Dependencies, Dependency, State } from "./target.js";
 
-function unique(expressions: ReadonlyArray<Expression>): ReadonlyArray<Expression> {
+export function unique<T extends Expression>(expressions: ReadonlyArray<T>): ReadonlyArray<T> {
 	const keys = new Set;
 
 	return expressions.filter(expression => {
@@ -15,7 +15,7 @@ function unique(expressions: ReadonlyArray<Expression>): ReadonlyArray<Expressio
 
 export abstract class Expression {
 	public abstract getDependencies(reason: Dependency, innerState?: State): Dependencies;
-	public abstract getNamedTypes(): ReadonlySet<string>;
+	public abstract getReferencedTypes(): ReadonlyArray<Type>;
 	public abstract write(writer: Writer, namespace?: Namespace): void;
 	public abstract key(): string;
 
@@ -159,8 +159,8 @@ export class LiteralExpression extends Expression {
 		return new Dependencies;
 	}
 	
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set;
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return [];
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -207,8 +207,8 @@ export class ValueExpression extends Expression {
 		return new Dependencies(this.children.flatMap(expression => [...expression.getDependencies(partialReason)]));
 	}
 	
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set(this.children.flatMap(expression => [...expression.getNamedTypes()]));
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return this.children.flatMap(expression => [...expression.getReferencedTypes()]);
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -293,8 +293,8 @@ export class EllipsesExpression extends Expression {
 		return new Dependencies;
 	}
 
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set;
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return [];
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -352,6 +352,10 @@ export abstract class Type extends Expression {
 	public getMemberType(name: string) {
 		return new MemberType(this, name);
 	}
+
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return [this];
+	}
 }
 
 export abstract class UnqualifiedType extends Type {
@@ -371,10 +375,6 @@ export class DeclaredType extends UnqualifiedType {
 
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return new Dependencies([[this.declaration, reason]]);
-	}
-	
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set;
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -400,10 +400,6 @@ export class NamedType extends UnqualifiedType {
 
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return new Dependencies;
-	}
-	
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set([this.name]);
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -437,8 +433,8 @@ export class MemberType extends UnqualifiedType {
 		return this.inner.getDependencies(reason.withState(State.Complete));
 	}
 	
-	public getNamedTypes(): ReadonlySet<string> {
-		return this.inner.getNamedTypes();
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return [this, ...this.inner.getReferencedTypes()];
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -480,8 +476,8 @@ export class QualifiedType extends Type {
 		}
 	}
 	
-	public getNamedTypes(): ReadonlySet<string> {
-		return this.inner.getNamedTypes();
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return [this, ...this.inner.getReferencedTypes()];
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -562,12 +558,10 @@ export class TemplateType extends Type {
 		);
 	}
 	
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set(
-			this.typeParameters
-				.flatMap(typeParameter => [...typeParameter.getNamedTypes()])
-				.concat([...this.inner.getNamedTypes()])
-		);
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return this.typeParameters
+			.flatMap(typeParameter => [...typeParameter.getReferencedTypes()])
+			.concat([this, ...this.inner.getReferencedTypes()]);
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
@@ -649,12 +643,10 @@ export class FunctionType extends Type {
 		);
 	}
 
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set(
-			this.parameters
-				.flatMap(parameter => [...parameter.getNamedTypes()])
-				.concat([...this.returnType.getNamedTypes()])
-		);
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return this.parameters
+			.flatMap(parameter => [...parameter.getReferencedTypes()])
+			.concat([this, ...this.returnType.getReferencedTypes()]);
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {

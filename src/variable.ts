@@ -1,6 +1,6 @@
 import { Declaration } from "./declaration.js";
 import { Namespace, Flags } from "./namespace.js";
-import { State, Dependency, Dependencies, ReasonKind } from "./target.js";
+import { State, Dependency, Dependencies, ReasonKind, ResolverContext } from "./target.js";
 import { Type } from "./type.js";
 import { Writer } from "./writer.js";
 
@@ -28,11 +28,11 @@ export class Variable extends Declaration {
 		return this.type.getDependencies(new Dependency(State.Partial, this, ReasonKind.VariableType));
 	}
 
-	public getDirectNamedTypes(): ReadonlySet<string> {
-		return this.type.getNamedTypes();
+	public getDirectReferencedTypes(): ReadonlyArray<Type> {
+		return this.type.getReferencedTypes();
 	}
 
-	public write(writer: Writer, state: State, namespace?: Namespace): void {
+	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		const flags = this.getFlags();
 
 		if (flags & Flags.Extern) {

@@ -1,6 +1,6 @@
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { Namespace, Flags } from "./namespace.js";
-import { State, Dependency, Dependencies, ReasonKind } from "./target.js";
+import { State, Dependency, Dependencies, ReasonKind, ResolverContext } from "./target.js";
 import { Writer } from "./writer.js";
 import { Type } from "./type.js";
 
@@ -122,15 +122,13 @@ export class Function extends TemplateDeclaration {
 		);
 	}
 
-	public getDirectNamedTypes(): ReadonlySet<string> {
-		return new Set(
-			this.parameters
-				.flatMap(parameter => [...parameter.getType().getNamedTypes()])
-				.concat([...this.type?.getNamedTypes() ?? []])
-		);
+	public getDirectReferencedTypes(): ReadonlyArray<Type> {
+		return this.parameters
+			.flatMap(parameter => [...parameter.getType().getReferencedTypes()])
+			.concat([...this.type?.getReferencedTypes() ?? []]);
 	}
 
-	public write(writer: Writer, state: State, namespace?: Namespace): void {
+	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		const flags = this.getFlags();
 		let first = true;
 		this.writeTemplate(writer);

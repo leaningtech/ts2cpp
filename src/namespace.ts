@@ -17,6 +17,9 @@ export enum Flags {
 // A `Namespace` does not store its children, in this sense it is better to
 // think of a namespace as an element in a linked list that describes the
 // namespace of a declaration, rather than as an AST node.
+//
+// If "A <- B" means that "A.parent === B" then "A <- B <- C" refers to the C++
+// path "A::B::C".
 export class Namespace {
 	// The [[cheerp::interface_name]] attribute is stored separately so that
 	// it can be freely modified, and can be omited at write time when it turns

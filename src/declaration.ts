@@ -1,9 +1,21 @@
-import { State, Dependencies, ReasonKind } from "./target.js";
+import { State, Dependencies, ReasonKind, ResolverContext } from "./target.js";
 import { Namespace } from "./namespace.js";
 import { Writer } from "./writer.js";
+import { Type, NamedType, unique } from "./type.js";
 import * as ts from "typescript";
 
 export class ReferenceData {
+	// When a member in a class references another declaration, we say that the
+	// declaration is referenced *in* the class, and that it is referenced *by*
+	// the member. `referencedBy` and `referencedIn` can be the same when the
+	// reference comes from the class itself, for example as a base class.
+	//
+	// Example:
+	// ```
+	// class ReferencedIn {
+	//     class Declaration;
+	//     Declaration *referencedBy();
+	// };
 	private readonly referencedBy: Declaration;
 	private readonly referencedIn: Declaration;
 	private readonly reasonKind: ReasonKind;
@@ -27,9 +39,15 @@ export class ReferenceData {
 	}
 }
 
+// `Declaration` is the base class for all types of declarations. Declarations
+// form an AST-like tree structure that closely resembles the generated C++
+// code. Note that namespaces are not seen as declarations, see
+// "src/namespace.ts" for more information about how namespaces are stored.
+//
+// Like namespaces, `Declaration` does not store its own children, but it does
+// provide an interface for querying the children. Currently the only type of
+// declaration with children in `Class` (in "src/class.ts").
 export abstract class Declaration extends Namespace {
-	private state?: State;
-	private referenced: boolean = false;
 	private referenceData?: ReferenceData;
 	private id: number;
 	private file?: string;
@@ -39,18 +57,6 @@ export abstract class Declaration extends Namespace {
 	public constructor(name: string, parent?: Namespace) {
 		super(name, parent);
 		this.id = Declaration.count++;
-	}
-
-	public isResolved(state: State): boolean {
-		return this.state !== undefined && this.state >= state;
-	}
-
-	public getState(): State | undefined {
-		return this.state;
-	}
-
-	public setState(state: State): void {
-		this.state = state;
 	}
 
 	public getId(): number {
@@ -69,92 +75,121 @@ export abstract class Declaration extends Namespace {
 		this.file = decl.getSourceFile().fileName;
 	}
 
+	// Return the first parent that is not a declaration.
 	public getNamespace(): Namespace | undefined {
 		const parent = this.getParent();
 		return parent instanceof Declaration ? parent.getNamespace() : parent;
 	}
 
+	// Return the parent, but only if it is a declaration.
 	public getParentDeclaration(): Declaration | undefined {
 		const parent = this.getParent();
 		return parent instanceof Declaration ? parent : undefined;
 	}
 
 	public isReferenced(): boolean {
-		return this.referenced;
+		return this.referenceData !== undefined;
 	}
 
 	public getReferenceData(): ReferenceData | undefined {
 		return this.referenceData;
 	}
 
-	private setReferencedDependency(root: Declaration, state: State, data: ReferenceData): void {
-		if (state === State.Complete) {
-			if (!this.referenced && this.isDescendantOf(root)) {
-				this.setReferenced(root, data);
-			}
-		} else {
-			const parent = this.getParentDeclaration();
+	// This function computes internal references. An internal reference is
+	// when a child of this declaration references (read: depends on) another
+	// child of this declaration. External references are ignored.
+	//
+	// This information is used when resolving dependencies (see
+	// "src/target.ts"), to determine if an inner class needs a complete
+	// declaration because one of its members is referenced internally.
+	//
+	// It is also used for printing dependency cycle error messages (see
+	// "src/error.ts").
+	public computeReferences(rootParam?: Declaration): void {
+		const root = rootParam ?? this;
 
-			if (parent && !parent.referenced && parent.isDescendantOf(root)) {
-				parent.setReferenced(root, data);
-			}
-		}
-	}
-
-	public setReferenced(root: Declaration, data?: ReferenceData): void {
-		const parent = this.getParentDeclaration();
-		this.referenced = true;
-		this.referenceData = data;
-
-		if (parent && !parent.referenced) {
-			parent.setReferenced(root, data);
-		}
-
+		// 1. Visit direct references, eg. base classes.
 		for (const [declaration, dependency] of this.getDirectDependencies(State.Complete)) {
 			const data = new ReferenceData(this, this, dependency.getReasonKind());
-			declaration.setReferencedDependency(root, dependency.getState(), data);
+			declaration.setReferenced(root, dependency.getState(), data);
 		}
 
 		for (const child of this.getChildren()) {
+			// 2. Visit references by children, eg. member function return types.
 			for (const [declaration, dependency] of child.getDirectDependencies(State.Partial)) {
 				const data = new ReferenceData(child, this, dependency.getReasonKind());
-				declaration.setReferencedDependency(root, dependency.getState(), data);
+				declaration.setReferenced(root, dependency.getState(), data);
+			}
+
+			// 3. Also compute internal references inside all of the children.
+			child.computeReferences();
+		}
+	}
+
+	// When `computeReferences` finds a referenced declaration, it calls this function.
+	public setReferenced(root: Declaration, state: State, data: ReferenceData): void {
+		// 1. Determine which declaration needs to be completely resolved for
+		// the reference to be valid, if the reference needs only a partial
+		// declaration, then the complete declaration of its parent is enough.
+		let node = state === State.Complete ? this : this.getParentDeclaration();
+
+		// 2. Iterate over all parents of the node, until we reach the root
+		// node. The root node is the node where the internal reference began.
+		// An internal reference inside of a class should not have any effect
+		// on its parent. External references are handled elsewhere.
+		for (; node && node.isDescendantOf(root); node = node.getParentDeclaration()) {
+			if (!node.isReferenced()) {
+				// 3. Store reference data in this declaration.
+				node.referenceData = data;
+
+				// 4. Also compute internal references of the class we
+				// referenced. This would otherwise also be done in
+				// `computeReferences`, but here we keep the `root` value from
+				// the current reference. This is important because an
+				// indirect may also be the cause for needing a complete
+				// declaration of an inner class.
+				node.computeReferences(root);
 			}
 		}
 	}
 
-	public computeReferences(): void {
-		this.setReferenced(this);
-	}
-
+	// Return all external dependencies of this declaration, including
+	// external dependencies from children. An external dependency is one that
+	// reaches outside of this declaration, rather than referencing another
+	// child of this declaration.
 	public getDependencies(state: State): Dependencies {
 		if (state === State.Complete) {
 			return new Dependencies(
 				this.getChildren()
-					.map(child => Array.from(child.getDependencies(child.referenced ? State.Complete : State.Partial)))
+					.map(child => Array.from(child.getDependencies(child.isReferenced() ? State.Complete : State.Partial)))
 					.reduce((acc, dependencies) => acc.concat(dependencies), [])
 					.filter(([declaration, dependency]) => !declaration.isDescendantOf(this))
 					.concat([...this.getDirectDependencies(State.Complete)])
 					.filter(([declaration, dependency]) => declaration !== this || dependency.getState() !== State.Partial)
 			);
 		} else {
+			// The dependencies of a partial declaration do not include
+			// dependencies of its children.
 			return this.getDirectDependencies(State.Partial);
 		}
 	}
 
-	public getNamedTypes(): ReadonlySet<string> {
-		return new Set(
+	// Returns all the types that are referenced by this declaration,
+	// recursively, including template arguments, pointer element types, etc.
+	// This is used by `removeUnusedTypeParameters`.
+	public getReferencedTypes(): ReadonlyArray<Type> {
+		return unique(
 			this.getChildren()
-				.flatMap(child => [...child.getNamedTypes()])
-				.concat([...this.getDirectNamedTypes()])
+				.flatMap(child => [...child.getReferencedTypes()])
+				.concat([...this.getDirectReferencedTypes()])
 		);
 	}
 
 	public abstract maxState(): State;
 	public abstract getChildren(): ReadonlyArray<Declaration>;
 	public abstract getDirectDependencies(state: State): Dependencies;
-	public abstract getDirectNamedTypes(): ReadonlySet<string>;
-	public abstract write(writer: Writer, state: State, namespace?: Namespace): void;
+	public abstract getDirectReferencedTypes(): ReadonlyArray<Type>;
+	public abstract write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void;
 	public abstract key(): string;
 }
 
@@ -235,7 +270,11 @@ export abstract class TemplateDeclaration extends Declaration {
 	}
 
 	public removeUnusedTypeParameters(): void {
-		const namedTypes = this.getNamedTypes();
+		const namedTypes = new Set(
+			this.getReferencedTypes()
+				.filter((type): type is NamedType => type instanceof NamedType)
+				.map(type => type.getName())
+		);
 
 		const typeParameters = this.typeParameters.filter(typeParameter => {
 			return namedTypes.has(typeParameter.getName());

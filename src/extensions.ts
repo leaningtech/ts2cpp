@@ -348,6 +348,7 @@ export function addExtensions(parser: Parser): void {
 	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
 	const consoleClass = parser.getRootClass("Console");
 	const documentClass = parser.getRootClass("Document");
+	const webGLRenderingContextBaseClass = parser.getRootClass("WebGLRenderingContextBase");
 
 	if (parser.stringBuiltin.classObj) {
 		addStringExtensions(parser, parser.stringBuiltin.classObj);
@@ -405,6 +406,13 @@ export function addExtensions(parser: Parser): void {
 	if (documentClass) {
 		addDocumentExtensions(parser, documentClass);
 	}
+
+	// TODO
+	/*
+	if (webGLRenderingContextBase) {
+		const pixelStoreiFunc = new Function("pixelStorei", );
+	}
+	*/
 
 	addExtern(parser, "URL");
 

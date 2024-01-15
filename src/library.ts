@@ -1,5 +1,5 @@
 import { Declaration } from "./declaration.js";
-import { State, Target, resolveDependencies, removeDuplicates } from "./target.js";
+import { State, Target, ResolverContext, resolveDependencies, removeDuplicates } from "./target.js";
 import { Options, StreamWriter } from "./writer.js";
 import { Namespace } from "./namespace.js";
 import * as fs from "fs";
@@ -315,7 +315,7 @@ export class LibraryWriter {
 			}
 		}
 
-		resolveDependencies(this.globals, (global, state) => {
+		resolveDependencies(new ResolverContext, this.globals, (context, global, state) => {
 			while (this.writers[index].isDone()) {
 				index += 1;
 			}
@@ -327,7 +327,7 @@ export class LibraryWriter {
 			
 			if (!file || this.library.hasFile(file)) {
 				fileWriter.writeNamespaceChange(namespace);
-				declaration.write(fileWriter.getWriter(), state, namespace);
+				declaration.write(context, fileWriter.getWriter(), state, namespace);
 			}
 			
 			if (state >= global.getTargetState()) {

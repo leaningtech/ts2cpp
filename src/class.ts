@@ -1,6 +1,6 @@
 import { Namespace, Flags } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { State, Target, Dependency, ReasonKind, Dependencies, resolveDependencies, removeDuplicates } from "./target.js";
+import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies, removeDuplicates } from "./target.js";
 import { Expression, Type, DeclaredType, TemplateType } from "./type.js";
 import { Function } from "./function.js";
 import { Writer } from "./writer.js";
@@ -163,15 +163,13 @@ export class Class extends TemplateDeclaration {
 		}
 	}
 
-	public getDirectNamedTypes(): ReadonlySet<string> {
-		return new Set(
-			this.constraints
-				.concat(this.bases.map(base => base.getType()))
-				.flatMap(type => [...type.getNamedTypes()])
-		);
+	public getDirectReferencedTypes(): ReadonlyArray<Type> {
+		return this.constraints
+			.concat(this.bases.map(base => base.getType()))
+			.flatMap(type => [...type.getReferencedTypes()]);
 	}
 
-	public write(writer: Writer, state: State, namespace?: Namespace): void {
+	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		this.writeTemplate(writer);
 		writer.write("class");
 		this.writeAttributesOrSpace(writer);
@@ -211,7 +209,7 @@ export class Class extends TemplateDeclaration {
 				}
 			}
 
-			resolveDependencies(this.members, (member, state) => {
+			resolveDependencies(context, this.members, (context, member, state) => {
 				const memberVisibility = member.getVisibility();
 
 				if (memberVisibility !== visibility) {
@@ -221,7 +219,7 @@ export class Class extends TemplateDeclaration {
 					visibility = memberVisibility;
 				}
 
-				member.getDeclaration().write(writer, state, this);
+				member.getDeclaration().write(context, writer, state, this);
 			});
 
 			if (this.usingDeclarations.size > 0) {

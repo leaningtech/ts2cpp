@@ -1,6 +1,26 @@
+// This poorly named file has everything to do with writing the AST such that
+// declarations appear in the right order.
+//
+// It is not always sufficient to just forward declare every class. Sometimes
+// one declaration requires the complete definition of another declaration. For
+// example, in the case of inheritance. This is further complicated by nested
+// classes whose complete definition may depend on or be depended on my another
+// (possibly nested) class.
+//
+// The algorithm implemented here involves a recursive depth-first search
+// through the dependency graph of a declaration with some extra state to
+// detect dependency cycles, and making sure not to write the same declaration
+// twice.
+//
+// A lengthy description of what sort of dependency cycles we might encounter
+// is found in "src/error.ts".
+
 import { Declaration } from "./declaration.js";
 import { options } from "./options.js";
 
+// This enum represents how much of a declaration is written.
+// Partial: it is only forward declared (eg. "class Object;").
+// Complete: it is completely defined (eg. "class Object {};").
 export enum State {
 	Partial,
 	Complete,
@@ -25,8 +45,14 @@ export interface Target {
 }
 
 export class Dependency {
+	// Do we need a complete definition, or is a forward declaration enough?
 	private readonly state: State;
+
+	// What is the declaration that requires this dependency?
+	// This is *NOT* the dependency itself, it is the *dependent*.
 	private readonly reasonDeclaration: Declaration;
+
+	// Why is it required?
 	private readonly reasonKind: ReasonKind;
 
 	public constructor(state: State, reasonDeclaration: Declaration, reasonKind: ReasonKind) {
@@ -52,6 +78,9 @@ export class Dependency {
 	}
 }
 
+// A map of dependencies. In the case that one declaration is depended on
+// multiple times, the `add` function only stores the one with higher
+// completion state.
 export class Dependencies {
 	private readonly map: Map<Declaration, Dependency> = new Map;
 
@@ -76,10 +105,18 @@ export class Dependencies {
 	}
 }
 
+// See "src/error.ts".
 export class Reason {
+	// What is the declaration that we were trying to resolve?
 	private readonly declaration: Declaration;
+
+	// How much of that declaration did we need?
 	private readonly state: State;
+
+	// In what way was the declaration referenced?
 	private readonly kind: ReasonKind;
+
+	// It was referenced by which other declaration?
 	private readonly next?: Reason;
 
 	public constructor(declaration: Declaration, state: State, kind: ReasonKind, next?: Reason) {
@@ -106,14 +143,45 @@ export class Reason {
 	}
 }
 
-export type ResolveFunction<T> = (dependency: T, state: State) => void;
+export type ResolveFunction<T> = (context: ResolverContext, dependency: T, state: State) => void;
 
+// The `ResolverContext` stores state that is persistent across multiple
+// instances of `DependencyResolver`.
+export class ResolverContext {
+	// To which state is a particular declaration already resolved?
+	//
+	// This is used to implement a DFS search in `resolveDependency`, but
+	// without visiting already-visited nodes.
+	private readonly state: Map<Declaration, State> = new Map;
+
+	public isResolved(declaration: Declaration, state: State): boolean {
+		const declarationState = this.state.get(declaration);
+		return declarationState !== undefined && declarationState >= state;
+	}
+
+	public getState(declaration: Declaration): State | undefined {
+		return this.state.get(declaration);
+	}
+
+	public setState(declaration: Declaration, state: State): void {
+		this.state.set(declaration, state);
+	}
+}
+
+// This class stores the state required for the dependency resolution
+// algorithm. It is generic so it can be used for types that wrap
+// `Declaration`, for example the `Member` class in "src/class.ts".
+//
+// A separate `DependencyResolver` instance exists for every class to resolve
+// internal dependencies inside of that class.
 class DependencyResolver<T extends Target> {
+	private readonly context: ResolverContext;
 	private readonly targets: Map<Declaration, T>;
 	private readonly pending: Map<Declaration, Array<State>> = new Map;
 	private readonly resolve: ResolveFunction<T>;
 
-	public constructor(targets: ReadonlyArray<T>, resolve: ResolveFunction<T>) {
+	public constructor(context: ResolverContext, targets: ReadonlyArray<T>, resolve: ResolveFunction<T>) {
+		this.context = context;
 		this.targets = new Map(targets.map(target => [target.getDeclaration(), target]));
 		this.resolve = resolve;
 	}
@@ -122,6 +190,13 @@ class DependencyResolver<T extends Target> {
 		const parentDeclaration = declaration.getParentDeclaration();
 		const newReason = new Reason(declaration, state, kind, reason);
 
+		// 1. If this is an inner class, we must first resolve its parent.
+		//
+		// For example, this is an error:
+		// ```
+		// class Outer::Inner {}; // Error: `Outer` has not yet been defined.
+		// class Outer { class Inner; };
+		// ```
 		if (parentDeclaration) {
 			const parentTarget = this.targets.get(parentDeclaration);
 
@@ -130,7 +205,7 @@ class DependencyResolver<T extends Target> {
 			}
 		}
 
-		if (!declaration.isResolved(state)) {
+		if (!this.context.isResolved(declaration, state)) {
 			let pendingStates = this.pending.get(declaration);
 
 			if (!pendingStates) {
@@ -140,10 +215,27 @@ class DependencyResolver<T extends Target> {
 
 			const pendingState = pendingStates[pendingStates.length - 1];
 
+			// 2. Check for dependency cycles.
+			//
+			// This is done using a map of stacks for each declaration. Each
+			// stack stores to which completion state we were trying to resolve
+			// the declaration.
+			//
+			// If the stack is non-empty, it means we have seen this
+			// declaration before, and we must be resolving it again because
+			// it depends on itself.
+			//
+			// If the current target state is *less than* the pending state,
+			// this is ok. For example, a Complete declaration may depend on
+			// the Partial declaration of itself.
+			//
+			// If the current target state is *greater than or equal to* the
+			// pending state, this is an error. A declaration may not depend
+			// on an equivalent or greater completion state of itself.
 			if (pendingState !== undefined && state >= pendingState) {
 				if (options.ignoreErrors) {
-					this.resolve(target, state);
-					declaration.setState(state);
+					this.resolve(this.context, target, state);
+					this.context.setState(declaration, state);
 					return;
 				} else {
 					throw newReason;
@@ -153,6 +245,63 @@ class DependencyResolver<T extends Target> {
 			pendingStates.push(state);
 
 			try {
+				// 3. Iterate over all dependencies and resolve them first.
+				//
+				// When running dependency resolution on the members of a
+				// class, it sometimes happens that the declaration we depend
+				// on is not in the list of targets. This can happen for one
+				// of two reasons.
+				//
+				// First, the dependency could be an "uncle" (sibling of a
+				// parent) of the dependent. These kind of dependencies are
+				// also considered dependencies of the parent (by
+				// `getDependencies`). So as we are resolving one of the
+				// parent's children, the uncle dependency must already have
+				// been resolved.
+				//
+				// Example of an uncle dependency:
+				// ```
+				// class Dependency;
+				// class Parent {
+				//     Dependency* dependent();
+				// };
+				// ```
+				//
+				// Second, the dependency could be a "nephew" (child of a
+				// sibling) of the dependent. In this case we must find which
+				// sibling the dependency is a child of and completely resolve
+				// that sibling first. The complete resolution of that sibling
+				// will imply the resolution of the nephew dependency.
+				//
+				// Example of a nephew dependency:
+				// ```
+				// class Parent {
+				//     class Sibling {
+				//         class Dependency;
+				//     };
+				//     Sibling::Dependency* dependent();
+				// };
+				// ```
+				//
+				// There is a tricky case where the dependency is a grandchild
+				// of one of the siblings of the dependent. The complete
+				// resolution of the sibling may only partially resolve its
+				// child, and not resolve the grandchild at all! This is solved
+				// because declarations store how they are referenced
+				// internally, and when a class detects that one of its
+				// children is referenced in this way, then it knows that the
+				// resolution of that child must always be complete.
+				//
+				// Example of a tricky nephew dependency:
+				// ```
+				// class Parent {
+				//     class Sibling {
+				//         class Nephew {
+				//             class Dependency;
+				//         };
+				//     };
+				//     Sibling::Nephew::Dependency* dependent();
+				// };
 				for (const [dependencyDeclaration, dependency] of declaration.getDependencies(state)) {
 					let declaration: Declaration | undefined = dependencyDeclaration;
 					let state = dependency.getState();
@@ -171,9 +320,15 @@ class DependencyResolver<T extends Target> {
 					}
 				}
 
-				if (!declaration.isResolved(state)) {
-					this.resolve(target, state);
-					declaration.setState(state);
+				// 4. Finally, after all dependencies have been resolved, we
+				// resolve the original declaration.
+				//
+				// If, through a combination of recursion and magic, it turns
+				// out that the declaration is already resolved to the required
+				// completion state, then we don't need to do anything.
+				if (!this.context.isResolved(declaration, state)) {
+					this.resolve(this.context, target, state);
+					this.context.setState(declaration, state);
 				}
 			} finally {
 				pendingStates.pop();
@@ -188,8 +343,8 @@ class DependencyResolver<T extends Target> {
 	}
 }
 
-export function resolveDependencies<T extends Target>(targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {
-	new DependencyResolver(targets, resolve).resolveDependencies();
+export function resolveDependencies<T extends Target>(context: ResolverContext, targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {
+	new DependencyResolver(context, targets, resolve).resolveDependencies();
 }
 
 export function removeDuplicates<T extends Target>(targets: ReadonlyArray<T>): Array<T> {

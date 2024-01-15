@@ -35,6 +35,7 @@ class Child extends Node {
 	public readonly name: string;
 	public readonly interfaceDecls: Array<ts.InterfaceDeclaration> = new Array;
 	public readonly funcDecls: Array<ts.FunctionDeclaration> = new Array;
+	public moduleDecl?: ts.ModuleDeclaration;
 	public classDecl?: ts.ClassDeclaration;
 	public varDecl?: ts.VariableDeclaration;
 	public typeDecl?: ts.TypeAliasDeclaration;
@@ -284,6 +285,7 @@ export class Parser {
 					this.discover(this.root, node.body!);
 				} else {
 					const child = self.get(interfaceName, name);
+					child.moduleDecl = node;
 					this.discover(child, node.body!);
 				}
 			} else if (ts.isClassDeclaration(node)) {
@@ -967,7 +969,7 @@ export class Parser {
 						this.library.addGlobal(child.genericClassObj);
 					}
 				}
-			} else if (child.funcDecls) {
+			} else if (child.funcDecls.length > 0) {
 				for (const funcDecl of child.funcDecls) {
 					for (const funcObj of this.createFuncs(funcDecl, types, typeId, forward)) {
 						funcObj.addFlags(Flags.Static);
@@ -1028,7 +1030,7 @@ export class Parser {
 		}
 
 		// classObj.removeUnusedTypeParameters();
-		classObj.setDecl(node.classDecl ?? node.interfaceDecls[0]);
+		classObj.setDecl(node.moduleDecl ?? node.classDecl ?? node.interfaceDecls[0]);
 		this.classes.push(classObj);
 	}
 

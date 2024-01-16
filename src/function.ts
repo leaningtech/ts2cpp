@@ -51,10 +51,23 @@ export class Initializer {
 }
 
 export class Function extends TemplateDeclaration {
+	// Function parameters.
 	private readonly parameters: Array<Parameter> = new Array;
+
+	// Constructor initializers, mostly used for extensions in
+	// "src/extensions.ts".
 	private readonly initializers: Array<Initializer> = new Array;
+
+	// We can't track dependencies of the function body, they must be added
+	// manually using `addExtraDependency`.
 	private readonly extraDependencies: Dependencies = new Dependencies;
+
+	// The return type.
 	private type?: Type;
+
+	// The function body. This is mostly used for extensions in
+	// "src/extensions.ts", but also for some automatically generated
+	// forwarding helper functions.
 	private body?: string;
 
 	public constructor(name: string, type?: Type, namespace?: Namespace) {
@@ -110,6 +123,10 @@ export class Function extends TemplateDeclaration {
 		return new Array;
 	}
 
+	// The dependencies of a function are:
+	// - types used in function parameters.
+	// - the return type.
+	// - extra dependencies added using `addExtraDependency`.
 	public getDirectDependencies(state: State): Dependencies {
 		const parameterReason = new Dependency(State.Partial, this, ReasonKind.ParameterType);
 		const returnReason = new Dependency(State.Partial, this, ReasonKind.ReturnType);
@@ -129,18 +146,22 @@ export class Function extends TemplateDeclaration {
 	}
 
 	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
-		const flags = this.getFlags();
-		let first = true;
+		// 1. Write the template<...> line, if needed.
 		this.writeTemplate(writer);
 
+		// 2. Write the interface name attribute, unless there is a body.
 		if (this.body === undefined) {
 			this.writeInterfaceName(writer);
 		}
 
+		// 3. Write attributes.
 		if (this.getAttributes().length > 0) {
 			this.writeAttributes(writer);
 			writer.writeLine(false);
 		}
+
+		// 4. Write modifiers, except const.
+		const flags = this.getFlags();
 
 		if (flags & Flags.Explicit) {
 			writer.write("explicit");
@@ -157,14 +178,19 @@ export class Function extends TemplateDeclaration {
 			writer.writeSpace();
 		}
 
+		// 5. Write return type.
 		if (this.type) {
 			this.type.write(writer, namespace);
 			writer.writeSpace();
 		}
 
+		// 6. Write function name.
 		writer.write(this.getName());
 		writer.write("(");
 
+		let first = true;
+
+		// 7. Write function parameters
 		for (const parameter of this.parameters) {
 			const defaultValue = parameter.getDefaultValue();
 
@@ -189,6 +215,7 @@ export class Function extends TemplateDeclaration {
 
 		writer.write(")");
 
+		// 8. Write const modifier.
 		if (flags & Flags.Const) {
 			writer.writeSpace(false);
 			writer.write("const");
@@ -196,6 +223,7 @@ export class Function extends TemplateDeclaration {
 
 		first = true;
 
+		// 9. Write constructor initializers.
 		for (const initializer of this.initializers) {
 			writer.write(first ? ":" : ",");
 			writer.writeSpace(false);
@@ -206,6 +234,7 @@ export class Function extends TemplateDeclaration {
 			first = false;
 		}
 
+		// 10. Write body, if present.
 		if (this.body !== undefined) {
 			writer.writeBody(this.body);
 		} else {
@@ -221,6 +250,8 @@ export class Function extends TemplateDeclaration {
 		return `F${flags}${this.getPath()};${this.templateKey()};${parameterKey};`;
 	}
 
+	// Replace parameter types with new types, as specified by the map.
+	// This is used to replace `TArray<Object*>` with `Array`, for example.
 	public rewriteParameterTypes(map: Map<string, Type>): void {
 		for (const parameter of this.parameters) {
 			const newType = map.get(parameter.getType().key());

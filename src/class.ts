@@ -6,7 +6,11 @@ import { Function } from "./function.js";
 import { Writer } from "./writer.js";
 import { options } from "./options.js";
 
-const USE_BASE_FUNCTIONS = [
+// A list of which base members to generate using declarations for.
+//
+// TODO: This could be more generic, instead of hardcoding a list of which
+// members to generate using declarations for.
+const USE_BASE_MEMBERS = [
 	"operator[]",
 ];
 
@@ -59,6 +63,7 @@ export class Base {
 		return this.type;
 	}
 
+	// Returns the base type without any template parameters.
 	public getInnerType(): Type {
 		let type = this.type;
 
@@ -85,7 +90,12 @@ export class Base {
 export class Class extends TemplateDeclaration {
 	private readonly members: Array<Member> = new Array;
 	private readonly bases: Array<Base> = new Array;
+
+	// Class constraints are written using `static_assert`.
 	private readonly constraints: Array<Expression> = new Array;
+
+	// Using declarations are required because method overloads can shadow
+	// methods from the base class.
 	private readonly usingDeclarations: Set<string> = new Set;
 
 	public getMembers(): ReadonlyArray<Member> {
@@ -101,8 +111,8 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public addMember(declaration: Declaration, visibility: Visibility): void {
+		// A method cannot have the same name as its parent class.
 		// TODO: emit a warning, maybe?
-
 		if (declaration instanceof Function || declaration.getName() !== this.getName()) {
 			this.members.push(new Member(declaration, visibility));
 			declaration.setParent(this);
@@ -148,6 +158,11 @@ export class Class extends TemplateDeclaration {
 		return this.members.map(member => member.getDeclaration());
 	}
 
+	// The dependencies of a class are:
+	// - types used in any constraints on this class.
+	// - types used as base classes.
+	// This function does *not* include dependencies of class members, to get
+	// those as well, call `getDependencies`.
 	public getDirectDependencies(state: State): Dependencies {
 		if (state === State.Complete) {
 			const constraintReason = new Dependency(State.Partial, this, ReasonKind.Constraint);
@@ -170,15 +185,23 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
+		// 1. Write the template<...> line, if needed.
 		this.writeTemplate(writer);
+
+		// 2. Write the class keyword.
 		writer.write("class");
+
+		// 3. Write attributes.
 		this.writeAttributesOrSpace(writer);
+
+		// 4. Write the name of the class.
 		writer.write(this.getPath(namespace));
 
 		if (state === State.Complete) {
 			let first = true;
 			let visibility = Visibility.Private;
 
+			// 5. Write base class specifiers.
 			for (const base of this.bases) {
 				writer.write(first ? ":" : ",");
 				first = false;
@@ -200,6 +223,7 @@ export class Class extends TemplateDeclaration {
 
 			writer.writeBlockOpen();
 
+			// 6. Write class constraints.
 			if (options.useConstraints) {
 				for (const constraint of this.constraints) {
 					writer.write("static_assert(");
@@ -209,6 +233,7 @@ export class Class extends TemplateDeclaration {
 				}
 			}
 
+			// 7. Write class members.
 			resolveDependencies(context, this.members, (context, member, state) => {
 				const memberVisibility = member.getVisibility();
 
@@ -222,6 +247,7 @@ export class Class extends TemplateDeclaration {
 				member.getDeclaration().write(context, writer, state, this);
 			});
 
+			// 8. Write "using" declarations.
 			if (this.usingDeclarations.size > 0) {
 				writer.write(VISIBILITY_STRINGS[Visibility.Public], -1);
 				writer.write(":");
@@ -247,7 +273,9 @@ export class Class extends TemplateDeclaration {
 		return `C${this.getPath()};`;
 	}
 
-	private getRecursiveBaseKeys(map: Map<string, number>): void {
+	// Recursively find all base types, and count how many times each one
+	// occurs.
+	private countRecursiveBaseKeys(map: Map<string, number>): void {
 		for (const base of this.bases) {
 			const type = base.getInnerType();
 			const key = type.key();
@@ -258,31 +286,30 @@ export class Class extends TemplateDeclaration {
 				const declaration = type.getDeclaration();
 
 				if (declaration instanceof Class) {
-					declaration.getRecursiveBaseKeys(map);
+					declaration.countRecursiveBaseKeys(map);
 				}
 			}
 		}
 	}
 
-	private *getBaseClasses(): Generator<[Base, Class]> {
-		for (const base of this.bases) {
-			const type = base.getInnerType();
-
-			if (type instanceof DeclaredType) {
-				const declaration = type.getDeclaration();
-
-				if (declaration instanceof Class) {
-					yield [base, declaration];
-				}
-			}
-		}
+	// Returns all bases, along with their class declarations.
+	private getBaseClasses(): ReadonlyArray<[Base, Class]> {
+		return this.bases
+			.map(base => [base, base.getInnerType()])
+			.filter(([base, type]) => type instanceof DeclaredType)
+			.map(([base, type]) => [base, (type as DeclaredType).getDeclaration()])
+			.filter(([base, declaration]) => declaration instanceof Class) as [Base, Class][];
 	}
 
 	public computeVirtualBaseClasses(keys?: ReadonlySet<string>): void {
 		if (!keys) {
+			// 1. Count how many times each base class appears in the
+			// inheritance tree, recursively.
 			const map = new Map<string, number>;
-			this.getRecursiveBaseKeys(map);
+			this.countRecursiveBaseKeys(map);
 
+			// 2. Filter out bases that only occur once, they do not need to be
+			// virtual.
 			keys = new Set(
 				[...map.entries()]
 					.filter(([key, count]) => count >= 2)
@@ -290,23 +317,28 @@ export class Class extends TemplateDeclaration {
 			);
 		}
 
+		// 3. If any of our base classes occurs anywhere else in the
+		// inheritance tree, mark it as virtual.
 		for (const base of this.bases) {
 			if (keys.has(base.getInnerType().key())) {
 				base.setVirtual(true);
 			}
 		}
 
+		// 4. Repeat step 3-4 for all base classes.
 		for (const [base, declaration] of this.getBaseClasses()) {
 			declaration.computeVirtualBaseClasses(keys);
 		}
 	}
 
-	private getRecursiveBaseMemberNames(map: Map<string, Set<string>>): void {
+	// For each base class, find all its members and add the base class name
+	// to a set of which classes declare that member.
+	private findRecursiveBaseMembers(map: Map<string, Set<string>>): void {
 		for (const [base, declaration] of this.getBaseClasses()) {
 			for (const member of declaration.members) {
 				const declaration = member.getDeclaration();
 
-				if (declaration instanceof Function && member.getVisibility() === Visibility.Public) {
+				if (member.getVisibility() === Visibility.Public) {
 					const name = declaration.getName();
 					let set = map.get(name);
 
@@ -315,34 +347,30 @@ export class Class extends TemplateDeclaration {
 						map.set(name, set);
 					}
 
-					set.add(`${base.getType().toString()}::${name}`);
+					set.add(base.getType().toString());
 				}
 			}
 
-			declaration.getRecursiveBaseMemberNames(map);
+			declaration.findRecursiveBaseMembers(map);
 		}
 	}
 
 	public useBaseMembers(): void {
-		const baseNames = new Map;
+		// 1. Get the names of all declarations in all base classes,
+		// recursively.
+		const baseMembers = new Map;
+		this.findRecursiveBaseMembers(baseMembers);
 
-		const names = new Set(
-			this.members
-				.map(member => member.getDeclaration())
-				.filter(declaration => declaration instanceof Function)
-				.map(declaration => declaration.getName())
-		);
+		// 2. Iterate over all members of this class
+		for (const member of this.members) {
+			const name = member.getDeclaration().getName();
+			const set = baseMembers.get(name);
 
-		this.getRecursiveBaseMemberNames(baseNames);
-
-		for (const name of names) {
-			if (USE_BASE_FUNCTIONS.includes(name)) {
-				const set = baseNames.get(name);
-
-				if (set) {
-					for (const declaration of set) {
-						this.usingDeclarations.add(declaration);
-					}
+			// 3. Add using declarations for all base classes that declare a
+			// member that is in the USE_BASE_MEMBERS list.
+			if (USE_BASE_MEMBERS.includes(name) && set) {
+				for (const baseName of set) {
+					this.usingDeclarations.add(`${baseName}::${name}`);
 				}
 			}
 		}

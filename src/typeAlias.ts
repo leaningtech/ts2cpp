@@ -28,6 +28,7 @@ export class TypeAlias extends TemplateDeclaration {
 		return new Array;
 	}
 
+	// The dependencies are just those of the type.
 	public getDirectDependencies(state: State): Dependencies {
 		return this.type.getDependencies(new Dependency(State.Partial, this, ReasonKind.TypeAliasType));
 	}

@@ -14,7 +14,7 @@ export class ReferenceData {
 	// ```
 	// class ReferencedIn {
 	//     class Declaration;
-	//     Declaration *referencedBy();
+	//     Declaration* referencedBy();
 	// };
 	private readonly referencedBy: Declaration;
 	private readonly referencedIn: Declaration;
@@ -97,36 +97,51 @@ export abstract class Declaration extends Namespace {
 
 	// This function computes internal references. An internal reference is
 	// when a child of this declaration references (read: depends on) another
-	// child of this declaration. External references are ignored.
+	// child of this declaration. We also handle indirect internal references.
+	// An indirect reference is when a declaration references another
+	// declaration, which in turn references another declaration, and so on.
 	//
 	// This information is used when resolving dependencies (see
 	// "src/target.ts"), to determine if an inner class needs a complete
 	// declaration because one of its members is referenced internally.
-	//
 	// It is also used for printing dependency cycle error messages (see
 	// "src/error.ts").
 	public computeReferences(rootParam?: Declaration): void {
+		// The `root` node is used when computing indirect references. It is
+		// the declaration in which the original reference was made. An
+		// internal indirect reference must not escape its root node, because
+		// then it would not be internal.
 		const root = rootParam ?? this;
 
-		// 1. Visit direct references, eg. base classes.
+		// 1. Visit references by this declaration, eg. base classes.
 		for (const [declaration, dependency] of this.getDirectDependencies(State.Complete)) {
 			const data = new ReferenceData(this, this, dependency.getReasonKind());
 			declaration.setReferenced(root, dependency.getState(), data);
 		}
 
+		// 2. Visit references by children, eg. method return types.
 		for (const child of this.getChildren()) {
-			// 2. Visit references by children, eg. member function return types.
 			for (const [declaration, dependency] of child.getDirectDependencies(State.Partial)) {
 				const data = new ReferenceData(child, this, dependency.getReasonKind());
 				declaration.setReferenced(root, dependency.getState(), data);
 			}
+		}
 
-			// 3. Also compute internal references inside all of the children.
-			child.computeReferences();
+		// 3. Also compute internal references of children. It is important
+		// that this happens *after* computing indirect references of this
+		// declaration, because these indirect references may reach further
+		// (they have a higher root node), and we don't want them to be stopped
+		// by the `!node.isReferenced()` check in `setReferenced`.
+		for (const child of this.getChildren()) {
+			if (!child.isReferenced()) {
+				child.computeReferences();
+			}
 		}
 	}
 
-	// When `computeReferences` finds a referenced declaration, it calls this function.
+	// When `computeReferences` finds a referenced declaration, it calls this
+	// function, which will store the reference data and call
+	// `computeReferences` again to handle indirect references.
 	public setReferenced(root: Declaration, state: State, data: ReferenceData): void {
 		// 1. Determine which declaration needs to be completely resolved for
 		// the reference to be valid, if the reference needs only a partial
@@ -134,12 +149,11 @@ export abstract class Declaration extends Namespace {
 		let node = state === State.Complete ? this : this.getParentDeclaration();
 
 		// 2. Iterate over all parents of the node, until we reach the root
-		// node. The root node is the node where the internal reference began.
-		// An internal reference inside of a class should not have any effect
-		// on its parent. External references are handled elsewhere.
+		// node. We stop at the root node because internal references should
+		// not affect the world outside the declaration where they originated.
 		for (; node && node.isDescendantOf(root); node = node.getParentDeclaration()) {
 			if (!node.isReferenced()) {
-				// 3. Store reference data in this declaration.
+				// 3. Store reference data in the referenced declaration.
 				node.referenceData = data;
 
 				// 4. Also compute internal references of the class we
@@ -185,11 +199,36 @@ export abstract class Declaration extends Namespace {
 		);
 	}
 
+	// Returns the maximum state of a declaration, this is only Complete for
+	// class declarations, and Partial for every other declaration, where a
+	// forward declaration is all we ever generate.
 	public abstract maxState(): State;
+
+	// Returns the children (class members) of this declaration.
 	public abstract getChildren(): ReadonlyArray<Declaration>;
+
+	// The *direct* dependencies of a declaration do not include dependencies
+	// of its children, this function is called by `getDependencies` and should
+	// rarely be used otherwise.
 	public abstract getDirectDependencies(state: State): Dependencies;
+
+	// The *direct* referenced types of a declaration do not include types
+	// referenced by its children, this function is called by
+	// `getReferencedTypes` and should rarely be used otherwise.
 	public abstract getDirectReferencedTypes(): ReadonlyArray<Type>;
+
+	// Write this declaration to a file. If `state` is Partial, only generate
+	// a forward declaration. The `namespace` is the namespace in which the
+	// declaration should be written, and can be used to abbreviate class
+	// paths. The `context` is passed because class declarations need to
+	// construct a `DependencyResolver` to generate their members in the
+	// correct order.
 	public abstract write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void;
+
+	// Returns a key that identifies this declaration, it is used for removing
+	// duplicate declarations. The key should be specific enough so we don't
+	// remove any declarations that aren't actually duplicates, but it should
+	// should not allow conflicting overloads to exist together.
 	public abstract key(): string;
 }
 
@@ -211,6 +250,7 @@ export class TypeParameter {
 	}
 }
 
+// A declaration that may be templated.
 export abstract class TemplateDeclaration extends Declaration {
 	private readonly typeParameters: Array<TypeParameter> = new Array;
 	private variadic: boolean = false;

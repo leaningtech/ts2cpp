@@ -24,6 +24,7 @@ export class Variable extends Declaration {
 		return new Array;
 	}
 
+	// The dependencies are just those of the type of the variable.
 	public getDirectDependencies(state: State): Dependencies {
 		return this.type.getDependencies(new Dependency(State.Partial, this, ReasonKind.VariableType));
 	}

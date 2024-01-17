@@ -88,7 +88,7 @@ struct EscapedResourcesList
 	{
 		if (resources == nullptr)
 			return;
-		client::Object* o = resources->get<R*, client::Object*>(r);
+		client::Object* o = resources->get(r);
 		asm("%1===undefined?null:%2" : "=r"(o) : "r"(o),"r"(o));
 		if (o == nullptr)
 			return;

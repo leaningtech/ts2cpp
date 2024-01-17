@@ -6,14 +6,6 @@ import { Function } from "./function.js";
 import { Writer } from "./writer.js";
 import { options } from "./options.js";
 
-// A list of which base members to generate using declarations for.
-//
-// TODO: This could be more generic, instead of hardcoding a list of which
-// members to generate using declarations for.
-const USE_BASE_MEMBERS = [
-	"operator[]",
-];
-
 export enum Visibility {
 	Public,
 	Protected,
@@ -356,6 +348,13 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public useBaseMembers(): void {
+		// A list of which base members to generate using declarations for.
+		//
+		// TODO: This could be more generic, instead of hardcoding the list.
+		const useBaseMembers = [
+			"operator[]",
+		];
+
 		// 1. Get the names of all declarations in all base classes,
 		// recursively.
 		const baseMembers = new Map;
@@ -368,7 +367,7 @@ export class Class extends TemplateDeclaration {
 
 			// 3. Add using declarations for all base classes that declare a
 			// member that is in the USE_BASE_MEMBERS list.
-			if (USE_BASE_MEMBERS.includes(name) && set) {
+			if (useBaseMembers.includes(name) && set) {
 				for (const baseName of set) {
 					this.usingDeclarations.add(`${baseName}::${name}`);
 				}

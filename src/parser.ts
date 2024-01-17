@@ -61,11 +61,6 @@ class Child extends Node {
 	}
 }
 
-type BuiltinType = {
-	classObj?: Class,
-	type: Type,
-};
-
 type TypeMap = Map<ts.Type, Type>;
 type ClassDecl = ts.InterfaceDeclaration | ts.ClassDeclaration;
 type FuncDecl = ts.SignatureDeclarationBase;
@@ -79,18 +74,11 @@ export class Parser {
 	private readonly namespace: Namespace;
 	private readonly basicDeclaredTypes: TypeMap = new Map;
 	private readonly genericDeclaredTypes: TypeMap = new Map;
+	private readonly library: Library;
 	private readonly classes: Array<Class> = new Array;
 	private readonly functions: Array<Function> = new Array;
-	private readonly library: Library;
 	private generateTotal: number = 0;
 	private generateProgress: number = 0;
-	public readonly objectBuiltin: BuiltinType;
-	public readonly numberBuiltin: BuiltinType;
-	public readonly stringBuiltin: BuiltinType;
-	public readonly bigintBuiltin: BuiltinType;
-	public readonly symbolBuiltin: BuiltinType;
-	public readonly functionBuiltin: BuiltinType;
-	public readonly eventListenerBuiltin: BuiltinType;
 
 	public constructor(program: ts.Program, library: Library, defaultLib: boolean) {
 		this.library = library;
@@ -104,14 +92,6 @@ export class Parser {
 				this.discover(this.root, sourceFile);
 			}
 		});
-
-		this.objectBuiltin = this.getBuiltinType("Object");
-		this.numberBuiltin = this.getBuiltinType("Number");
-		this.stringBuiltin = this.getBuiltinType("String");
-		this.bigintBuiltin = this.getBuiltinType("BigInt");
-		this.symbolBuiltin = this.getBuiltinType("Symbol");
-		this.functionBuiltin = this.getBuiltinType("Function");
-		this.eventListenerBuiltin = this.getBuiltinType("EventListener");
 
 		withTimer("generate", () => {
 			if (options.namespace) {
@@ -172,8 +152,10 @@ export class Parser {
 			}
 		});
 
-		if (this.objectBuiltin.classObj) {
-			this.objectBuiltin.classObj.addAttribute("cheerp::client_layout");
+		const objectClass = this.getRootClass("Object");
+
+		if (objectClass) {
+			objectClass.addAttribute("cheerp::client_layout");
 		}
 	}
 
@@ -183,6 +165,10 @@ export class Parser {
 
 	public getClasses(): ReadonlyArray<Class> {
 		return this.classes;
+	}
+
+	public getFunctions(): ReadonlyArray<Function> {
+		return this.functions;
 	}
 
 	public getRootClass(name: string): Class | undefined {
@@ -201,18 +187,13 @@ export class Parser {
 		}
 	}
 
-	private getBuiltinType(name: string): BuiltinType {
+	public getRootType(name: string): Type {
 		const child = this.root.children.get(name);
 
 		if (child && child.basicClassObj) {
-			return {
-				classObj: child.basicClassObj,
-				type: new DeclaredType(child.basicClassObj),
-			};
+			return new DeclaredType(child.basicClassObj);
 		} else {
-			return {
-				type: new NamedType(`client::${name}`),
-			};
+			return new NamedType(`client::${name}`);
 		}
 	}
 
@@ -335,7 +316,7 @@ export class Parser {
 		} else if (basicDeclaredType && type.isClassOrInterface()) {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
-			info.addType(this.eventListenerBuiltin.type, TypeKind.Function);
+			info.addType(this.getRootType("EventListener"), TypeKind.Function);
 			info.addType(NULLPTR_TYPE, TypeKind.Function);
 
 			for (const signature of type.getCallSignatures()) {
@@ -364,7 +345,7 @@ export class Parser {
 		} else if (type.flags & ts.TypeFlags.Any) {
 			// TODO: Use any + double + bool, is there a better alternative?
 			info.addType(ANY_TYPE, TypeKind.Class);
-			// info.addType(this.objectBuiltin.type, TypeKind.Class);
+			// info.addType(this.getRootType("Object"), TypeKind.Class);
 			info.setOptional();
 		} else if (type.flags & ts.TypeFlags.VoidLike) {
 			info.addType(VOID_TYPE, TypeKind.Primitive);
@@ -373,11 +354,11 @@ export class Parser {
 		} else if (type.flags & ts.TypeFlags.BooleanLike) {
 			info.addType(BOOL_TYPE, TypeKind.Primitive);
 		} else if (type.flags & ts.TypeFlags.StringLike) {
-			info.addType(this.stringBuiltin.type, TypeKind.Class);
+			info.addType(this.getRootType("String"), TypeKind.Class);
 		} else  if (type.flags & ts.TypeFlags.BigIntLike) {
-			info.addType(this.bigintBuiltin.type, TypeKind.Class);
+			info.addType(this.getRootType("BigInt"), TypeKind.Class);
 		} else if (type.flags & ts.TypeFlags.ESSymbolLike) {
-			info.addType(this.symbolBuiltin.type, TypeKind.Class);
+			info.addType(this.getRootType("Symbol"), TypeKind.Class);
 		} else if (type.isIntersection()) {
 			this.addTypeInfo(type.types[0], types, info, cache);
 		} else if (type.isUnion()) {
@@ -392,7 +373,7 @@ export class Parser {
 				const target = this.genericDeclaredTypes.get(typeRef.target);
 
 				if (!target) {
-					const target = this.basicDeclaredTypes.get(typeRef.target) ?? this.objectBuiltin.type;
+					const target = this.basicDeclaredTypes.get(typeRef.target) ?? this.getRootType("Object");
 					info.addType(target, TypeKind.Class);
 					return;
 				}
@@ -412,7 +393,7 @@ export class Parser {
 		
 				info.addType(templateType, TypeKind.Class);
 			} else {
-				info.addType(this.objectBuiltin.type, TypeKind.Class);
+				info.addType(this.getRootType("Object"), TypeKind.Class);
 			}
 		} else if (type.isTypeParameter()) {
 			info.addType(ANY_TYPE, TypeKind.Class);
@@ -421,7 +402,7 @@ export class Parser {
 			// info.addType(BOOL_TYPE, TypeKind.Primitive);
 			info.setOptional();
 		} else {
-			info.addType(this.objectBuiltin.type, TypeKind.Class);
+			info.addType(this.getRootType("Object"), TypeKind.Class);
 		}
 	}
 
@@ -948,9 +929,11 @@ export class Parser {
 		}
 
 		if (classObj.getBases().length === 0) {
-			if (this.objectBuiltin.classObj !== classObj) {
-				// TODO: automatically find an appropriate base class
-				classObj.addBase(this.objectBuiltin.type, Visibility.Public);
+			const objectClass = this.getRootClass("Object");
+			const objectType = this.getRootType("Object");
+
+			if (objectClass !== classObj) {
+				classObj.addBase(objectType, Visibility.Public);
 			} else {
 				classObj.addBase(ANY_TYPE, Visibility.Public);
 			}

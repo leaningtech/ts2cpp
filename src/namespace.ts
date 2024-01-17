@@ -45,7 +45,6 @@ export class Namespace {
 	}
 
 	public setInterfaceName(name: string): void {
-		// TODO: set interface name for all types of declarations, not just functions
 		this.interfaceName = name;
 	}
 

@@ -4,102 +4,88 @@ import { Library } from "./library.js";
 import { withTimer, parseOptions, options } from "./options.js";
 import * as ts from "typescript";
 
-// TODO: generate function types for classes that only have a call signature
-
-const DEFAULTLIB_FILES = [
-	"node_modules/typescript/lib/lib.es5.d.ts",
-	"node_modules/typescript/lib/lib.es2015.d.ts",
-	"node_modules/typescript/lib/lib.es2016.d.ts",
-	"node_modules/typescript/lib/lib.es2017.d.ts",
-	"node_modules/typescript/lib/lib.es2018.d.ts",
-	"node_modules/typescript/lib/lib.es2019.d.ts",
-	"node_modules/typescript/lib/lib.es2020.d.ts",
-	"node_modules/typescript/lib/lib.es2015.core.d.ts",
-	"node_modules/typescript/lib/lib.es2015.collection.d.ts",
-	"node_modules/typescript/lib/lib.es2015.generator.d.ts",
-	"node_modules/typescript/lib/lib.es2015.iterable.d.ts",
-	"node_modules/typescript/lib/lib.es2015.promise.d.ts",
-	"node_modules/typescript/lib/lib.es2015.proxy.d.ts",
-	"node_modules/typescript/lib/lib.es2015.reflect.d.ts",
-	"node_modules/typescript/lib/lib.es2015.symbol.d.ts",
-	"node_modules/typescript/lib/lib.es2015.symbol.wellknown.d.ts",
-	"node_modules/typescript/lib/lib.es2016.array.include.d.ts",
-	"node_modules/typescript/lib/lib.es2017.date.d.ts",
-	"node_modules/typescript/lib/lib.es2017.object.d.ts",
-	"node_modules/typescript/lib/lib.es2017.sharedmemory.d.ts",
-	"node_modules/typescript/lib/lib.es2017.string.d.ts",
-	"node_modules/typescript/lib/lib.es2017.intl.d.ts",
-	"node_modules/typescript/lib/lib.es2017.typedarrays.d.ts",
-	"node_modules/typescript/lib/lib.es2018.asyncgenerator.d.ts",
-	"node_modules/typescript/lib/lib.es2018.asynciterable.d.ts",
-	"node_modules/typescript/lib/lib.es2018.intl.d.ts",
-	"node_modules/typescript/lib/lib.es2018.promise.d.ts",
-	"node_modules/typescript/lib/lib.es2018.regexp.d.ts",
-	"node_modules/typescript/lib/lib.es2019.array.d.ts",
-	"node_modules/typescript/lib/lib.es2019.object.d.ts",
-	"node_modules/typescript/lib/lib.es2019.string.d.ts",
-	"node_modules/typescript/lib/lib.es2019.symbol.d.ts",
-	"node_modules/typescript/lib/lib.es2019.intl.d.ts",
-	"node_modules/typescript/lib/lib.es2020.bigint.d.ts",
-	"node_modules/typescript/lib/lib.es2020.date.d.ts",
-	"node_modules/typescript/lib/lib.es2020.promise.d.ts",
-	"node_modules/typescript/lib/lib.es2020.sharedmemory.d.ts",
-	"node_modules/typescript/lib/lib.es2020.string.d.ts",
-	"node_modules/typescript/lib/lib.es2020.symbol.wellknown.d.ts",
-	"node_modules/typescript/lib/lib.es2020.intl.d.ts",
-	"node_modules/typescript/lib/lib.es2020.number.d.ts",
-	"node_modules/typescript/lib/lib.esnext.intl.d.ts",
-	"node_modules/typescript/lib/lib.decorators.d.ts",
-	"node_modules/typescript/lib/lib.decorators.legacy.d.ts",
-	"node_modules/typescript/lib/lib.dom.d.ts",
-	"node_modules/typescript/lib/lib.webworker.d.ts",
-	"node_modules/typescript/lib/lib.webworker.importscripts.d.ts",
-	"node_modules/typescript/lib/lib.scripthost.d.ts",
-];
-
+// 1. Parse command line options.
 const args = parseOptions();
 
+// 2. Add default library files if "--default-lib" is specified.
 if (options.isDefaultLib) {
-	args.push(...DEFAULTLIB_FILES);
+	args.push("node_modules/typescript/lib/lib.es5.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2016.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2017.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2018.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2019.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.core.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.collection.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.generator.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.iterable.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.promise.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.proxy.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.reflect.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.symbol.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2015.symbol.wellknown.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2016.array.include.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2017.date.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2017.object.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2017.sharedmemory.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2017.string.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2017.intl.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2017.typedarrays.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2018.asyncgenerator.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2018.asynciterable.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2018.intl.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2018.promise.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2018.regexp.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2019.array.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2019.object.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2019.string.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2019.symbol.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2019.intl.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.bigint.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.date.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.promise.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.sharedmemory.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.string.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.symbol.wellknown.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.intl.d.ts");
+	args.push("node_modules/typescript/lib/lib.es2020.number.d.ts");
+	args.push("node_modules/typescript/lib/lib.esnext.intl.d.ts");
+	args.push("node_modules/typescript/lib/lib.decorators.d.ts");
+	args.push("node_modules/typescript/lib/lib.decorators.legacy.d.ts");
+	args.push("node_modules/typescript/lib/lib.dom.d.ts");
+	args.push("node_modules/typescript/lib/lib.webworker.d.ts");
+	args.push("node_modules/typescript/lib/lib.webworker.importscripts.d.ts");
+	args.push("node_modules/typescript/lib/lib.scripthost.d.ts");
 }
 
+// 3. Parse the typescript declaration files.
 const tsProgram = withTimer("create program", () => {
 	return ts.createProgram(args, {});
 });
 
-const library = new Library(options.outputFile ?? "cheerp/clientlib.h", args);
-
+// 4. List which files were used if "--list-files" is specified. This could be
+// more than only the files which were specified, if they include other files.
 if (options.listFiles) {
 	for (const sourceFile of tsProgram.getSourceFiles()) {
 		console.log(sourceFile.fileName);
 	}
 }
 
-if (options.isDefaultLib) {
-	const jsobjectFile = library.addFile("cheerp/jsobject.h");
-	const typesFile = library.addFile("cheerp/types.h");
-	const clientlibFile = library.getDefaultFile();
-	jsobjectFile.addName("client::Object");
-	typesFile.addName("client::String");
-	typesFile.addName("client::Array");
-	typesFile.addName("client::TArray");
-	typesFile.addName("client::Map");
-	typesFile.addName("client::TMap");
-	typesFile.addName("client::Number");
-	typesFile.addName("client::Function");
-	typesFile.addName("cheerp::makeString");
-	typesFile.addInclude("jsobject.h", false, jsobjectFile);
-	clientlibFile.addInclude("types.h", false, typesFile);
-	clientlibFile.addInclude("function.h", false, typesFile);
-	library.addGlobalInclude("jshelper.h", false);
-} else {
+// 5. Create the library instance.
+const library = new Library(options.outputFile ?? "cheerp/clientlib.h", args);
+
+// 6. If this isn't "clientlib.h", add an include for "clientlib.h".
+if (!options.isDefaultLib) {
 	library.addGlobalInclude("cheerp/clientlib.h", true);
 }
 
+// 7. Convert the typescript AST into a C++ AST.
 const parser = withTimer("parse", () => {
 	return new Parser(tsProgram, library, options.isDefaultLib);
 });
 
+// 8. Write everything into c++ headers.
 catchErrors(() => {
 	withTimer("write", () => {
 		library.write({ pretty: options.isPretty });

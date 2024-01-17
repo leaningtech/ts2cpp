@@ -10,12 +10,36 @@ import { State } from "./target.js";
 
 // TODO: add constraints for type parameters in this file
 
+// Utility function, adds an extern variable named `name` of a type with the
+// same name.
+function addExtern(parser: Parser, name: string) {
+	const declaration = parser.getRootClass(name);
+
+	if (declaration) {
+		const file = declaration.getFile();
+		const varDecl = new Variable(name, new DeclaredType(declaration));
+
+		if (file) {
+			varDecl.setFile(file);
+		}
+
+		varDecl.addFlags(Flags.Extern);
+		varDecl.setParent(declaration.getParent());
+		parser.getLibrary().addGlobal(varDecl);
+	}
+}
+
+// Utility function, adds a conversion constructor to `classObj` to convert
+// from the type `type`.
 function addConversionConstructor(classObj: Class, type: Type): void {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addParameter(type, "x");
 	classObj.addMember(funcObj, Visibility.Public);
 }
 
+// Utility function, adds a conversion constructor to `classObj` to convert
+// from the type `type`, by simply forwarding it to the `Object` constructor.
+// This is used for type casting hacks.
 function addObjectInitializerConstructor(classObj: Class, type: Type): Function {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addParameter(type, "x");
@@ -25,6 +49,11 @@ function addObjectInitializerConstructor(classObj: Class, type: Type): Function 
 	return funcObj;
 }
 
+// Add String extensions:
+// - conversion from a variety of different types.
+// - `fromUtf8`, and a `const char*` constructor that calls it.
+// - `toUtf8`, and an `operator std::string` that calls it.
+// - `makeString` implementation, forward declared in "cheerp/jshelper.h"
 function addStringExtensions(parser: Parser, stringClass: Class): void {
 	const stringType = new DeclaredType(stringClass);
 
@@ -119,48 +148,47 @@ return this->toUtf8();
 	makeStringFunc.setBody(`return new client::String(str);`);
 
 	parser.getLibrary().addGlobal(makeStringFunc);
+	parser.getLibrary().getFile("cheerp/types.h")!.addDeclaration(makeStringFunc);
 }
 
+// Add Number extensions:
+// - conversion from `double`
 function addNumberExtensions(parser: Parser, numberClass: Class): void {
-	const doubleConstructor = new Function(numberClass.getName());
-	doubleConstructor.addParameter(DOUBLE_TYPE, "x");
-
-	numberClass.addMember(doubleConstructor, Visibility.Public);
+	addConversionConstructor(numberClass, DOUBLE_TYPE);
 }
 
+// Add Object extensions:
+// - `operator[]` and `set_` to get and set fields of the object.
 function addObjectExtensions(parser: Parser, objectClass: Class): void {
+	const stringType = parser.getRootType("String");
+	const objectType = parser.getRootType("Object");
+
 	const setFunc = new Function("set_", VOID_TYPE);
-	setFunc.addParameter(parser.stringBuiltin.type.constReference(), "name");
-	setFunc.addParameter(parser.objectBuiltin.type.constPointer(), "v");
+	setFunc.addParameter(stringType.constReference(), "name");
+	setFunc.addParameter(objectType.constPointer(), "v");
 
 	const genericSetFunc = new Function("set_", VOID_TYPE);
 	genericSetFunc.addTypeParameter("T");
-	genericSetFunc.addParameter(parser.stringBuiltin.type.constReference(), "name");
+	genericSetFunc.addParameter(stringType.constReference(), "name");
 	genericSetFunc.addParameter(new NamedType("T"), "v");
 	
-	const indexFunc = new Function("operator[]", parser.objectBuiltin.type.pointer());
+	const indexFunc = new Function("operator[]", objectType.pointer());
 	indexFunc.addFlags(Flags.Const);
-	indexFunc.addParameter(parser.stringBuiltin.type.constReference(), "name");
+	indexFunc.addParameter(stringType.constReference(), "name");
 	
-	const doubleConversion = new Function("operator double");
-	doubleConversion.addFlags(Flags.Const | Flags.Explicit);
-	doubleConversion.setBody(`
-return this->cast<double>();
-	`);
-
-	const intConversion = new Function("operator int");
-	intConversion.addFlags(Flags.Const | Flags.Explicit);
-	intConversion.setBody(`
-return this->cast<int>();
-	`);
-
 	objectClass.addMember(setFunc, Visibility.Public);
 	objectClass.addMember(genericSetFunc, Visibility.Public);
 	objectClass.addMember(indexFunc, Visibility.Public);
-	// objectClass.addMember(doubleConversion, Visibility.Public);
-	// objectClass.addMember(intConversion, Visibility.Public);
 }
 
+// Add Map extensions:
+// - `get`, `set`, `has`, and `delete` with template parameters.
+//
+// These functions are not used anywhere in cheerpx or cheerpj. They are only
+// used in one specific cheerp test case that explicitly lists the template
+// parameters, rather than calling the overloads generated from typescript that
+// are both nicer to use and more type safe.
+// TODO: it is probably better to just modify the test case and remove these.
 function addMapExtensions(parser: Parser, mapClass: Class): void {
 	const keyType = new NamedType("K");
 	const valueType = new NamedType("V");
@@ -195,28 +223,18 @@ return out;
 	mapClass.addMember(deleteFunc, Visibility.Public);
 }
 
-function addArrayExtensions(parser: Parser, arrayClass: Class, type: Type): void {
-	const indexFunc = new Function("operator[]", type);
-	indexFunc.addFlags(Flags.Const);
-	indexFunc.addParameter(INT_TYPE, "index");
-	indexFunc.setBody(`
-return __builtin_cheerp_make_regular<${type.toString()}>(this, 0)[index];
-	`);
-	
-	const indexRefFunc = new Function("operator[]", type.reference());
-	indexRefFunc.addParameter(INT_TYPE, "index");
-	indexRefFunc.setBody(`
-return __builtin_cheerp_make_regular<${type.toString()}>(this, 0)[index];
-	`);
-
-	arrayClass.addMember(indexFunc, Visibility.Public);
-	arrayClass.addMember(indexRefFunc, Visibility.Public);
-}
-
-function addTypedArrayExtensions(parser: Parser, arrayBufferViewClass: Class, name: string, type: string): void {
+// Add typed array extensions:
+// - `operator[]` that returns the correct c++ type for the typed array.
+// - a copy constructor.
+//
+// The copy constructor is needed because typescript only defines a constructor
+// from `TArrayLike<double>`.
+// TODO: this may no longer be needed after making some changes to TArrayLike.
+function addTypedArrayExtensions(parser: Parser, name: string, type: string): void {
+	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
 	const typedArrayClass = parser.getRootClass(name);
 
-	if (typedArrayClass) {
+	if (arrayBufferViewClass && typedArrayClass) {
 		typedArrayClass.addBase(new DeclaredType(arrayBufferViewClass), Visibility.Public);
 		typedArrayClass.removeMember("operator[]");
 
@@ -242,6 +260,11 @@ return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 	}
 }
 
+// Add Function extensions:
+// - conversion from `EventListener*`.
+//
+// TODO: this may no longer be needed after replacing `Callback` with
+// `Callback2`.
 function addFunctionExtensions(parser: Parser, functionClass: Class) {
 	const eventListenerClass = parser.getRootClass("EventListener");
 
@@ -253,40 +276,12 @@ function addFunctionExtensions(parser: Parser, functionClass: Class) {
 	}
 }
 
-function addConsoleLogExtensions(parser: Parser, consoleClass: Class, name: string) {
-	const logFunc = new Function(`_${name}`, VOID_TYPE);
-	logFunc.setInterfaceName(name);
-	logFunc.addVariadicTypeParameter("_Args");
-	logFunc.addParameter(new NamedType("_Args").rValueReference().expand(), "data");
-	consoleClass.addMember(logFunc, Visibility.Private);
-
-	for (const member of consoleClass.getMembers()) {
-		const decl = member.getDeclaration();
-
-		if (decl instanceof Function && decl.getName() === name) {
-			const parameters = new Array;
-
-			for (const parameter of decl.getParameters()) {
-				const parameterType = parameter.getType();
-				let name = parameter.getName();
-				let suffix = "";
-
-				if (parameterType instanceof QualifiedType) {
-					const qualifier = parameterType.getQualifier();
-
-					if (qualifier & TypeQualifier.Variadic) {
-						suffix = "...";
-					}
-				}
-
-				parameters.push(`cheerp::clientCast(${name})${suffix}`);
-			}
-
-			decl.setBody(`_${name}(${parameters.join(", ")});`);
-		}
-	}
-}
-
+// Add Document extensions:
+// - set return type of `createElement` and `getElementsByTagName` to use
+// `HTMLElement` instead of just `Element`.
+//
+// The typescript declarations have some complex expressions for this that the
+// parser does not fully understand, so we manually set the correct type here.
 function addDocumentExtensions(parser: Parser, documentClass: Class) {
 	const htmlElementClass = parser.getRootClass("HTMLElement");
 	const htmlCollectionOfClass = parser.getGenericRootClass("HTMLCollectionOf");
@@ -315,139 +310,117 @@ function addDocumentExtensions(parser: Parser, documentClass: Class) {
 	}
 }
 
-function addExtern(parser: Parser, name: string) {
-	const declaration = parser.getRootClass(name);
+// Patch some functions for compatibility or ease of use:
+// - Set return type of some functions to `int`.
+// - Add `const` flag to some functions.
+// - Add `explicit` flag to some String constructors.
+//
+// This whole thing is pretty ugly but I don't see a way around it.
+function patchFunctions(parser: Parser) {
+	const objectType = parser.getRootType("Object");
 
-	if (declaration) {
-		const file = declaration.getFile();
-		const varDecl = new Variable(name, new DeclaredType(declaration));
-
-		if (file) {
-			varDecl.setFile(file);
-		}
-
-		varDecl.addFlags(Flags.Extern);
-		varDecl.setParent(declaration.getParent());
-		parser.getLibrary().addGlobal(varDecl);
-	}
-}
-
-export function addExtensions(parser: Parser): void {
-	const library = parser.getLibrary();
-	const jsobjectFile = library.getFile("cheerp/jsobject.h")!;
-	const typesFile = library.getFile("cheerp/types.h")!;
-	const clientlibFile = library.getFile("cheerp/clientlib.h")!;
-
-	typesFile.addInclude("string", true);
-	jsobjectFile.addInclude("cstddef", true);
-	jsobjectFile.addInclude("cstdint", true);
-
-	const mapClass = parser.getRootClass("Map");
-	const arrayClass = parser.getRootClass("Array");
-	const tArrayClass = parser.getGenericRootClass("Array");
-	const arrayBufferViewClass = parser.getRootClass("ArrayBufferView");
-	const consoleClass = parser.getRootClass("Console");
-	const documentClass = parser.getRootClass("Document");
-	const webGLRenderingContextBaseClass = parser.getRootClass("WebGLRenderingContextBase");
-
-	if (parser.stringBuiltin.classObj) {
-		addStringExtensions(parser, parser.stringBuiltin.classObj);
-	}
-
-	if (parser.numberBuiltin.classObj) {
-		addNumberExtensions(parser, parser.numberBuiltin.classObj);
-	}
-
-	if (parser.objectBuiltin.classObj) {
-		addObjectExtensions(parser, parser.objectBuiltin.classObj);
-	}
-
-	if (parser.functionBuiltin.classObj) {
-		addFunctionExtensions(parser, parser.functionBuiltin.classObj);
-	}
-
-	if (mapClass) {
-		addMapExtensions(parser, mapClass);
-	}
-
-	/*
-	if (arrayClass) {
-		addArrayExtensions(parser, arrayClass, parser.objectBuiltin.type.pointer());
-	}
-
-	if (tArrayClass) {
-		addArrayExtensions(parser, tArrayClass, new NamedType("_To"));
-	}
-	*/
-
-	if (arrayBufferViewClass) {
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Int8Array", "char");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint8Array", "unsigned char");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint8ClampedArray", "double");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Int16Array", "short");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint16Array", "unsigned short");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Int32Array", "int");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Uint32Array", "unsigned int");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Float32Array", "float");
-		addTypedArrayExtensions(parser, arrayBufferViewClass, "Float64Array", "double");
-	}
-
-	if (consoleClass) {
-		/*
-		addConsoleLogExtensions(parser, consoleClass, "debug");
-		addConsoleLogExtensions(parser, consoleClass, "error");
-		addConsoleLogExtensions(parser, consoleClass, "info");
-		addConsoleLogExtensions(parser, consoleClass, "log");
-		addConsoleLogExtensions(parser, consoleClass, "warn");
-		addConsoleLogExtensions(parser, consoleClass, "trace");
-		*/
-	}
-
-	if (documentClass) {
-		addDocumentExtensions(parser, documentClass);
-	}
-
-	// TODO
-	/*
-	if (webGLRenderingContextBase) {
-		const pixelStoreiFunc = new Function("pixelStorei", );
-	}
-	*/
-
-	addExtern(parser, "URL");
-
-	const keys = [
-		parser.objectBuiltin.type.constReference().key(),
-		parser.objectBuiltin.type.constPointer().key(),
+	const explicitStringConstructorKeys = [
+		objectType.constReference().key(),
+		objectType.constPointer().key(),
 		ANY_TYPE.constReference().key(),
 		ANY_TYPE.constPointer().key(),
 	];
 
-	for (const classObj of parser.getClasses()) {
-		const className = classObj.getName();
+	for (const funcObj of parser.getFunctions()) {
+		const classObj = funcObj.getParentDeclaration();
 
-		for (const child of classObj.getChildren()) {
-			if (child instanceof Function) {
-				const name = child.getName();
-				const parameters = child.getParameters();
-				const type = parameters.length === 1 ? parameters[0].getType() : undefined;
+		if (classObj) {
+			switch (funcObj.getName()) {
+			case "get_length":
+			case "get_size":
+			case "indexOf":
+			case "lastIndexOf":
+			case "charCodeAt":
+				funcObj.setType(INT_TYPE);
+			case "concat":
+			case "_concat":
+			case "localeCompare":
+			case "split":
+			case "replace":
+			case "substring":
+				funcObj.addFlags((funcObj.getFlags() & Flags.Static) ? 0 as Flags : Flags.Const);
+				break;
+			case "String":
+				if (classObj.getName() === "String") {
+					const params = funcObj.getParameters();
 
-				if (name === "get_length" || name === "get_size" || name === "indexOf" || name === "lastIndexOf" || name === "charCodeAt") {
-					if (!(child.getFlags() & Flags.Static)) {
-						child.addFlags(Flags.Const);
-					}
-
-					child.setType(INT_TYPE);
-				} else if (name === "concat" || name === "_concat" || name === "localeCompare" || name === "split" || name == "replace" || name == "substring") {
-					if (!(child.getFlags() & Flags.Static)) {
-						child.addFlags(Flags.Const);
-					}
-				} else if (className === "String" && name === "String") {
-					if (type && keys.includes(type.key())) {
-						child.addFlags(Flags.Explicit);
+					if (params.length === 1 && explicitStringConstructorKeys.includes(params[0].getType().key())) {
+						funcObj.addFlags(Flags.Explicit);
 					}
 				}
+
+				break;
 			}
 		}
 	}
+}
+
+// TODO: pixelStorei extension (or add int overload to all functions that
+// take both double and bool).
+export function addExtensions(parser: Parser): void {
+	const library = parser.getLibrary();
+	const jsobjectFile = library.addFile("cheerp/jsobject.h")!;
+	const typesFile = library.addFile("cheerp/types.h")!;
+	const clientlibFile = library.getDefaultFile();
+
+	const objectClass = parser.getRootClass("Object");
+	const stringClass = parser.getRootClass("String");
+	const numberClass = parser.getRootClass("Number");
+	const arrayClass = parser.getRootClass("Array");
+	const genericArrayClass = parser.getGenericRootClass("Array");
+	const mapClass = parser.getRootClass("Map");
+	const genericMapClass = parser.getGenericRootClass("Map");
+	const functionClass = parser.getRootClass("Function");
+	const documentClass = parser.getRootClass("Document");
+
+	// 1. Add includes for types that are assumed to exist.
+	library.addGlobalInclude("jshelper.h", false);
+	typesFile.addInclude("string", true);
+	typesFile.addInclude("jsobject.h", false, jsobjectFile);
+	jsobjectFile.addInclude("cstddef", true);
+	jsobjectFile.addInclude("cstdint", true);
+	clientlibFile.addInclude("types.h", false, typesFile);
+	clientlibFile.addInclude("function.h", false);
+	
+	// 2. For some declarations, set which file they should be written to.
+	objectClass && jsobjectFile.addDeclaration(objectClass);
+	stringClass && typesFile.addDeclaration(stringClass);
+	numberClass && typesFile.addDeclaration(numberClass);
+	arrayClass && typesFile.addDeclaration(arrayClass);
+	genericArrayClass && typesFile.addDeclaration(genericArrayClass);
+	mapClass && typesFile.addDeclaration(mapClass);
+	genericMapClass && typesFile.addDeclaration(genericMapClass);
+	functionClass && typesFile.addDeclaration(functionClass);
+
+	// 3. Add extensions for specific classes.
+	objectClass && addObjectExtensions(parser, objectClass);
+	stringClass && addStringExtensions(parser, stringClass);
+	numberClass && addNumberExtensions(parser, numberClass);
+	mapClass && addMapExtensions(parser, mapClass);
+	functionClass && addFunctionExtensions(parser, functionClass);
+	documentClass && addDocumentExtensions(parser, documentClass);
+
+	// 4. Add extensions for typed arrays.
+	addTypedArrayExtensions(parser, "Int8Array", "char");
+	addTypedArrayExtensions(parser, "Uint8Array", "unsigned char");
+	addTypedArrayExtensions(parser, "Uint8ClampedArray", "double");
+	addTypedArrayExtensions(parser, "Int16Array", "short");
+	addTypedArrayExtensions(parser, "Uint16Array", "unsigned short");
+	addTypedArrayExtensions(parser, "Int32Array", "int");
+	addTypedArrayExtensions(parser, "Uint32Array", "unsigned int");
+	addTypedArrayExtensions(parser, "Float32Array", "float");
+	addTypedArrayExtensions(parser, "Float64Array", "double");
+
+	// 5. Add an extern variable `URL` so that functions on it can be called
+	// with `.` instead of `::`, this makes us more compatible with the old
+	// clientlib, and does not have any downsides as far as I could tell.
+	addExtern(parser, "URL");
+
+	// 6. Patch some functions for compatibility or ease of use.
+	patchFunctions(parser);
 }

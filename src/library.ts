@@ -60,7 +60,7 @@ export class Include {
 export class File {
 	private readonly name: string;
 	private readonly includes: Array<Include> = new Array;
-	private readonly names: Array<string> = new Array;
+	private readonly declarations: Array<Declaration> = new Array;
 
 	public constructor(name: string) {
 		this.name = name;
@@ -78,12 +78,12 @@ export class File {
 		this.includes.push(new Include(name, system, file));
 	}
 
-	public getNames(): ReadonlyArray<string> {
-		return this.names;
+	public getDeclarations(): ReadonlyArray<Declaration> {
+		return this.declarations;
 	}
 
-	public addName(name: string): void {
-		this.names.push(name);
+	public addDeclaration(declaration: Declaration): void {
+		this.declarations.push(declaration);
 	}
 }
 
@@ -91,8 +91,7 @@ export class FileWriter {
 	private readonly file: File;
 	private readonly writer: StreamWriter;
 	private namespace?: Namespace;
-	private targetCount: number = 0;
-	private resolveCount: number = 0;
+	private target: number = 0;
 
 	public constructor(file: File, writer: StreamWriter) {
 		this.file = file;
@@ -108,18 +107,18 @@ export class FileWriter {
 	}
 
 	public incrementTarget(): void {
-		this.targetCount += 1;
+		this.target += 1;
 	}
 
-	public incrementResolve(): void {
-		this.resolveCount += 1;
+	public decrementTarget(): void {
+		this.target -= 1;
 	}
 
 	public isDone(): boolean {
-		return this.resolveCount >= this.targetCount;
+		return this.target === 0;
 	}
 
-	public writeNamespaceChange(namespace?: Namespace): void {
+	public setNamespace(namespace?: Namespace): void {
 		Namespace.writeChange(this.writer, this.namespace, namespace);
 		this.namespace = namespace;
 	}
@@ -127,9 +126,9 @@ export class FileWriter {
 
 export class Library {
 	private readonly files: Map<string, File> = new Map;
-	private defaultFile: File;
+	private readonly defaultFile: File;
 	private readonly globals: Array<Global> = new Array;
-	private globalIncludes: Array<Include> = new Array;
+	private readonly globalIncludes: Array<Include> = new Array;
 	private readonly typescriptFiles: Array<string> = new Array;
 
 	public constructor(defaultName: string, typescriptFiles: ReadonlyArray<string>) {
@@ -172,32 +171,12 @@ export class Library {
 		this.globalIncludes.push(new Include(name, system, file));
 	}
 
-	public getTypescriptFiles(): ReadonlyArray<string> {
-		return this.typescriptFiles;
-	}
-
 	public hasFile(file: string): boolean {
 		return this.typescriptFiles.includes(realpath(file));
 	}
 
 	public removeDuplicates(): void {
 		this.globals.splice(0, this.globals.length, ...removeDuplicates(this.globals));
-	}
-
-	private static getFileOrder(files: Array<File>, file: File): void {
-		if (!files.includes(file)) {
-			for (const include of file.getIncludes()) {
-				const includeFile = include.getFile();
-
-				if (includeFile) {
-					Library.getFileOrder(files, includeFile);
-				}
-			}
-
-			if (!files.includes(file)) {
-				files.push(file);
-			}
-		}
 	}
 
 	public write(options?: Partial<Options>): void {
@@ -207,73 +186,58 @@ export class Library {
 
 export class LibraryWriter {
 	private readonly library: Library;
-	private readonly writerMap: Map<string, FileWriter> = new Map;
+	private readonly writerMap: Map<Declaration, FileWriter> = new Map;
 	private readonly writers: Array<FileWriter> = new Array;
-	private readonly defaultWriter: FileWriter;
 	private readonly globals: Array<Global> = new Array;
-	private readonly fileOrder: Array<File> = new Array;
+	private defaultWriter?: FileWriter;
 
 	public constructor(library: Library, options?: Partial<Options>) {
-		const defaultFile = library.getDefaultFile();
-		let defaultWriter: FileWriter | undefined;
-
-		for (const [name, file] of library.getFiles()) {
-			const writer = new StreamWriter(name, options);
-			const fileWriter = new FileWriter(file, writer);
-			this.writers.push(fileWriter);
-
-			for (const declarationName of file.getNames()) {
-				this.writerMap.set(declarationName, fileWriter);
-			}
-
-			if (file === defaultFile) {
-				defaultWriter = fileWriter;
-			}
-		}
-
 		this.library = library;
-		this.defaultWriter = defaultWriter!;
 		this.globals = [...library.getGlobals()];
 
 		for (const [name, file] of library.getFiles()) {
-			this.computeFileOrder(file);
+			this.addFile(file);
 		}
-
-		this.writers.sort((a, b) => {
-			const aIdx = this.fileOrder.indexOf(a.getFile());
-			const bIdx = this.fileOrder.indexOf(b.getFile());
-			return aIdx - bIdx;
-		});
-
+		
 		this.globals.sort((a, b) => {
-			const aIdx = this.fileOrder.indexOf(this.getWriter(a).getFile());
-			const bIdx = this.fileOrder.indexOf(this.getWriter(b).getFile());
+			const aIdx = this.writers.indexOf(this.getWriter(a));
+			const bIdx = this.writers.indexOf(this.getWriter(b));
 			return aIdx - bIdx;
 		});
 
-		for (const global of library.getGlobals()) {
+		for (const global of this.globals) {
 			this.getWriter(global).incrementTarget();
 		}
 	}
 
-	private computeFileOrder(file: File): void {
-		if (!this.fileOrder.includes(file)) {
+	private addFile(file: File): void {
+		if (!this.writers.some(writer => writer.getFile() === file)) {
 			for (const include of file.getIncludes()) {
 				const includeFile = include.getFile();
 
 				if (includeFile) {
-					this.computeFileOrder(includeFile);
+					this.addFile(includeFile);
 				}
 			}
 
-			if (!this.fileOrder.includes(file)) {
-				this.fileOrder.push(file);
+			if (!this.writers.some(writer => writer.getFile() === file)) {
+				const writer = new StreamWriter(file.getName());
+				const fileWriter = new FileWriter(file, writer);
+				this.writers.push(fileWriter);
+
+				for (const declaration of file.getDeclarations()) {
+					this.writerMap.set(declaration, fileWriter);
+				}
+
+				if (file === this.library.getDefaultFile()) {
+					this.defaultWriter = fileWriter;
+				}
 			}
 		}
 	}
 
 	private getWriter(global: Global): FileWriter {
-		return this.writerMap.get(global.getDeclaration().getPath()) ?? this.defaultWriter;
+		return this.writerMap.get(global.getDeclaration()) ?? this.defaultWriter!;
 	}
 
 	public write() {
@@ -326,18 +290,18 @@ export class LibraryWriter {
 			const file = declaration.getFile();
 			
 			if (!file || this.library.hasFile(file)) {
-				fileWriter.writeNamespaceChange(namespace);
+				fileWriter.setNamespace(namespace);
 				declaration.write(context, fileWriter.getWriter(), state, namespace);
 			}
-			
+
 			if (state >= global.getTargetState()) {
-				this.getWriter(global).incrementResolve();
+				this.getWriter(global).decrementTarget();
 			}
 		});
 
 		for (const fileWriter of this.writers) {
 			const writer = fileWriter.getWriter();
-			fileWriter.writeNamespaceChange(undefined);
+			fileWriter.setNamespace(undefined);
 			writer.writeLineStart();
 			writer.write("#endif");
 			writer.writeLine();

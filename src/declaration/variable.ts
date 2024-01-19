@@ -1,8 +1,8 @@
 import { Declaration } from "./declaration.js";
 import { Namespace, Flags } from "./namespace.js";
-import { State, Dependency, Dependencies, ReasonKind, ResolverContext } from "./target.js";
-import { Type } from "./type.js";
-import { Writer } from "./writer.js";
+import { State, Dependency, Dependencies, ReasonKind, ResolverContext } from "../target.js";
+import { Type } from "../type/type.js";
+import { Writer } from "../writer.js";
 
 export class Variable extends Declaration {
 	private type: Type;

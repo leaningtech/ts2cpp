@@ -1,15 +1,22 @@
-import { Namespace, Flags } from "./namespace.js";
-import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { Class, Visibility } from "./class.js";
-import { Function } from "./function.js";
-import { Variable } from "./variable.js";
-import { TypeAlias } from "./typeAlias.js";
+import { Namespace, Flags } from "./declaration/namespace.js";
+import { Declaration, TemplateDeclaration } from "./declaration/declaration.js";
+import { Class, Visibility } from "./declaration/class.js";
+import { Function } from "./declaration/function.js";
+import { Variable } from "./declaration/variable.js";
+import { TypeAlias } from "./declaration/typeAlias.js";
 import { Library } from "./library.js";
-import { Expression, ValueExpression, ExpressionKind, Type, NamedType, DeclaredType, TemplateType, UnqualifiedType, FunctionType, QualifiedType, TypeQualifier } from "./type.js";
-import { VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, NULLPTR_TYPE, FUNCTION_TYPE, ARGS, ELLIPSES, ENABLE_IF } from "./types.js";
+import { Expression } from "./type/expression.js";
+import { ELLIPSES } from "./type/literalExpression.js";
+import { CompoundExpression, ExpressionKind } from "./type/compoundExpression.js";
+import { Type, UnqualifiedType } from "./type/type.js";
+import { NamedType, VOID_TYPE, BOOL_TYPE, DOUBLE_TYPE, ANY_TYPE, NULLPTR_TYPE, FUNCTION_TYPE, ARGS, ENABLE_IF } from "./type/namedType.js";
+import { DeclaredType } from "./type/declaredType.js";
+import { TemplateType } from "./type/templateType.js";
+import { FunctionType } from "./type/functionType.js";
+import { QualifiedType, TypeQualifier } from "./type/qualifiedType.js";
 import { getName } from "./name.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
-import { withTimer, options } from "./options.js";
+import { withTimer, options } from "./utility.js";
 import { addExtensions } from "./extensions.js";
 import * as ts from "typescript";
 
@@ -570,10 +577,10 @@ export class Parser {
 	}
 
 	private makeTypeConstraint(type: Type, constraints: ReadonlyArray<Expression>): Type {
-		const expression = Expression.and(...constraints);
+		const expression = CompoundExpression.and(...constraints);
 
 		if (expression.getChildren().length > 0) {
-			return Type.enableIf(expression, type);
+			return TemplateType.enableIf(expression, type);
 		} else {
 			return type;
 		}
@@ -641,7 +648,7 @@ export class Parser {
 		}
 
 		funcObj.setDecl(decl);
-		const constraint = new ValueExpression(ExpressionKind.LogicalAnd);
+		const constraint = new CompoundExpression(ExpressionKind.LogicalAnd);
 		const forwardParameters = [];
 
 		for (const typeParam of typeParams) {
@@ -655,9 +662,9 @@ export class Parser {
 				funcObj.addVariadicTypeParameter("_Args");
 				const param = ARGS;
 				funcObj.addParameter(param.expand(), name);
-				const argsConstraint = new ValueExpression(ExpressionKind.LogicalAnd);
-				const element = Type.arrayElementType(type);
-				argsConstraint.addChild(Expression.isAcceptableArgs(param, element));
+				const argsConstraint = new CompoundExpression(ExpressionKind.LogicalAnd);
+				const element = TemplateType.arrayElementType(type);
+				argsConstraint.addChild(TemplateType.isAcceptableArgs(param, element));
 				argsConstraint.addChild(ELLIPSES);
 				constraint.addChild(argsConstraint);
 				forwardParameters.push(name + "...");
@@ -668,7 +675,7 @@ export class Parser {
 		}
 
 		if (returnType && constraint.getChildren().length > 0 && options.useConstraints) {
-			funcObj.setType(Type.enableIf(constraint, returnType));
+			funcObj.setType(TemplateType.enableIf(constraint, returnType));
 		}
 
 		if (ts.isMethodDeclaration(decl) && (ts.getCombinedModifierFlags(decl) & ts.ModifierFlags.Static)) {

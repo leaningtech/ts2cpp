@@ -1,5 +1,5 @@
-import { Writer } from "./writer.js";
-import { options } from "./options.js";
+import { Writer } from "../writer.js";
+import { options } from "../utility.js";
 
 export enum Flags {
 	Static = 1,

@@ -1,9 +1,12 @@
-import { Flags, Namespace } from "./namespace.js";
-import { Function } from "./function.js";
-import { Variable } from "./variable.js";
-import { Class, Visibility } from "./class.js";
-import { Type, DeclaredType, NamedType, QualifiedType, TypeQualifier, TemplateType } from "./type.js";
-import { LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./types.js";
+import { Flags, Namespace } from "./declaration/namespace.js";
+import { Function } from "./declaration/function.js";
+import { Variable } from "./declaration/variable.js";
+import { Class, Visibility } from "./declaration/class.js";
+import { Type } from "./type/type.js";
+import { DeclaredType } from "./type/declaredType.js";
+import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./type/namedType.js";
+import { QualifiedType, TypeQualifier } from "./type/qualifiedType.js";
+import { TemplateType } from "./type/templateType.js";
 import { Parser } from "./parser.js";
 import { Library } from "./library.js";
 import { State } from "./target.js";

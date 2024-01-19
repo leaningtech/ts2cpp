@@ -1,7 +1,9 @@
-import { State, Dependencies, ReasonKind, ResolverContext } from "./target.js";
+import { State, Dependencies, ReasonKind, ResolverContext } from "../target.js";
 import { Namespace } from "./namespace.js";
-import { Writer } from "./writer.js";
-import { Type, NamedType, unique } from "./type.js";
+import { Writer } from "../writer.js";
+import { Type } from "../type/type.js";
+import { NamedType } from "../type/namedType.js";
+import { removeDuplicates } from "../utility.js";
 import * as ts from "typescript";
 
 export class ReferenceData {
@@ -42,11 +44,12 @@ export class ReferenceData {
 // `Declaration` is the base class for all types of declarations. Declarations
 // form an AST-like tree structure that closely resembles the generated C++
 // code. Note that namespaces are not seen as declarations, see
-// "src/namespace.ts" for more information about how namespaces are stored.
+// "src/declaration/namespace.ts" for more information about how namespaces
+// are stored.
 //
 // Like namespaces, `Declaration` does not store its own children, but it does
 // provide an interface for querying the children. Currently the only type of
-// declaration with children in `Class` (in "src/class.ts").
+// declaration with children in `Class` (in "src/declaration/class.ts").
 export abstract class Declaration extends Namespace {
 	private referenceData?: ReferenceData;
 	private id: number;
@@ -192,7 +195,7 @@ export abstract class Declaration extends Namespace {
 	// recursively, including template arguments, pointer element types, etc.
 	// This is used by `removeUnusedTypeParameters`.
 	public getReferencedTypes(): ReadonlyArray<Type> {
-		return unique(
+		return removeDuplicates(
 			this.getChildren()
 				.flatMap(child => [...child.getReferencedTypes()])
 				.concat([...this.getDirectReferencedTypes()])
@@ -219,7 +222,7 @@ export abstract class Declaration extends Namespace {
 
 	// Write this declaration to a file. If `state` is Partial, only generate
 	// a forward declaration. The `namespace` is the namespace in which the
-	// declaration should be written, and can be used to abbreviate class
+	// declaration is being written, and can be used to abbreviate class
 	// paths. The `context` is passed because class declarations need to
 	// construct a `DependencyResolver` to generate their members in the
 	// correct order.
@@ -310,14 +313,16 @@ export abstract class TemplateDeclaration extends Declaration {
 	}
 
 	public removeUnusedTypeParameters(): void {
-		const namedTypes = new Set(
+		// Get all referenced types.
+		const referencedTypes = new Set(
 			this.getReferencedTypes()
 				.filter((type): type is NamedType => type instanceof NamedType)
 				.map(type => type.getName())
 		);
 
+		// Filter out template parameters that aren't referenced.
 		const typeParameters = this.typeParameters.filter(typeParameter => {
-			return namedTypes.has(typeParameter.getName());
+			return referencedTypes.has(typeParameter.getName());
 		});
 
 		this.typeParameters.splice(0, this.typeParameters.length, ...typeParameters);

@@ -1,10 +1,13 @@
 import { Namespace, Flags } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies, removeDuplicates } from "./target.js";
-import { Expression, Type, DeclaredType, TemplateType } from "./type.js";
+import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies } from "../target.js";
+import { Expression } from "../type/expression.js";
+import { Type } from "../type/type.js";
+import { DeclaredType } from "../type/declaredType.js";
+import { TemplateType } from "../type/templateType.js";
 import { Function } from "./function.js";
-import { Writer } from "./writer.js";
-import { options } from "./options.js";
+import { Writer } from "../writer.js";
+import { options, removeDuplicates } from "../utility.js";
 
 export enum Visibility {
 	Public,
@@ -29,6 +32,10 @@ export class Member implements Target {
 
 	public getDeclaration(): Declaration {
 		return this.declaration;
+	}
+
+	public key(): string {
+		return this.declaration.key();
 	}
 
 	public getVisibility(): Visibility {

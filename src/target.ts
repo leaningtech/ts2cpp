@@ -15,8 +15,8 @@
 // A lengthy description of what sort of dependency cycles we might encounter
 // is found in "src/error.ts".
 
-import { Declaration } from "./declaration.js";
-import { options } from "./options.js";
+import { Declaration } from "./declaration/declaration.js";
+import { Key, options } from "./utility.js";
 
 // This enum represents how much of a declaration is written.
 // Partial: it is only forward declared (eg. "class Object;").
@@ -39,7 +39,7 @@ export enum ReasonKind {
 	Extra,
 }
 
-export interface Target {
+export interface Target extends Key {
 	getDeclaration(): Declaration;
 	getTargetState(): State;
 }
@@ -170,7 +170,7 @@ export class ResolverContext {
 
 // This class stores the state required for the dependency resolution
 // algorithm. It is generic so it can be used for types that wrap
-// `Declaration`, for example the `Member` class in "src/class.ts".
+// `Declaration`, for example the `Member` class in "src/declaration/class.ts".
 //
 // A separate `DependencyResolver` instance exists for every class to resolve
 // internal dependencies inside of that class.
@@ -259,7 +259,9 @@ class DependencyResolver<T extends Target> {
 				// parent's children, the uncle dependency must already have
 				// been resolved.
 				//
-				// Example of an uncle dependency:
+				// Example of an uncle dependency, note that `Dependency` is
+				// not in the list of targets when generating `Parent` because
+				// it is outside of the `Parent` class:
 				// ```
 				// class Dependency;
 				// class Parent {
@@ -273,7 +275,9 @@ class DependencyResolver<T extends Target> {
 				// that sibling first. The complete resolution of that sibling
 				// will imply the resolution of the nephew dependency.
 				//
-				// Example of a nephew dependency:
+				// Example of a nephew dependency, note that `Dependency` is
+				// not in the list of targets when generating `Parent` because
+				// it is nested inside of the `Sibling` class:
 				// ```
 				// class Parent {
 				//     class Sibling {
@@ -302,6 +306,7 @@ class DependencyResolver<T extends Target> {
 				//     };
 				//     Sibling::Nephew::Dependency* dependent();
 				// };
+				// ```
 				for (const [dependencyDeclaration, dependency] of declaration.getDependencies(state)) {
 					let declaration: Declaration | undefined = dependencyDeclaration;
 					let state = dependency.getState();
@@ -345,21 +350,4 @@ class DependencyResolver<T extends Target> {
 
 export function resolveDependencies<T extends Target>(context: ResolverContext, targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {
 	new DependencyResolver(context, targets, resolve).resolveDependencies();
-}
-
-export function removeDuplicates<T extends Target>(targets: ReadonlyArray<T>): Array<T> {
-	const keys = new Set;
-	const newTargets = new Array;
-
-	for (const target of targets) {
-		const declaration = target.getDeclaration();
-		const key = declaration.key();
-
-		if (!keys.has(key)) {
-			newTargets.push(target);
-			keys.add(key);
-		}
-	}
-
-	return newTargets;
 }

@@ -1,8 +1,8 @@
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { Namespace, Flags } from "./namespace.js";
-import { State, Dependency, Dependencies, ReasonKind, ResolverContext } from "./target.js";
-import { Writer } from "./writer.js";
-import { Type } from "./type.js";
+import { State, Dependency, Dependencies, ReasonKind, ResolverContext } from "../target.js";
+import { Writer } from "../writer.js";
+import { Type } from "../type/type.js";
 
 export class Parameter {
 	private type: Type;

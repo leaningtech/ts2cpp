@@ -1,7 +1,13 @@
-// Parsing command line arguments. Also contains a `withTimer` function that
-// logs some timing information when verbose mode is enabled.
+// Some utility functions, including:
+// - Parsing command line options.
+// - Benchmarking.
+// - The `removeDuplicates` function.
 
 import { program } from "commander";
+
+export interface Key {
+	key(): string;
+}
 
 export let options: Options;
 
@@ -48,6 +54,8 @@ export function parseOptions(): Array<string> {
 	return program.args;
 }
 
+// Times the given function, forwarding the return value. Timing information is
+// only output to console if "--verbose" is set.
 export function withTimer<T>(name: string, func: () => T): T {
 	if (options.isVerbose) {
 		console.time(name);
@@ -60,4 +68,14 @@ export function withTimer<T>(name: string, func: () => T): T {
 	}
 
 	return result;
+}
+
+// Returns a new array where every key occurs at most once.
+export function removeDuplicates<T extends Key>(expressions: ReadonlyArray<T>): ReadonlyArray<T> {
+	const keys = new Set;
+
+	return expressions.filter(expression => {
+		const key = expression.key();
+		return !keys.has(key) && keys.add(key);
+	});
 }

@@ -41,7 +41,7 @@
 // member that requires `Inner` to be complete is also stored. This forms
 // a linked list where each class member requires the complete declaration of
 // another class, which in turn has a member that requires the complete
-// declaration of the previous class in the list. This linked list, if present
+// declaration of the previous class in the list. This linked list, if present,
 // is the "reference data" of a declaration.
 //
 // An example of this can be found in "examples/memberCycle.d.ts". The error
@@ -74,7 +74,7 @@
 import { Library } from "./library.js";
 import { Options } from "./writer.js";
 import { ReasonKind, Reason } from "./target.js";
-import { ReferenceData } from "./declaration.js";
+import { ReferenceData } from "./declaration/declaration.js";
 
 function getReferencedString(referenceData: ReferenceData, prevPath: string): string {
 	const path = referenceData.getReferencedBy().getPath();

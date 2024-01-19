@@ -1,8 +1,8 @@
 import { Declaration, TemplateDeclaration } from "./declaration.js";
 import { Namespace } from "./namespace.js";
-import { Type } from "./type.js";
-import { State, Dependencies, ReasonKind, Dependency, ResolverContext } from "./target.js";
-import { Writer } from "./writer.js";
+import { Type } from "../type/type.js";
+import { State, Dependencies, ReasonKind, Dependency, ResolverContext } from "../target.js";
+import { Writer } from "../writer.js";
 
 export class TypeAlias extends TemplateDeclaration {
 	private type: Type;

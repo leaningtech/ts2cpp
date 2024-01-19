@@ -1,6 +1,10 @@
 import { Parser } from "./parser.js";
-import { Expression, Type, NamedType, TemplateType, TypeQualifier, DeclaredType } from "./type.js";
-import { ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "./types.js";
+import { Expression } from "./type/expression.js";
+import { Type } from "./type/type.js";
+import { NamedType, ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "./type/namedType.js";
+import { TemplateType } from "./type/templateType.js";
+import { TypeQualifier } from "./type/qualifiedType.js";
+import { DeclaredType } from "./type/declaredType.js";
 
 const REFERENCE_TYPES = [
 	"String",
@@ -100,7 +104,7 @@ export class TypeInfo {
 	}
 
 	public asTypeConstraint(type: Type): Expression {
-		return Expression.isAcceptable(type,
+		return TemplateType.isAcceptable(type,
 			...this.getPlural().map(constraint => {
 				return constraint.getNonVoidPointerOrPrimitive();
 			})
@@ -123,7 +127,7 @@ export class TypeInfo {
 				return types[0].getPointerOrPrimitive();
 			}
 
-			const result = Type.union(
+			const result = TemplateType.union(
 				...types
 					.map(type => {
 						return type.getPointerOrPrimitive();

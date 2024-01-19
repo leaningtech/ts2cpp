@@ -1,7 +1,7 @@
 import { Parser } from "./parser.js";
 import { catchErrors } from "./error.js";
 import { Library } from "./library.js";
-import { withTimer, parseOptions, options } from "./options.js";
+import { withTimer, parseOptions, options } from "./utility.js";
 import * as ts from "typescript";
 
 // 1. Parse command line options.
@@ -85,7 +85,7 @@ const parser = withTimer("parse", () => {
 	return new Parser(tsProgram, library, options.isDefaultLib);
 });
 
-// 8. Write everything into c++ headers.
+// 8. Write everything into C++ headers.
 catchErrors(() => {
 	withTimer("write", () => {
 		library.write({ pretty: options.isPretty });

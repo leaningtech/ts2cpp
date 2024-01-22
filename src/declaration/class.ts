@@ -83,66 +83,85 @@ export class Base {
 }
 
 export class Class extends TemplateDeclaration {
-	private readonly members: Array<Member> = new Array;
-	private readonly bases: Array<Base> = new Array;
+	private members?: Array<Member>;
+	private bases?: Array<Base>;
 
 	// Class constraints are written using `static_assert`.
-	private readonly constraints: Array<Expression> = new Array;
+	private constraints?: Array<Expression>;
 
 	// Using declarations are required because method overloads can shadow
 	// methods from the base class.
-	private readonly usingDeclarations: Set<string> = new Set;
+	private usingDeclarations?: Set<string>;
 
 	public getMembers(): ReadonlyArray<Member> {
-		return this.members;
+		return this.members ?? [];
 	}
 
 	public hasStaticMembers(): boolean {
-		return this.members.some(member => member.getDeclaration().getFlags() & Flags.Static);
+		return this.getMembers().some(member => member.getDeclaration().getFlags() & Flags.Static);
 	}
 
 	public hasConstructor(): boolean {
-		return this.members.some(member => member.getDeclaration().getName() === this.getName());
+		return this.getMembers().some(member => member.getDeclaration().getName() === this.getName());
 	}
 
 	public addMember(declaration: Declaration, visibility: Visibility): void {
 		// A method cannot have the same name as its parent class.
 		// TODO: emit a warning, maybe?
 		if (declaration instanceof Function || declaration.getName() !== this.getName()) {
+			this.members ??= [];
 			this.members.push(new Member(declaration, visibility));
 			declaration.setParent(this);
 		}
 	}
 
 	public getBases(): ReadonlyArray<Base> {
-		return this.bases;
+		return this.bases ?? [];
 	}
 
 	public addBase(type: Type, visibility: Visibility): void {
 		if (!(type instanceof DeclaredType) || type.getDeclaration() !== this) {
+			this.bases ??= [];
 			this.bases.push(new Base(type, visibility));
 		}
 	}
 
 	public getConstraints(): ReadonlyArray<Expression> {
-		return this.constraints;
+		return this.constraints ?? [];
 	}
 
 	public hasConstraints(): boolean {
-		return this.constraints.length > 0;
+		return this.getConstraints().length > 0;
 	}
 
 	public addConstraint(expression: Expression): void {
+		this.constraints ??= [];
 		this.constraints.push(expression);
 	}
 
+	public getUsingDeclarations(): ReadonlySet<string> {
+		return this.usingDeclarations ?? new Set;
+	}
+
+	public addUsingDeclaration(usingDeclaration: string): void {
+		this.usingDeclarations ??= new Set;
+		this.usingDeclarations.add(usingDeclaration);
+	}
+
 	public removeDuplicates(): void {
-		this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType(), base])).values());
-		this.members.splice(0, this.members.length, ...removeDuplicateDeclarations(this.members));
+		if (this.bases) {
+			this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType(), base])).values());
+		}
+
+		if (this.members) {
+			this.members.splice(0, this.members.length, ...removeDuplicateDeclarations(this.members));
+		}
 	}
 
 	public removeMember(name: string): void {
-		this.members.splice(0, this.members.length, ...this.members.filter(member => member.getDeclaration().getName() !== name));
+		if (this.members) {
+			this.members.splice(0, this.members.length, ...this.members.filter(member => member.getDeclaration().getName() !== name));
+		}
 	}
 
 	public maxState(): State {
@@ -150,7 +169,7 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public getChildren(): ReadonlyArray<Declaration> {
-		return this.members.map(member => member.getDeclaration());
+		return this.getMembers().map(member => member.getDeclaration());
 	}
 
 	// The dependencies of a class are:
@@ -164,9 +183,9 @@ export class Class extends TemplateDeclaration {
 			const baseReason = new Dependency(State.Complete, this, ReasonKind.BaseClass);
 
 			return new Dependencies(
-				this.constraints
+				this.getConstraints()
 					.flatMap(constraint => [...constraint.getDependencies(constraintReason)])
-					.concat(this.bases.flatMap(base => [...base.getType().getDependencies(baseReason)]))
+					.concat(this.getBases().flatMap(base => [...base.getType().getDependencies(baseReason)]))
 			);
 		} else {
 			return new Dependencies;
@@ -174,8 +193,8 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public getDirectReferencedTypes(): ReadonlyArray<Type> {
-		return this.constraints
-			.concat(this.bases.map(base => base.getType()))
+		return this.getConstraints()
+			.concat(this.getBases().map(base => base.getType()))
 			.flatMap(type => [...type.getReferencedTypes()]);
 	}
 
@@ -197,7 +216,7 @@ export class Class extends TemplateDeclaration {
 			let visibility = Visibility.Private;
 
 			// 5. Write base class specifiers.
-			for (const base of this.bases) {
+			for (const base of this.getBases()) {
 				writer.write(first ? ":" : ",");
 				first = false;
 				writer.writeSpace(false);
@@ -220,7 +239,7 @@ export class Class extends TemplateDeclaration {
 
 			// 6. Write class constraints.
 			if (options.useConstraints) {
-				for (const constraint of this.constraints) {
+				for (const constraint of this.getConstraints()) {
 					writer.write("static_assert(");
 					constraint.write(writer, namespace);
 					writer.write(");");
@@ -229,7 +248,7 @@ export class Class extends TemplateDeclaration {
 			}
 
 			// 7. Write class members.
-			resolveDependencies(context, this.members, (context, member, state) => {
+			resolveDependencies(context, this.getMembers(), (context, member, state) => {
 				const memberVisibility = member.getVisibility();
 
 				if (memberVisibility !== visibility) {
@@ -243,12 +262,12 @@ export class Class extends TemplateDeclaration {
 			});
 
 			// 8. Write "using" declarations.
-			if (this.usingDeclarations.size > 0) {
+			if (this.getUsingDeclarations().size > 0) {
 				writer.write(VISIBILITY_STRINGS[Visibility.Public], -1);
 				writer.write(":");
 				writer.writeLine(false);
 
-				for (const declaration of this.usingDeclarations) {
+				for (const declaration of this.getUsingDeclarations()) {
 					writer.write("using");
 					writer.writeSpace(true);
 					writer.write(declaration);
@@ -271,7 +290,7 @@ export class Class extends TemplateDeclaration {
 	// Recursively find all base types, and count how many times each one
 	// occurs.
 	private countRecursiveBases(map: Map<Type, number>): void {
-		for (const base of this.bases) {
+		for (const base of this.getBases()) {
 			const type = base.getInnerType();
 			const value = map.get(type) ?? 0;
 			map.set(type, value + 1);
@@ -288,7 +307,7 @@ export class Class extends TemplateDeclaration {
 
 	// Returns all bases, along with their class declarations.
 	private getBaseClasses(): ReadonlyArray<[Base, Class]> {
-		return this.bases
+		return this.getBases()
 			.map(base => [base, base.getInnerType()])
 			.filter(([base, type]) => type instanceof DeclaredType)
 			.map(([base, type]) => [base, (type as DeclaredType).getDeclaration()])
@@ -313,7 +332,7 @@ export class Class extends TemplateDeclaration {
 
 		// 3. If any of our base classes occurs anywhere else in the
 		// inheritance tree, mark it as virtual.
-		for (const base of this.bases) {
+		for (const base of this.getBases()) {
 			if (keys.has(base.getInnerType())) {
 				base.setVirtual(true);
 			}
@@ -329,7 +348,7 @@ export class Class extends TemplateDeclaration {
 	// to a set of which classes declare that member.
 	private findRecursiveBaseMembers(map: Map<string, Set<string>>): void {
 		for (const [base, declaration] of this.getBaseClasses()) {
-			for (const member of declaration.members) {
+			for (const member of declaration.getMembers()) {
 				const declaration = member.getDeclaration();
 
 				if (member.getVisibility() === Visibility.Public) {
@@ -363,15 +382,15 @@ export class Class extends TemplateDeclaration {
 		this.findRecursiveBaseMembers(baseMembers);
 
 		// 2. Iterate over all members of this class
-		for (const member of this.members) {
+		for (const member of this.getMembers()) {
 			const name = member.getDeclaration().getName();
 			const set = baseMembers.get(name);
 
 			// 3. Add using declarations for all base classes that declare a
-			// member that is in the USE_BASE_MEMBERS list.
+			// member that is in the useBaseMembers list.
 			if (useBaseMembers.includes(name) && set) {
 				for (const baseName of set) {
-					this.usingDeclarations.add(`${baseName}::${name}`);
+					this.addUsingDeclaration(`${baseName}::${name}`);
 				}
 			}
 		}

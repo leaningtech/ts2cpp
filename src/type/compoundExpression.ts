@@ -15,7 +15,7 @@ export enum ExpressionKind {
 // operator, such as `A || B || C`. All operators are the same, to mix them
 // you must construct nested `CompoundExpressions`.
 export class CompoundExpression extends Expression {
-	private readonly children: Array<Expression> = new Array;
+	private children?: Array<Expression>;
 	private readonly kind: ExpressionKind;
 
 	private constructor(kind: ExpressionKind) {
@@ -24,7 +24,7 @@ export class CompoundExpression extends Expression {
 	}
 
 	public getChildren(): ReadonlyArray<Expression> {
-		return this.children;
+		return this.children ?? [];
 	}
 
 	public getKind(): ExpressionKind {
@@ -34,15 +34,15 @@ export class CompoundExpression extends Expression {
 	// The dependencies of a compound expression are:
 	// - partial for all children.
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
-		return new Dependencies(this.children.flatMap(expression => [...expression.getDependencies(reason)]));
+		return new Dependencies(this.getChildren().flatMap(expression => [...expression.getDependencies(reason)]));
 	}
 
 	public getReferencedTypes(): ReadonlyArray<Type> {
-		return this.children.flatMap(expression => [...expression.getReferencedTypes()]);
+		return this.getChildren().flatMap(expression => [...expression.getReferencedTypes()]);
 	}
 
 	public write(writer: Writer, namespace?: Namespace): void {
-		if (this.children.length === 0) {
+		if (this.getChildren().length === 0) {
 			// Special case when there are no children.
 			switch (this.kind) {
 			case ExpressionKind.LogicalAnd:
@@ -52,15 +52,15 @@ export class CompoundExpression extends Expression {
 				writer.write("false");
 				break;
 			}
-		} else if (this.children.length === 1) {
+		} else if (this.getChildren().length === 1) {
 			// Omit parentheses if there is only one child.
-			this.children[0].write(writer, namespace);
+			this.getChildren()[0].write(writer, namespace);
 		} else {
 			// We must write the full expression with parentheses.
 			let first = true;
 			writer.write("(");
 
-			for (const expression of this.children) {
+			for (const expression of this.getChildren()) {
 				if (!first) {
 					writer.writeSpace(false);
 
@@ -85,7 +85,7 @@ export class CompoundExpression extends Expression {
 	}
 
 	public key(): string {
-		const children = this.children.map(child => child.key()).join("");
+		const children = this.getChildren().map(child => child.key()).join("");
 
 		switch (this.kind) {
 		case ExpressionKind.LogicalAnd:
@@ -98,16 +98,20 @@ export class CompoundExpression extends Expression {
 	public isAlwaysTrue(): boolean {
 		switch (this.kind) {
 		case ExpressionKind.LogicalAnd:
-			return this.children.every(child => child.isAlwaysTrue());
+			return this.getChildren().every(child => child.isAlwaysTrue());
 		case ExpressionKind.LogicalOr:
-			return this.children.some(child => child.isAlwaysTrue());
+			return this.getChildren().some(child => child.isAlwaysTrue());
 		}
 	}
 
 	// Create a new compound expression.
 	public static create(kind: ExpressionKind, ...members: ReadonlyArray<Expression>): CompoundExpression {
 		const result = new CompoundExpression(kind);
-		result.children.push(...members);
+
+		if (members.length > 0) {
+			result.children = [...members];
+		}
+
 		return result.intern();
 	}
 
@@ -118,8 +122,8 @@ export class CompoundExpression extends Expression {
 		const children = [];
 
 		for (const member of members) {
-			if (member instanceof CompoundExpression && member.getKind() === kind && !member.children.includes(ELLIPSES)) {
-				children.push(...member.children);
+			if (member instanceof CompoundExpression && member.getKind() === kind && !member.getChildren().includes(ELLIPSES)) {
+				children.push(...member.getChildren());
 			} else {
 				children.push(member);
 			}

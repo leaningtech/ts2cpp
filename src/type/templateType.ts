@@ -14,7 +14,7 @@ import { removeDuplicateExpressions } from "./expression.js";
 // (`TArray<String*>`).
 export class TemplateType extends Type {
 	private readonly inner: UnqualifiedType;
-	private readonly typeParameters: Array<Expression> = new Array;
+	private typeParameters?: Array<Expression>;
 
 	private constructor(inner: UnqualifiedType) {
 		super();
@@ -26,13 +26,14 @@ export class TemplateType extends Type {
 	}
 
 	public getTypeParameters(): ReadonlyArray<Expression> {
-		return this.typeParameters;
+		return this.typeParameters ?? [];
 	}
 
 	// This is unsafe because `TemplateType` should be immutable. There is a
 	// rare case where we need to modify it, but we should be very careful when
 	// doing so.
 	public addTypeParameterUnsafe(typeParameter: Expression): void {
+		this.typeParameters ??= [];
 		this.typeParameters.push(typeParameter);
 	}
 
@@ -57,14 +58,14 @@ export class TemplateType extends Type {
 		}
 
 		return new Dependencies(
-			this.typeParameters
+			this.getTypeParameters()
 				.flatMap(typeParameter => [...typeParameter.getDependencies(reason, state)])
 				.concat([...this.inner.getDependencies(reason)])
 		);
 	}
 	
 	public getReferencedTypes(): ReadonlyArray<Type> {
-		return this.typeParameters
+		return this.getTypeParameters()
 			.flatMap(typeParameter => [...typeParameter.getReferencedTypes()])
 			.concat([this, ...this.inner.getReferencedTypes()]);
 	}
@@ -74,7 +75,7 @@ export class TemplateType extends Type {
 		this.inner.write(writer, namespace);
 		writer.write("<");
 
-		for (const typeParameter of this.typeParameters) {
+		for (const typeParameter of this.getTypeParameters()) {
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
@@ -88,7 +89,7 @@ export class TemplateType extends Type {
 	}
 
 	public key(): string {
-		const typeParameters = this.typeParameters
+		const typeParameters = this.getTypeParameters()
 			.map(typeParameter => typeParameter.key()).join("");
 
 		return `T${this.inner.key()}${typeParameters};`;
@@ -99,9 +100,9 @@ export class TemplateType extends Type {
 	// - it's `IsAcceptableV<T, U...>` where U includes the type `_Any*`.
 	public isAlwaysTrue(): boolean {
 		if (this.inner === IS_SAME) {
-			return this.typeParameters[0] === this.typeParameters[1];
+			return this.getTypeParameters()[0] === this.getTypeParameters()[1];
 		} else if (this.inner === IS_ACCEPTABLE) {
-			return this.typeParameters.slice(1).includes(ANY_TYPE.pointer());
+			return this.getTypeParameters().slice(1).includes(ANY_TYPE.pointer());
 		} else {
 			return false;
 		}
@@ -111,7 +112,7 @@ export class TemplateType extends Type {
 	// void-like.
 	public isVoidLike(): boolean {
 		if (this.inner === ENABLE_IF) {
-			return this.typeParameters[1].isVoidLike();
+			return this.getTypeParameters()[1].isVoidLike();
 		} else {
 			return false;
 		}
@@ -130,7 +131,11 @@ export class TemplateType extends Type {
 
 	public static create(inner: UnqualifiedType, ...typeParameters: ReadonlyArray<Expression>): TemplateType {
 		const result = new TemplateType(inner);
-		result.typeParameters.push(...typeParameters);
+
+		if (typeParameters.length > 0) {
+			result.typeParameters = [...typeParameters];
+		}
+
 		return result.intern();
 	}
 	

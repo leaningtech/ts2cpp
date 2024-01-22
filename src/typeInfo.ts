@@ -50,11 +50,9 @@ export class TypeData {
 		}
 	}
 }
-
 export class TypeInfo {
 	private readonly objectType: Type;
 	private readonly types: Array<TypeData> = new Array;
-	private readonly keys: Set<Type> = new Set;
 	private optional: boolean = false;
 
 	public constructor(parser: Parser) {
@@ -66,9 +64,8 @@ export class TypeInfo {
 	}
 
 	public addType(type: Type, kind: TypeKind): void {
-		if (!this.keys.has(type)) {
+		if (!this.types.some(t => t.getType() === type)) {
 			this.types.push(new TypeData(type, kind));
-			this.keys.add(type);
 		}
 	}
 

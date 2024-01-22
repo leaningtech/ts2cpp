@@ -8,7 +8,7 @@ import { Namespace } from "../declaration/namespace.js";
 // parameter to `_Function<T>`.
 export class FunctionType extends Type {
 	private readonly returnType: Type;
-	private readonly parameters: Array<Type> = new Array;
+	private parameters?: Array<Type>;
 
 	private constructor(returnType: Type) {
 		super();
@@ -20,7 +20,7 @@ export class FunctionType extends Type {
 	}
 
 	public getParameters(): ReadonlyArray<Type> {
-		return this.parameters;
+		return this.parameters ?? [];
 	}
 
 	// The dependencies of a function type are:
@@ -30,14 +30,14 @@ export class FunctionType extends Type {
 		const partialReason = reason.withState(State.Partial);
 
 		return new Dependencies(
-			this.parameters
+			this.getParameters()
 				.flatMap(typeParameter => [...typeParameter.getDependencies(partialReason)])
 				.concat([...this.returnType.getDependencies(partialReason)])
 		);
 	}
 
 	public getReferencedTypes(): ReadonlyArray<Type> {
-		return this.parameters
+		return this.getParameters()
 			.flatMap(parameter => [...parameter.getReferencedTypes()])
 			.concat([this, ...this.returnType.getReferencedTypes()]);
 	}
@@ -47,7 +47,7 @@ export class FunctionType extends Type {
 		this.returnType.write(writer, namespace);
 		writer.write("(");
 
-		for (const parameter of this.parameters) {
+		for (const parameter of this.getParameters()) {
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
@@ -61,7 +61,7 @@ export class FunctionType extends Type {
 	}
 
 	public key(): string {
-		const parameters = this.parameters
+		const parameters = this.getParameters()
 			.map(parameter => parameter.key()).join("");
 
 		return `f${this.returnType.key()}${parameters};`;
@@ -69,7 +69,11 @@ export class FunctionType extends Type {
 
 	public static create(returnType: Type, ...parameters: ReadonlyArray<Type>): FunctionType {
 		const result = new FunctionType(returnType);
-		result.parameters.push(...parameters);
+		
+		if (parameters.length > 0) {
+			result.parameters = [...parameters];
+		}
+
 		return result.intern();
 	}
 }

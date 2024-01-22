@@ -52,15 +52,15 @@ export class Initializer {
 
 export class Function extends TemplateDeclaration {
 	// Function parameters.
-	private readonly parameters: Array<Parameter> = new Array;
+	private parameters?: Array<Parameter>;
 
 	// Constructor initializers, mostly used for extensions in
 	// "src/extensions.ts".
-	private readonly initializers: Array<Initializer> = new Array;
+	private initializers?: Array<Initializer>;
 
 	// We can't track dependencies of the function body, they must be added
 	// manually using `addExtraDependency`.
-	private readonly extraDependencies: Dependencies = new Dependencies;
+	private extraDependencies?: Dependencies;
 
 	// The return type.
 	private type?: Type;
@@ -76,26 +76,29 @@ export class Function extends TemplateDeclaration {
 	}
 
 	public getParameters(): ReadonlyArray<Parameter> {
-		return this.parameters;
+		return this.parameters ?? [];
 	}
 
 	public addParameter(type: Type, name: string, defaultValue?: string): void {
+		this.parameters ??= [];
 		this.parameters.push(new Parameter(type, name, defaultValue));
 	}
 
 	public getInitializers(): ReadonlyArray<Initializer> {
-		return this.initializers;
+		return this.initializers ?? [];
 	}
 
 	public addInitializer(name: string, value: string): void {
+		this.initializers ??= [];
 		this.initializers.push(new Initializer(name, value));
 	}
 
 	public getExtraDependencies(): Dependencies {
-		return this.extraDependencies;
+		return this.extraDependencies ?? new Dependencies;
 	}
 
 	public addExtraDependency(declaration: Declaration, state: State, reason: ReasonKind = ReasonKind.Extra): void {
+		this.extraDependencies ??= new Dependencies;
 		this.extraDependencies.add(declaration, new Dependency(state, this, reason));
 	}
 
@@ -132,15 +135,15 @@ export class Function extends TemplateDeclaration {
 		const returnReason = new Dependency(State.Partial, this, ReasonKind.ReturnType);
 
 		return new Dependencies(
-			this.parameters
+			this.getParameters()
 				.flatMap(parameter => [...parameter.getType().getDependencies(parameterReason)])
 				.concat([...this.type?.getDependencies(returnReason) ?? []])
-				.concat([...this.extraDependencies])
+				.concat([...this.extraDependencies ?? []])
 		);
 	}
 
 	public getDirectReferencedTypes(): ReadonlyArray<Type> {
-		return this.parameters
+		return this.getParameters()
 			.flatMap(parameter => [...parameter.getType().getReferencedTypes()])
 			.concat([...this.type?.getReferencedTypes() ?? []]);
 	}
@@ -191,7 +194,7 @@ export class Function extends TemplateDeclaration {
 		let first = true;
 
 		// 7. Write function parameters
-		for (const parameter of this.parameters) {
+		for (const parameter of this.getParameters()) {
 			const defaultValue = parameter.getDefaultValue();
 
 			if (!first) {
@@ -224,7 +227,7 @@ export class Function extends TemplateDeclaration {
 		first = true;
 
 		// 9. Write constructor initializers.
-		for (const initializer of this.initializers) {
+		for (const initializer of this.getInitializers()) {
 			writer.write(first ? ":" : ",");
 			writer.writeSpace(false);
 			writer.write(initializer.getName());
@@ -245,7 +248,7 @@ export class Function extends TemplateDeclaration {
 
 	public key(): string {
 		const flags = (this.getFlags() & Flags.Const) ? "C" : "M";
-		const parameterKey = this.parameters
+		const parameterKey = this.getParameters()
 			.map(parameter => parameter.getType().key()).join("");
 		return `F${flags}${this.getPath()};${this.templateKey()};${parameterKey};`;
 	}
@@ -253,7 +256,7 @@ export class Function extends TemplateDeclaration {
 	// Replace parameter types with new types, as specified by the map.
 	// This is used to replace `TArray<Object*>` with `Array`, for example.
 	public rewriteParameterTypes(map: Map<Type, Type>): void {
-		for (const parameter of this.parameters) {
+		for (const parameter of this.getParameters()) {
 			const newType = map.get(parameter.getType());
 
 			if (newType) {

@@ -255,24 +255,25 @@ export class TypeParameter {
 
 // A declaration that may be templated.
 export abstract class TemplateDeclaration extends Declaration {
-	private readonly typeParameters: Array<TypeParameter> = new Array;
-	private variadic: boolean = false;
+	private typeParameters?: Array<TypeParameter>;
 
 	public getTypeParameters(): ReadonlyArray<TypeParameter> {
-		return this.typeParameters;
+		return this.typeParameters ?? [];
 	}
 
 	public addTypeParameter(name: string): void {
+		this.typeParameters ??= [];
 		this.typeParameters.push(new TypeParameter(name, false));
 	}
 
 	public addVariadicTypeParameter(name: string): void {
+		this.typeParameters ??= [];
 		this.typeParameters.push(new TypeParameter(name, true));
-		this.variadic = true;
 	}
 
+	// We only check the last parameter for if it's variadic.
 	public isVariadic(): boolean {
-		return this.variadic;
+		return !!this.typeParameters && this.typeParameters.length > 0 && this.typeParameters[this.typeParameters.length - 1]?.isVariadic();
 	}
 
 	public static writeParameters(writer: Writer, parameters: ReadonlyArray<TypeParameter>): void {
@@ -300,15 +301,15 @@ export abstract class TemplateDeclaration extends Declaration {
 	}
 
 	public writeTemplate(writer: Writer): void {
-		if (this.typeParameters.length > 0) {
+		if (this.getTypeParameters().length > 0) {
 			writer.write("template");
-			TemplateDeclaration.writeParameters(writer, this.typeParameters);
+			TemplateDeclaration.writeParameters(writer, this.getTypeParameters());
 			writer.writeLine(false);
 		}
 	}
 
 	public templateKey(): string {
-		return this.typeParameters
+		return this.getTypeParameters()
 			.map(typeParameter => typeParameter.getName() + ";").join("");
 	}
 
@@ -321,10 +322,12 @@ export abstract class TemplateDeclaration extends Declaration {
 		);
 
 		// Filter out template parameters that aren't referenced.
-		const typeParameters = this.typeParameters.filter(typeParameter => {
+		const typeParameters = this.getTypeParameters().filter(typeParameter => {
 			return referencedTypes.has(typeParameter.getName());
 		});
 
-		this.typeParameters.splice(0, this.typeParameters.length, ...typeParameters);
+		if (this.typeParameters) {
+			this.typeParameters.splice(0, this.typeParameters.length, ...typeParameters);
+		}
 	}
 }

@@ -426,18 +426,16 @@ export class Parser {
 		}
 	}
 
-	private usesType(parent: ts.Type, child: ts.Type, visited?: Set<ts.Type>): boolean {
-		if (visited) {
-			if (visited.has(parent)) {
-				return false;
-			} else {
-				visited.add(parent);
-			}
+	private usesType(parent: ts.Type, child: ReadonlyArray<ts.Type>, visited?: Set<ts.Type>): boolean {
+		visited ??= new Set;
+
+		if (visited.has(parent)) {
+			return false;
 		} else {
-			visited = new Set;
+			visited.add(parent);
 		}
 
-		if (parent === child) {
+		if (child.includes(parent)) {
 			return true;
 		} else if (parent.isClassOrInterface() && parent.typeParameters) {
 			return parent.typeParameters
@@ -459,7 +457,7 @@ export class Parser {
 					}
 				}
 			}
-		} else if (parent.isUnion()) {
+		} else if (parent.isUnion() || parent.isIntersection()) {
 			return parent.types.some(type => this.usesType(type, child, visited));
 		} else if (parent.flags & ts.TypeFlags.Object) {
 			const objectType = parent as ts.ObjectType;
@@ -515,7 +513,7 @@ export class Parser {
 				const type = this.typeChecker.getTypeAtLocation(typeParameter);
 				const typeName = type.symbol.name;
 
-				if (!returnType || this.usesType(returnType, type)) {
+				if (!returnType || this.usesType(returnType, [type])) {
 					if (!typeParameterSet.has(typeName)) {
 						typeParameterArray.push(this.getTypeParameter(types, type, typeId++).getName());
 						typeParameterSet.add(typeName);

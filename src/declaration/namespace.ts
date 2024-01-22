@@ -29,7 +29,7 @@ export class Namespace {
 	private name: string;
 	private flags: Flags = 0 as Flags;
 	private parent?: Namespace;
-	private attributes: Array<string> = new Array;
+	private attributes?: Array<string>;
 	
 	public constructor(name: string, parent?: Namespace) {
 		this.name = name;
@@ -95,10 +95,11 @@ export class Namespace {
 	}
 
 	public getAttributes(): ReadonlyArray<string> {
-		return this.attributes;
+		return this.attributes ?? [];
 	}
 
 	public addAttribute(attribute: string): void {
+		this.attributes ??= [];
 		this.attributes.push(attribute);
 	}
 
@@ -114,7 +115,7 @@ export class Namespace {
 		let first = true;
 		writer.write("[[");
 
-		for (const attribute of this.attributes) {
+		for (const attribute of this.getAttributes()) {
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
@@ -128,7 +129,7 @@ export class Namespace {
 	}
 
 	public writeAttributesOrSpace(writer: Writer): void {
-		if (this.attributes.length > 0) {
+		if (this.getAttributes().length > 0) {
 			writer.writeSpace(false);
 			this.writeAttributes(writer);
 			writer.writeSpace(false);

@@ -158,8 +158,8 @@ export class Class extends TemplateDeclaration {
 	}
 
 	// The dependencies of a class are:
-	// - types used in any constraints on this class.
-	// - types used as base classes.
+	// - partial for types used in any constraints on this class.
+	// - complete for types used as base classes.
 	// This function does *not* include dependencies of class members, to get
 	// those as well, call `getDependencies`.
 	public getDirectDependencies(state: State): Dependencies {

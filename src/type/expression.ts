@@ -8,8 +8,13 @@ import { Key, options } from "../utility.js";
 // expressions, see "src/type/type.ts" for more info.
 export abstract class Expression implements Key {
 	// Return all dependencies of this type. Some compound types depend on
-	// multiple declarations, for example, `Array<String*>*` depends on both
-	// `Array` and `String`.
+	// multiple declarations, for example, `TArray<String*>*` depends on both
+	// `TArray` and `String`.
+	//
+	// `reason` includes the following information:
+	// - Is this dependency on the complete type or just a forward declaration?
+	// - What declaration is the *dependent* of this dependency?
+	// - What is the dependency needed for? Return type? Base class? etc.
 	//
 	// `innerState` is a hack to force pointer types to depend on a complete
 	// declaration of their inner type. Usually a pointer type, such as
@@ -54,7 +59,7 @@ export abstract class Expression implements Key {
 	}
 
 	// Return the raw type with any qualifiers removed. This turns
-	// `const Array<String*>*` into `Array<String*>`.
+	// `const TArray<String*>*` into `TArray<String*>`.
 	public removeQualifiers(): Expression {
 		return this;
 	}

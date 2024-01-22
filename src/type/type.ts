@@ -1,6 +1,6 @@
 import { Expression } from "./expression.js";
 
-// A C++ type, like `Array<String*>*`. Types are not too different from
+// A C++ type, like `TArray<String*>*`. Types are not too different from
 // expressions, they just have some utility functions for operations that can
 // only be applied to types, and having a separate type for types gives some
 // type safety. `Type` being a cubclass of `Expression` is convenient when

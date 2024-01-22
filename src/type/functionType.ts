@@ -3,6 +3,9 @@ import { Dependency, State, Dependencies } from "../target.js";
 import { Writer } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
 
+// A C-style function type of the form "int(const char*)" (a function taking a
+// const char* and returning an int). This is used, for example, as a type
+// parameter to `_Function<T>`.
 export class FunctionType extends Type {
 	private readonly returnType: Type;
 	private readonly parameters: Array<Type> = new Array;
@@ -24,6 +27,9 @@ export class FunctionType extends Type {
 		this.parameters.push(parameter);
 	}
 
+	// The dependencies of a function type are:
+	// - partial for the parameter types.
+	// - partial for the return type.
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		const partialReason = reason.withState(State.Partial);
 

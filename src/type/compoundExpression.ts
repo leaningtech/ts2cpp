@@ -11,8 +11,8 @@ export enum ExpressionKind {
 	LogicalOr,
 };
 
-// A `CompoundExpression` is a list of expressions separated by binary
-// operators, such as `A || B || C`. All operators are the same, to mix them
+// A `CompoundExpression` is a list of subexpressions separated by a binary
+// operator, such as `A || B || C`. All operators are the same, to mix them
 // you must construct nested `CompoundExpressions`.
 export class CompoundExpression extends Expression {
 	private readonly children: Array<Expression> = new Array;
@@ -35,9 +35,10 @@ export class CompoundExpression extends Expression {
 		return this.kind;
 	}
 
+	// The dependencies of a compound expression are:
+	// - partial for all children.
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
-		const partialReason = reason.withState(State.Partial);
-		return new Dependencies(this.children.flatMap(expression => [...expression.getDependencies(partialReason)]));
+		return new Dependencies(this.children.flatMap(expression => [...expression.getDependencies(reason)]));
 	}
 	
 	public getReferencedTypes(): ReadonlyArray<Type> {
@@ -46,7 +47,7 @@ export class CompoundExpression extends Expression {
 
 	public write(writer: Writer, namespace?: Namespace): void {
 		if (this.children.length === 0) {
-			// Special case for empty expressions.
+			// Special case when there are no children.
 			switch (this.kind) {
 			case ExpressionKind.LogicalAnd:
 				writer.write("true");
@@ -56,7 +57,7 @@ export class CompoundExpression extends Expression {
 				break;
 			}
 		} else if (this.children.length === 1) {
-			// Omit parentheses if ther is only one child.
+			// Omit parentheses if there is only one child.
 			this.children[0].write(writer, namespace);
 		} else {
 			// We must write the full expression with parentheses.

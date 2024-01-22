@@ -124,8 +124,8 @@ export class Function extends TemplateDeclaration {
 	}
 
 	// The dependencies of a function are:
-	// - types used in function parameters.
-	// - the return type.
+	// - partial for types used in function parameters.
+	// - partial for the return type.
 	// - extra dependencies added using `addExtraDependency`.
 	public getDirectDependencies(state: State): Dependencies {
 		const parameterReason = new Dependency(State.Partial, this, ReasonKind.ParameterType);

@@ -69,8 +69,10 @@ namespace cheerp {
 	using RemoveCvRefT = std::remove_cv_t<std::remove_reference_t<T>>;
 	template<class T>
 	using ArrayElementTypeT = typename ArrayElementType<RemoveCvRefT<T>>::type;
+	template<class T>
+	constexpr bool IsCharPointerV = std::is_pointer_v<std::decay_t<T>> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>, char>;
 	template<bool Variadic, class From, class To>
-	constexpr bool IsAcceptableImplV = std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::_Any> || std::is_same_v<std::remove_pointer_t<RemoveCvRefT<From>>, client::_Any> || std::is_convertible_v<From, To> || std::is_convertible_v<From, const std::remove_pointer_t<To>&> || (Variadic && std::is_convertible_v<From, const char*> && std::is_same_v<To, client::String*>);
+	constexpr bool IsAcceptableImplV = std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::_Any> || std::is_same_v<std::remove_pointer_t<RemoveCvRefT<From>>, client::_Any> || std::is_convertible_v<From, To> || std::is_convertible_v<From, const std::remove_pointer_t<To>&> || (Variadic && IsCharPointerV<From> && std::is_same_v<To, client::String*>);
 	template<bool Variadic, class From, class To>
 	struct IsAcceptable {
 		constexpr static bool value = IsAcceptableImplV<Variadic, From, To>;
@@ -103,8 +105,6 @@ namespace cheerp {
 	}
 	[[cheerp::genericjs, gnu::always_inline]]
 	inline client::String* makeString(const char* str);
-	template<class T>
-	constexpr bool IsCharPointerV = std::is_pointer_v<std::decay_t<T>> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>, char>;
 	template<class T>
 	[[cheerp::genericjs, gnu::always_inline]]
 	std::conditional_t<IsCharPointerV<T>, client::String*, T&&> clientCast(T&& value) {

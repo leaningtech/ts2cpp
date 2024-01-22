@@ -30,6 +30,8 @@ export class MemberType extends UnqualifiedType {
 		return this.name;
 	}
 
+	// The dependencies of a member type are:
+	// - complete for the parent of the member type.
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return this.inner.getDependencies(reason.withState(State.Complete));
 	}

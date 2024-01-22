@@ -16,7 +16,7 @@ export class MemberType extends UnqualifiedType {
 	private readonly inner: Type;
 	private readonly name: string;
 
-	public constructor(inner: Type, name: string) {
+	private constructor(inner: Type, name: string) {
 		super();
 		this.inner = inner;
 		this.name = name;
@@ -52,5 +52,9 @@ export class MemberType extends UnqualifiedType {
 
 	public key(): string {
 		return `Y${this.inner.key()}${this.name};`;
-	};
+	}
+
+	public static create(inner: Type, name: string): MemberType {
+		return new MemberType(inner, name).intern();
+	}
 }

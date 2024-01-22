@@ -8,7 +8,7 @@ import { Namespace } from "../declaration/namespace.js";
 export class NamedType extends UnqualifiedType {
 	private readonly name: string;
 
-	public constructor(name: string) {
+	private constructor(name: string) {
 		super();
 		this.name = name;
 	}
@@ -32,31 +32,35 @@ export class NamedType extends UnqualifiedType {
 	public isVoidLike(): boolean {
 		return this.name === "void";
 	}
+
+	public static create(name: string): NamedType {
+		return new NamedType(name).intern();
+	}
 }
 
-export const VOID_TYPE = new NamedType("void");
-export const BOOL_TYPE = new NamedType("bool");
-export const DOUBLE_TYPE = new NamedType("double");
-export const FLOAT_TYPE = new NamedType("float");
-export const LONG_TYPE = new NamedType("long");
-export const UNSIGNED_LONG_TYPE = new NamedType("unsigned long");
-export const INT_TYPE = new NamedType("int");
-export const UNSIGNED_INT_TYPE = new NamedType("unsigned int");
-export const SHORT_TYPE = new NamedType("short");
-export const UNSIGNED_SHORT_TYPE = new NamedType("unsigned short");
-export const CHAR_TYPE = new NamedType("char");
-export const UNSIGNED_CHAR_TYPE = new NamedType("unsigned char");
+export const VOID_TYPE = NamedType.create("void");
+export const BOOL_TYPE = NamedType.create("bool");
+export const DOUBLE_TYPE = NamedType.create("double");
+export const FLOAT_TYPE = NamedType.create("float");
+export const LONG_TYPE = NamedType.create("long");
+export const UNSIGNED_LONG_TYPE = NamedType.create("unsigned long");
+export const INT_TYPE = NamedType.create("int");
+export const UNSIGNED_INT_TYPE = NamedType.create("unsigned int");
+export const SHORT_TYPE = NamedType.create("short");
+export const UNSIGNED_SHORT_TYPE = NamedType.create("unsigned short");
+export const CHAR_TYPE = NamedType.create("char");
+export const UNSIGNED_CHAR_TYPE = NamedType.create("unsigned char");
 export const CONST_CHAR_POINTER_TYPE = CHAR_TYPE.constPointer();
-export const SIZE_TYPE = new NamedType("std::size_t");
-export const NULLPTR_TYPE = new NamedType("std::nullptr_t");
-export const STRING_TYPE = new NamedType("std::string");
-export const ENABLE_IF = new NamedType("std::enable_if_t");
-export const IS_SAME = new NamedType("std::is_same_v");
-export const IS_CONVERTIBLE = new NamedType("std::is_convertible_v");
-export const IS_ACCEPTABLE = new NamedType("cheerp::IsAcceptableV");
-export const IS_ACCEPTABLE_ARGS = new NamedType("cheerp::IsAcceptableArgsV");
-export const ARRAY_ELEMENT_TYPE = new NamedType("cheerp::ArrayElementTypeT");
-export const ANY_TYPE = new NamedType("_Any");
-export const UNION_TYPE = new NamedType("_Union");
-export const FUNCTION_TYPE = new NamedType("_Function");
-export const ARGS = new NamedType("_Args");
+export const SIZE_TYPE = NamedType.create("std::size_t");
+export const NULLPTR_TYPE = NamedType.create("std::nullptr_t");
+export const STRING_TYPE = NamedType.create("std::string");
+export const ENABLE_IF = NamedType.create("std::enable_if_t");
+export const IS_SAME = NamedType.create("std::is_same_v");
+export const IS_CONVERTIBLE = NamedType.create("std::is_convertible_v");
+export const IS_ACCEPTABLE = NamedType.create("cheerp::IsAcceptableV");
+export const IS_ACCEPTABLE_ARGS = NamedType.create("cheerp::IsAcceptableArgsV");
+export const ARRAY_ELEMENT_TYPE = NamedType.create("cheerp::ArrayElementTypeT");
+export const ANY_TYPE = NamedType.create("_Any");
+export const UNION_TYPE = NamedType.create("_Union");
+export const FUNCTION_TYPE = NamedType.create("_Function");
+export const ARGS = NamedType.create("_Args");

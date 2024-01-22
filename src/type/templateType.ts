@@ -8,7 +8,7 @@ import { Namespace } from "../declaration/namespace.js";
 import { LiteralExpression, TRUE } from "./literalExpression.js";
 import { CompoundExpression } from "./compoundExpression.js";
 import { VOID_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, UNION_TYPE, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE, IS_ACCEPTABLE_ARGS } from "./namedType.js";
-import { removeDuplicates } from "../utility.js";
+import { removeDuplicateExpressions } from "./expression.js";
 
 // A template type is a generic type with template arguments
 // (`TArray<String*>`).
@@ -16,7 +16,7 @@ export class TemplateType extends Type {
 	private readonly inner: UnqualifiedType;
 	private readonly typeParameters: Array<Expression> = new Array;
 
-	public constructor(inner: UnqualifiedType) {
+	private constructor(inner: UnqualifiedType) {
 		super();
 		this.inner = inner;
 	}
@@ -29,7 +29,10 @@ export class TemplateType extends Type {
 		return this.typeParameters;
 	}
 
-	public addTypeParameter(typeParameter: Expression): void {
+	// This is unsafe because `TemplateType` should be immutable. There is a
+	// rare case where we need to modify it, but we should be very careful when
+	// doing so.
+	public addTypeParameterUnsafe(typeParameter: Expression): void {
 		this.typeParameters.push(typeParameter);
 	}
 
@@ -95,12 +98,10 @@ export class TemplateType extends Type {
 	// - it's `std::is_same_v<T, U>` where T and U refer to the same type.
 	// - it's `IsAcceptableV<T, U...>` where U includes the type `_Any*`.
 	public isAlwaysTrue(): boolean {
-		const key = this.inner.key();
-
-		if (key === IS_SAME.key()) {
-			return this.typeParameters[0].key() === this.typeParameters[1].key();
-		} else if (key === IS_ACCEPTABLE.key()) {
-			return this.typeParameters.slice(1).map(typeParameter => typeParameter.key()).includes(ANY_TYPE.pointer().key());
+		if (this.inner === IS_SAME) {
+			return this.typeParameters[0] === this.typeParameters[1];
+		} else if (this.inner === IS_ACCEPTABLE) {
+			return this.typeParameters.slice(1).includes(ANY_TYPE.pointer());
 		} else {
 			return false;
 		}
@@ -109,13 +110,28 @@ export class TemplateType extends Type {
 	// A template type is void-like if it's `std::enable_if_t<T>` and `T` is
 	// void-like.
 	public isVoidLike(): boolean {
-		const key = this.inner.key();
-
-		if (key === ENABLE_IF.key()) {
+		if (this.inner === ENABLE_IF) {
 			return this.typeParameters[1].isVoidLike();
 		} else {
 			return false;
 		}
+	}
+
+	public getName(): string | undefined {
+		return this.inner.getName();
+	}
+
+	// A version of `create` that does not intern the template type. Attempting
+	// to use the return value of this function may break things in subtle ways
+	// and should only be done with extreme caution.
+	public static createUnsafe(inner: UnqualifiedType): TemplateType {
+		return new TemplateType(inner);
+	}
+
+	public static create(inner: UnqualifiedType, ...typeParameters: ReadonlyArray<Expression>): TemplateType {
+		const result = new TemplateType(inner);
+		result.typeParameters.push(...typeParameters);
+		return result.intern();
 	}
 	
 	// Construct an `std::enable_if_t` template.
@@ -137,15 +153,11 @@ export class TemplateType extends Type {
 			type = otherType as Type;
 		}
 
-		const result = new TemplateType(ENABLE_IF);
-
-		result.addTypeParameter(condition);
-
 		if (type) {
-			result.addTypeParameter(type);
+			return TemplateType.create(ENABLE_IF, condition, type);
+		} else {
+			return TemplateType.create(ENABLE_IF, condition);
 		}
-
-		return result;
 	}
 
 	// Construct an `ArrayElementTypeT` template.
@@ -170,43 +182,34 @@ export class TemplateType extends Type {
 			return ANY_TYPE.pointer();
 		}
 
-		const result = new TemplateType(ARRAY_ELEMENT_TYPE);
-		result.addTypeParameter(array);
-		return result;
+		return TemplateType.create(ARRAY_ELEMENT_TYPE, array);
 	}
 
 	// Construct a `_Union<T...>` template.
 	//
 	// Any duplicates in the argument list are removed first.
 	public static union(...types: ReadonlyArray<Type>): Type {
-		const result = new TemplateType(UNION_TYPE);
-		const anyTypePointerKey = ANY_TYPE.pointer().key();
+		const typeParameters = [];
 
-		for (const type of removeDuplicates(types)) {
-			if (type.key() === anyTypePointerKey) {
+		for (const type of removeDuplicateExpressions(types)) {
+			if (type === ANY_TYPE.pointer()) {
 				return ANY_TYPE;
 			}
 
-			result.addTypeParameter(type);
+			typeParameters.push(type);
 		}
 
-		return result;
+		return TemplateType.create(UNION_TYPE, ...typeParameters);
 	}
 
 	// Construct a `std::is_same_v<T, U>` template.
 	public static isSame(lhs: Type, rhs: Type): TemplateType {
-		const result = new TemplateType(IS_SAME);
-		result.addTypeParameter(lhs);
-		result.addTypeParameter(rhs);
-		return result;
+		return TemplateType.create(IS_SAME, lhs, rhs);
 	}
 
 	// Construct a `std::is_convertible_v<T, U>` template.
 	public static isConvertible(from: Type, to: Type): TemplateType {
-		const result = new TemplateType(IS_CONVERTIBLE);
-		result.addTypeParameter(from);
-		result.addTypeParameter(to);
-		return result;
+		return TemplateType.create(IS_CONVERTIBLE, from, to);
 	}
 
 	// Construct a `IsAcceptableV<T, U...>` template.
@@ -219,19 +222,11 @@ export class TemplateType extends Type {
 	// `IsAcceptableV<double, _Any*>` returns true, while
 	// `std::is_convertible_v<double, _Any*>` returns false.
 	public static isAcceptable(from: Type, ...to: ReadonlyArray<Type>): Expression {
-		const anyTypePointerKey = ANY_TYPE.pointer().key();
-		const result = new TemplateType(IS_ACCEPTABLE);
-		result.addTypeParameter(from);
-		
-		if (to.some(type => type.key() === anyTypePointerKey)) {
+		if (to.includes(ANY_TYPE.pointer())) {
 			return TRUE;
 		}
 
-		for (const type of removeDuplicates(to)) {
-			result.addTypeParameter(type);
-		}
-
-		return result;
+		return TemplateType.create(IS_ACCEPTABLE, from, ...removeDuplicateExpressions(to));
 	}
 
 	// Construct a `IsAcceptableArgsV<T, U...>` template.
@@ -245,18 +240,10 @@ export class TemplateType extends Type {
 	// `cheerp::clientCast`, which is only called in variadic functions (for
 	// now).
 	public static isAcceptableArgs(from: Type, ...to: ReadonlyArray<Type>): Expression {
-		const anyTypePointerKey = ANY_TYPE.pointer().key();
-		const result = new TemplateType(IS_ACCEPTABLE_ARGS);
-		result.addTypeParameter(from);
-		
-		if (to.some(type => type.key() === anyTypePointerKey)) {
+		if (to.includes(ANY_TYPE.pointer())) {
 			return TRUE;
 		}
 
-		for (const type of removeDuplicates(to)) {
-			result.addTypeParameter(type);
-		}
-
-		return result;
+		return TemplateType.create(IS_ACCEPTABLE_ARGS, from, ...removeDuplicateExpressions(to));
 	}
 }

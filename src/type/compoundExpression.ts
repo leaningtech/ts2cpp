@@ -18,17 +18,13 @@ export class CompoundExpression extends Expression {
 	private readonly children: Array<Expression> = new Array;
 	private readonly kind: ExpressionKind;
 
-	public constructor(kind: ExpressionKind) {
+	private constructor(kind: ExpressionKind) {
 		super();
 		this.kind = kind;
 	}
 
 	public getChildren(): ReadonlyArray<Expression> {
 		return this.children;
-	}
-
-	public addChild(expression: Expression): void {
-		this.children.push(expression);
 	}
 
 	public getKind(): ExpressionKind {
@@ -40,7 +36,7 @@ export class CompoundExpression extends Expression {
 	public getDependencies(reason: Dependency, innerState?: State): Dependencies {
 		return new Dependencies(this.children.flatMap(expression => [...expression.getDependencies(reason)]));
 	}
-	
+
 	public getReferencedTypes(): ReadonlyArray<Type> {
 		return this.children.flatMap(expression => [...expression.getReferencedTypes()]);
 	}
@@ -108,23 +104,28 @@ export class CompoundExpression extends Expression {
 		}
 	}
 
-	// Create a new expression, collapsing multiple compound expressions of the
-	// same kind into one. For "&&" and "||", this does not change the semantic
-	// value of the expression.
-	public static combine(kind: ExpressionKind, ...members: ReadonlyArray<Expression>): CompoundExpression {
+	// Create a new compound expression.
+	public static create(kind: ExpressionKind, ...members: ReadonlyArray<Expression>): CompoundExpression {
 		const result = new CompoundExpression(kind);
+		result.children.push(...members);
+		return result.intern();
+	}
+
+	// Create a new compound expression, collapsing multiple compound
+	// expressions of the same kind into one. For "&&" and "||", this does not
+	// change the meaning of the expression.
+	public static combine(kind: ExpressionKind, ...members: ReadonlyArray<Expression>): CompoundExpression {
+		const children = [];
 
 		for (const member of members) {
-			if (member instanceof CompoundExpression && member.getKind() === kind) {
-				for (const child of member.children) {
-					result.addChild(child);
-				}
+			if (member instanceof CompoundExpression && member.getKind() === kind && !member.children.includes(ELLIPSES)) {
+				children.push(...member.children);
 			} else {
-				result.addChild(member);
+				children.push(member);
 			}
 		}
 		
-		return result;
+		return CompoundExpression.create(kind, ...children);
 	}
 
 	public static or(...children: ReadonlyArray<Expression>): CompoundExpression {
@@ -135,3 +136,5 @@ export class CompoundExpression extends Expression {
 		return CompoundExpression.combine(ExpressionKind.LogicalAnd, ...children);
 	}
 }
+
+import { ELLIPSES } from "./literalExpression.js";

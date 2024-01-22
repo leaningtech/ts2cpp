@@ -16,7 +16,7 @@
 // is found in "src/error.ts".
 
 import { Declaration } from "./declaration/declaration.js";
-import { Key, options } from "./utility.js";
+import { options } from "./utility.js";
 
 // This enum represents how much of a declaration is written.
 // Partial: it is only forward declared (eg. "class Object;").
@@ -39,7 +39,7 @@ export enum ReasonKind {
 	Extra,
 }
 
-export interface Target extends Key {
+export interface Target {
 	getDeclaration(): Declaration;
 	getTargetState(): State;
 }
@@ -351,3 +351,14 @@ class DependencyResolver<T extends Target> {
 export function resolveDependencies<T extends Target>(context: ResolverContext, targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {
 	new DependencyResolver(context, targets, resolve).resolveDependencies();
 }
+
+// Returns a new array where every key occurs at most once.
+export function removeDuplicateDeclarations<T extends Target>(targets: ReadonlyArray<T>): ReadonlyArray<T> {
+	const keys = new Set;
+
+	return targets.filter(target => {
+		const key = target.getDeclaration().key();
+		return !keys.has(key) && keys.add(key);
+	});
+}
+

@@ -1,8 +1,7 @@
 import { Declaration } from "./declaration/declaration.js";
-import { State, Target, ResolverContext, resolveDependencies } from "./target.js";
+import { State, Target, ResolverContext, resolveDependencies, removeDuplicateDeclarations } from "./target.js";
 import { Options, StreamWriter } from "./writer.js";
 import { Namespace } from "./declaration/namespace.js";
-import { removeDuplicates } from "./utility.js";
 import * as fs from "fs";
 
 const REALPATH_CACHE = new Map;
@@ -47,10 +46,6 @@ export class Global implements Target {
 
 	public getDeclaration(): Declaration {
 		return this.declaration;
-	}
-
-	public key(): string {
-		return this.declaration.key();
 	}
 
 	public getTargetState(): State {
@@ -238,7 +233,7 @@ export class Library {
 	}
 
 	public removeDuplicates(): void {
-		this.globals.splice(0, this.globals.length, ...removeDuplicates(this.globals));
+		this.globals.splice(0, this.globals.length, ...removeDuplicateDeclarations(this.globals));
 	}
 
 	public write(options?: Partial<Options>): void {

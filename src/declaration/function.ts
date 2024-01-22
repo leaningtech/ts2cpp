@@ -252,9 +252,9 @@ export class Function extends TemplateDeclaration {
 
 	// Replace parameter types with new types, as specified by the map.
 	// This is used to replace `TArray<Object*>` with `Array`, for example.
-	public rewriteParameterTypes(map: Map<string, Type>): void {
+	public rewriteParameterTypes(map: Map<Type, Type>): void {
 		for (const parameter of this.parameters) {
-			const newType = map.get(parameter.getType().key());
+			const newType = map.get(parameter.getType());
 
 			if (newType) {
 				parameter.setType(newType);

@@ -13,7 +13,7 @@ import { Namespace } from "../declaration/namespace.js";
 export class LiteralExpression extends Expression {
 	private readonly token: string;
 
-	public constructor(token: string) {
+	private constructor(token: string) {
 		super();
 		this.token = token;
 	}
@@ -39,8 +39,12 @@ export class LiteralExpression extends Expression {
 	public isAlwaysTrue(): boolean {
 		return this.token === "true" || this.token === "...";
 	}
+
+	public static create(token: string): LiteralExpression {
+		return new LiteralExpression(token).intern();
+	}
 }
 
-export const ELLIPSES = new LiteralExpression("...");
-export const TRUE = new LiteralExpression("true");
-export const FALSE = new LiteralExpression("false");
+export const ELLIPSES = LiteralExpression.create("...");
+export const TRUE = LiteralExpression.create("true");
+export const FALSE = LiteralExpression.create("false");

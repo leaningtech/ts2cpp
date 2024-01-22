@@ -139,18 +139,15 @@ export class Parser {
 		const genericMap = this.getGenericRootClass("Map");
 
 		if (basicArray && genericArray) {
-			const anyArray = new TemplateType(new DeclaredType(genericArray));
-			anyArray.addTypeParameter(ANY_TYPE.pointer());
-			parameterTypesMap.set(anyArray.pointer().key(), new DeclaredType(basicArray).pointer());
-			parameterTypesMap.set(anyArray.constPointer().key(), new DeclaredType(basicArray).constPointer());
+			const anyArray = TemplateType.create(DeclaredType.create(genericArray), ANY_TYPE.pointer());
+			parameterTypesMap.set(anyArray.pointer(), DeclaredType.create(basicArray).pointer());
+			parameterTypesMap.set(anyArray.constPointer(), DeclaredType.create(basicArray).constPointer());
 		}
 
 		if (basicMap && genericMap) {
-			const anyMap = new TemplateType(new DeclaredType(genericMap));
-			anyMap.addTypeParameter(ANY_TYPE.pointer());
-			anyMap.addTypeParameter(ANY_TYPE.pointer());
-			parameterTypesMap.set(anyMap.pointer().key(), new DeclaredType(basicMap).pointer());
-			parameterTypesMap.set(anyMap.constPointer().key(), new DeclaredType(basicMap).constPointer());
+			const anyMap = TemplateType.create(DeclaredType.create(genericMap), ANY_TYPE.pointer(), ANY_TYPE.pointer());
+			parameterTypesMap.set(anyMap.pointer(), DeclaredType.create(basicMap).pointer());
+			parameterTypesMap.set(anyMap.constPointer(), DeclaredType.create(basicMap).constPointer());
 		}
 
 		withTimer("rewrite parameter types", () => {
@@ -198,9 +195,9 @@ export class Parser {
 		const child = this.root.children.get(name);
 
 		if (child && child.basicClassObj) {
-			return new DeclaredType(child.basicClassObj);
+			return DeclaredType.create(child.basicClassObj);
 		} else {
-			return new NamedType(`client::${name}`);
+			return NamedType.create(`client::${name}`);
 		}
 	}
 
@@ -208,7 +205,7 @@ export class Parser {
 		let result = types.get(type);
 
 		if (!result) {
-			result = new NamedType(`_T${id}`);
+			result = NamedType.create(`_T${id}`);
 			types.set(type, result);
 		}
 
@@ -224,13 +221,13 @@ export class Parser {
 			child.type = this.typeChecker.getTypeAtLocation(node);
 			const interfaceType = child.type as ts.InterfaceType;
 			child.basicClassObj = new Class(name);
-			const basicClassType = new DeclaredType(child.basicClassObj);
+			const basicClassType = DeclaredType.create(child.basicClassObj);
 			this.basicDeclaredTypes.set(child.type, basicClassType);
 
 			if (interfaceType.typeParameters && interfaceType.typeParameters.length > 0) {
 				child.genericClassObj = new Class(`T${name}`);
 				child.genericClassObj.addBase(basicClassType, Visibility.Public);
-				this.genericDeclaredTypes.set(child.type, new DeclaredType(child.genericClassObj));
+				this.genericDeclaredTypes.set(child.type, DeclaredType.create(child.genericClassObj));
 			}
 		}
 	}
@@ -309,17 +306,17 @@ export class Parser {
 				info.addType(basicDeclaredType, TypeKind.Generic);
 			}
 		} else if (genericDeclaredType && type.isClassOrInterface()) {
-			const templateType = new TemplateType(genericDeclaredType);
+			const templateType = TemplateType.createUnsafe(genericDeclaredType);
 			cache.set(type, templateType);
 
 			if (type.typeParameters) {
 				for (const typeParam of type.typeParameters) {
 					const info = this.getTypeInfo(typeParam, types, cache);
-					templateType.addTypeParameter(info.asTypeParameter());
+					templateType.addTypeParameterUnsafe(info.asTypeParameter());
 				}
 			}
 
-			info.addType(templateType, TypeKind.Class);
+			info.addType(templateType.internUnsafe(), TypeKind.Class);
 		} else if (basicDeclaredType && type.isClassOrInterface()) {
 			info.addType(basicDeclaredType, TypeKind.Class);
 		} else if (type.getCallSignatures().length > 0) {
@@ -332,15 +329,15 @@ export class Parser {
 
 				for (const returnType of returnInfo.asParameterTypes()) {
 					for (let i = 0; i <= declaration.parameters.length; i++) {
-						const funcType = new FunctionType(returnType);
+						const parameterTypes = [];
 
 						for (const parameter of declaration.parameters.slice(0, i)) {
 							const parameterInfo = this.getTypeNodeInfo(parameter.type!, types, cache);
-							funcType.addParameter(parameterInfo.asReturnType());
+							parameterTypes.push(parameterInfo.asReturnType());
 						}
 
-						const functionType = new TemplateType(FUNCTION_TYPE);
-						functionType.addTypeParameter(funcType);
+						const funcType = FunctionType.create(returnType, ...parameterTypes);
+						const functionType = TemplateType.create(FUNCTION_TYPE, funcType);
 						info.addType(functionType, i === declaration.parameters.length ? TypeKind.Class : TypeKind.Function);
 					}
 				}
@@ -385,7 +382,7 @@ export class Parser {
 					return;
 				}
 
-				const templateType = new TemplateType(target);
+				const templateType = TemplateType.createUnsafe(target);
 				cache.set(type, templateType);
 
 				for (const typeArg of this.typeChecker.getTypeArguments(typeRef)) {
@@ -395,10 +392,10 @@ export class Parser {
 					}
 
 					const info = this.getTypeInfo(typeArg, types, cache);
-					templateType.addTypeParameter(info.asTypeParameter());
+					templateType.addTypeParameterUnsafe(info.asTypeParameter());
 				}
 		
-				info.addType(templateType, TypeKind.Class);
+				info.addType(templateType.internUnsafe(), TypeKind.Class);
 			} else {
 				info.addType(this.getRootType("Object"), TypeKind.Class);
 			}
@@ -548,11 +545,10 @@ export class Parser {
 						const typeParam = types.get(typeParamType)!;
 						const constraintInfo = this.getTypeNodeInfo(constraint, types);
 						const result = constraintInfo.asTypeConstraint(typeParam);
-						const key = result.key();
 
-						if (!constraintSet.has(key)) {
+						if (!constraintSet.has(result)) {
 							constraintArray.push(result);
-							constraintSet.add(key);
+							constraintSet.add(result);
 						}
 					}
 				}
@@ -598,7 +594,7 @@ export class Parser {
 		const helperFunc = new Function(`_${decl.getName()}`, ANY_TYPE.pointer());
 		helperFunc.setInterfaceName(decl.getName());
 		helperFunc.addVariadicTypeParameter("_Args");
-		helperFunc.addParameter(new NamedType("_Args").expand(), "data");
+		helperFunc.addParameter(NamedType.create("_Args").expand(), "data");
 		helperFunc.addFlags(decl.getFlags());
 		this.functions.push(helperFunc);
 
@@ -620,7 +616,7 @@ export class Parser {
 			parameters.push(`cheerp::clientCast(${name})${suffix}`);
 		}
 
-		if (type instanceof TemplateType && type.getInner().key() === ENABLE_IF.key()) {
+		if (type instanceof TemplateType && type.getInner() === ENABLE_IF) {
 			type = type.getTypeParameters()[1] as Type;
 		}
 
@@ -648,7 +644,7 @@ export class Parser {
 		}
 
 		funcObj.setDecl(decl);
-		const constraint = new CompoundExpression(ExpressionKind.LogicalAnd);
+		const constraintParameters = [];
 		const forwardParameters = [];
 
 		for (const typeParam of typeParams) {
@@ -662,17 +658,16 @@ export class Parser {
 				funcObj.addVariadicTypeParameter("_Args");
 				const param = ARGS;
 				funcObj.addParameter(param.expand(), name);
-				const argsConstraint = new CompoundExpression(ExpressionKind.LogicalAnd);
 				const element = TemplateType.arrayElementType(type);
-				argsConstraint.addChild(TemplateType.isAcceptableArgs(param, element));
-				argsConstraint.addChild(ELLIPSES);
-				constraint.addChild(argsConstraint);
+				constraintParameters.push(CompoundExpression.and(TemplateType.isAcceptableArgs(param, element), ELLIPSES));
 				forwardParameters.push(name + "...");
 			} else {
 				funcObj.addParameter(type, name);
 				forwardParameters.push(name);
 			}
 		}
+		
+		const constraint = CompoundExpression.and(...constraintParameters);
 
 		if (returnType && constraint.getChildren().length > 0 && options.useConstraints) {
 			funcObj.setType(TemplateType.enableIf(constraint, returnType));
@@ -752,7 +747,7 @@ export class Parser {
 				if (returnType && parameters.length === 1) {
 					const [indexParameter, indexType] = parameters[0];
 
-					if (indexType.key() === DOUBLE_TYPE.key()) {
+					if (indexType === DOUBLE_TYPE) {
 						const [indexInterfaceName, indexName] = getName(indexParameter.name);
 						const funcObj = this.createFunc(decl, name, parameters, typeParams, interfaceName, returnType.reference(), forward);
 						funcObj.setBody(`return __builtin_cheerp_make_regular<${returnType.toString()}>(this, 0)[static_cast<int>(${indexName})];`);
@@ -1043,7 +1038,7 @@ export class Parser {
 		for (const child of node.children.values()) {
 			this.generateProgress += 1;
 
-			if (options.isVerbose) {
+			if (options.isVerboseProgress) {
 				console.log(`${this.generateProgress}/${this.generateTotal} ${child.name}`);
 			}
 
@@ -1081,7 +1076,7 @@ export class Parser {
 			} else if (child.varDecl) {
 				const varObj = this.createVar(child.varDecl, TYPES_EMPTY, false);
 
-				if (varObj.getType().key() !== VOID_TYPE.key()) {
+				if (varObj.getType() !== VOID_TYPE) {
 					varObj.setParent(namespace);
 					varObj.addFlags(Flags.Extern);
 					this.library.addGlobal(varObj);

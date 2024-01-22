@@ -15,7 +15,7 @@ import { Namespace } from "../declaration/namespace.js";
 export class DeclaredType extends UnqualifiedType {
 	private readonly declaration: Declaration;
 
-	public constructor(declaration: Declaration) {
+	private constructor(declaration: Declaration) {
 		super();
 		this.declaration = declaration;
 	}
@@ -34,5 +34,13 @@ export class DeclaredType extends UnqualifiedType {
 
 	public key(): string {
 		return `D${this.declaration.getId()}`;
+	}
+
+	public getName(): string {
+		return this.declaration.getName();
+	}
+
+	public static create(declaration: Declaration): DeclaredType {
+		return new DeclaredType(declaration).intern();
 	}
 }

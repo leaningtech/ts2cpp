@@ -20,7 +20,7 @@ function addExtern(parser: Parser, name: string) {
 
 	if (declaration) {
 		const file = declaration.getFile();
-		const varDecl = new Variable(name, new DeclaredType(declaration));
+		const varDecl = new Variable(name, DeclaredType.create(declaration));
 
 		if (file) {
 			varDecl.setFile(file);
@@ -58,7 +58,7 @@ function addObjectInitializerConstructor(classObj: Class, type: Type): Function 
 // - `toUtf8`, and an `operator std::string` that calls it.
 // - `makeString` implementation, forward declared in "cheerp/jshelper.h"
 function addStringExtensions(parser: Parser, stringClass: Class): void {
-	const stringType = new DeclaredType(stringClass);
+	const stringType = DeclaredType.create(stringClass);
 
 	addConversionConstructor(stringClass, stringType.constPointer());
 	addConversionConstructor(stringClass, stringType.constReference());
@@ -173,7 +173,7 @@ function addObjectExtensions(parser: Parser, objectClass: Class): void {
 	const genericSetFunc = new Function("set_", VOID_TYPE);
 	genericSetFunc.addTypeParameter("T");
 	genericSetFunc.addParameter(stringType.constReference(), "name");
-	genericSetFunc.addParameter(new NamedType("T"), "v");
+	genericSetFunc.addParameter(NamedType.create("T"), "v");
 	
 	const indexFunc = new Function("operator[]", objectType.pointer());
 	indexFunc.addFlags(Flags.Const);
@@ -193,8 +193,8 @@ function addObjectExtensions(parser: Parser, objectClass: Class): void {
 // are both nicer to use and more type safe.
 // TODO: it is probably better to just modify the test case and remove these.
 function addMapExtensions(parser: Parser, mapClass: Class): void {
-	const keyType = new NamedType("K");
-	const valueType = new NamedType("V");
+	const keyType = NamedType.create("K");
+	const valueType = NamedType.create("V");
 
 	const getFunc = new Function("get", valueType);
 	getFunc.addTypeParameter("K");
@@ -238,24 +238,24 @@ function addTypedArrayExtensions(parser: Parser, name: string, type: string): vo
 	const typedArrayClass = parser.getRootClass(name);
 
 	if (arrayBufferViewClass && typedArrayClass) {
-		typedArrayClass.addBase(new DeclaredType(arrayBufferViewClass), Visibility.Public);
+		typedArrayClass.addBase(DeclaredType.create(arrayBufferViewClass), Visibility.Public);
 		typedArrayClass.removeMember("operator[]");
 
-		const indexFunc = new Function("operator[]", new NamedType(type));
+		const indexFunc = new Function("operator[]", NamedType.create(type));
 		indexFunc.addFlags(Flags.Const);
 		indexFunc.addParameter(DOUBLE_TYPE, "index");
 		indexFunc.setBody(`
 return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 		`);
 		
-		const indexRefFunc = new Function("operator[]", new NamedType(type).reference());
+		const indexRefFunc = new Function("operator[]", NamedType.create(type).reference());
 		indexRefFunc.addParameter(DOUBLE_TYPE, "index");
 		indexRefFunc.setBody(`
 return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 		`);
 
 		const copyConstructor = new Function(typedArrayClass.getName());
-		copyConstructor.addParameter(new DeclaredType(typedArrayClass).constPointer(), "array");
+		copyConstructor.addParameter(DeclaredType.create(typedArrayClass).constPointer(), "array");
 
 		typedArrayClass.addMember(indexFunc, Visibility.Public);
 		typedArrayClass.addMember(indexRefFunc, Visibility.Public);
@@ -272,9 +272,9 @@ function addFunctionExtensions(parser: Parser, functionClass: Class) {
 	const eventListenerClass = parser.getRootClass("EventListener");
 
 	if (eventListenerClass) {
-		const constEventListenerConstructor = addObjectInitializerConstructor(functionClass, new DeclaredType(eventListenerClass).constPointer());
+		const constEventListenerConstructor = addObjectInitializerConstructor(functionClass, DeclaredType.create(eventListenerClass).constPointer());
 		constEventListenerConstructor.addExtraDependency(eventListenerClass, State.Complete);
-		const eventListenerConstructor = addObjectInitializerConstructor(functionClass, new DeclaredType(eventListenerClass).pointer());
+		const eventListenerConstructor = addObjectInitializerConstructor(functionClass, DeclaredType.create(eventListenerClass).pointer());
 		eventListenerConstructor.addExtraDependency(eventListenerClass, State.Complete);
 	}
 }
@@ -290,11 +290,8 @@ function addDocumentExtensions(parser: Parser, documentClass: Class) {
 	const htmlCollectionOfClass = parser.getGenericRootClass("HTMLCollectionOf");
 
 	if (htmlElementClass && htmlCollectionOfClass) {
-		const htmlElementType = new DeclaredType(htmlElementClass).pointer();
-		const htmlCollectionOfTemplate = new TemplateType(new DeclaredType(htmlCollectionOfClass));
-
-		htmlCollectionOfTemplate.addTypeParameter(htmlElementType);
-
+		const htmlElementType = DeclaredType.create(htmlElementClass).pointer();
+		const htmlCollectionOfTemplate = TemplateType.create(DeclaredType.create(htmlCollectionOfClass), htmlElementType);
 		const htmlCollectionOfType = htmlCollectionOfTemplate.pointer();
 
 		for (const member of documentClass.getMembers()) {
@@ -322,12 +319,12 @@ function addDocumentExtensions(parser: Parser, documentClass: Class) {
 function patchFunctions(parser: Parser) {
 	const objectType = parser.getRootType("Object");
 
-	const explicitStringConstructorKeys = [
-		objectType.constReference().key(),
-		objectType.constPointer().key(),
-		ANY_TYPE.constReference().key(),
-		ANY_TYPE.constPointer().key(),
-	];
+	const explicitStringConstructors = new Set<Type>([
+		objectType.constReference(),
+		objectType.constPointer(),
+		ANY_TYPE.constReference(),
+		ANY_TYPE.constPointer(),
+	]);
 
 	for (const funcObj of parser.getFunctions()) {
 		const classObj = funcObj.getParentDeclaration();
@@ -352,7 +349,7 @@ function patchFunctions(parser: Parser) {
 				if (classObj.getName() === "String") {
 					const params = funcObj.getParameters();
 
-					if (params.length === 1 && explicitStringConstructorKeys.includes(params[0].getType().key())) {
+					if (params.length === 1 && explicitStringConstructors.has(params[0].getType())) {
 						funcObj.addFlags(Flags.Explicit);
 					}
 				}

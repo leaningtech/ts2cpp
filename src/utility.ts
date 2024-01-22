@@ -1,13 +1,8 @@
 // Some utility functions, including:
 // - Parsing command line options.
 // - Benchmarking.
-// - The `removeDuplicates` function.
 
 import { program } from "commander";
-
-export interface Key {
-	key(): string;
-}
 
 export let options: Options;
 
@@ -15,6 +10,7 @@ export interface Options {
 	isPretty: boolean,
 	isDefaultLib: boolean,
 	isVerbose: boolean,
+	isVerboseProgress: boolean,
 	ignoreErrors: boolean,
 	listFiles: boolean,
 	useConstraints: boolean,
@@ -31,6 +27,7 @@ export function parseOptions(): Array<string> {
 		.option("--ignore-errors")
 		.option("--list-files")
 		.option("--verbose, -v")
+		.option("--verbose-progress")
 		.option("--namespace <namespace>")
 		.option("--no-constraints")
 		.option("--full-names");
@@ -43,6 +40,7 @@ export function parseOptions(): Array<string> {
 		isPretty: !!opts.pretty,
 		isDefaultLib: !!opts.defaultLib,
 		isVerbose: !!opts.V,
+		isVerboseProgress: !!opts.verboseProgress,
 		ignoreErrors: !!opts.ignoreErrors,
 		listFiles: !!opts.listFiles,
 		useConstraints: !!opts.constraints,
@@ -65,17 +63,11 @@ export function withTimer<T>(name: string, func: () => T): T {
 
 	if (options.isVerbose) {
 		console.timeEnd(name);
+
+		const memoryUsage = process.memoryUsage();
+
+		console.info(`memory usage: ${JSON.stringify(memoryUsage)}`);
 	}
 
 	return result;
-}
-
-// Returns a new array where every key occurs at most once.
-export function removeDuplicates<T extends Key>(expressions: ReadonlyArray<T>): ReadonlyArray<T> {
-	const keys = new Set;
-
-	return expressions.filter(expression => {
-		const key = expression.key();
-		return !keys.has(key) && keys.add(key);
-	});
 }

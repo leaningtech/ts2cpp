@@ -10,7 +10,7 @@ export abstract class Type extends Expression {
 	// Add qualifier to the type. For example, this turns
 	// `new NamedType("String").qualify(Pointer)` into `String*`.
 	public qualify(qualifier: TypeQualifier): QualifiedType {
-		return new QualifiedType(this, qualifier);
+		return QualifiedType.create(this, qualifier);
 	}
 	
 	public pointer(): QualifiedType {
@@ -39,8 +39,8 @@ export abstract class Type extends Expression {
 
 	// Get a member type of this type. For example
 	// `typename Container::iterator`.
-	public getMemberType(name: string) {
-		return new MemberType(this, name);
+	public getMemberType(name: string): MemberType {
+		return MemberType.create(this, name);
 	}
 
 	// A type always references itself.
@@ -49,6 +49,12 @@ export abstract class Type extends Expression {
 	// `getReferencedTypes` on `String` we *want* it to return `String`.
 	public getReferencedTypes(): ReadonlyArray<Type> {
 		return [this];
+	}
+
+	// Get a name for this type, if available. Subclasses should override this
+	// if they can give a reasonable name for the type.
+	public getName(): string | undefined {
+		return undefined;
 	}
 }
 

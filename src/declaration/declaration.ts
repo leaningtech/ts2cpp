@@ -3,7 +3,7 @@ import { Namespace } from "./namespace.js";
 import { Writer } from "../writer.js";
 import { Type } from "../type/type.js";
 import { NamedType } from "../type/namedType.js";
-import { removeDuplicates } from "../utility.js";
+import { removeDuplicateExpressions } from "../type/expression.js";
 import * as ts from "typescript";
 
 export class ReferenceData {
@@ -195,7 +195,7 @@ export abstract class Declaration extends Namespace {
 	// recursively, including template arguments, pointer element types, etc.
 	// This is used by `removeUnusedTypeParameters`.
 	public getReferencedTypes(): ReadonlyArray<Type> {
-		return removeDuplicates(
+		return removeDuplicateExpressions(
 			this.getChildren()
 				.flatMap(child => [...child.getReferencedTypes()])
 				.concat([...this.getDirectReferencedTypes()])

@@ -6,11 +6,6 @@ import { TemplateType } from "./type/templateType.js";
 import { TypeQualifier } from "./type/qualifiedType.js";
 import { DeclaredType } from "./type/declaredType.js";
 
-const REFERENCE_TYPES = [
-	"String",
-	"Function",
-];
-
 export enum TypeKind {
 	Class,
 	Function,
@@ -36,7 +31,7 @@ export class TypeData {
 	}
 
 	public needsPointer(): boolean {
-		return (this.kind === TypeKind.Class || this.kind === TypeKind.Function) && this.type.key() !== NULLPTR_TYPE.key();
+		return (this.kind === TypeKind.Class || this.kind === TypeKind.Function) && this.type !== NULLPTR_TYPE;
 	}
 
 	public getPointerOrPrimitive(): Type {
@@ -48,7 +43,7 @@ export class TypeData {
 	}
 
 	public getNonVoidPointerOrPrimitive(): Type {
-		if (this.type.key() === VOID_TYPE.key()) {
+		if (this.type === VOID_TYPE) {
 			return ANY_TYPE.pointer();
 		} else {
 			return this.getPointerOrPrimitive();
@@ -59,7 +54,7 @@ export class TypeData {
 export class TypeInfo {
 	private readonly objectType: Type;
 	private readonly types: Array<TypeData> = new Array;
-	private readonly keys: Set<string> = new Set;
+	private readonly keys: Set<Type> = new Set;
 	private optional: boolean = false;
 
 	public constructor(parser: Parser) {
@@ -71,11 +66,9 @@ export class TypeInfo {
 	}
 
 	public addType(type: Type, kind: TypeKind): void {
-		const key = type.key();
-
-		if (!this.keys.has(key)) {
+		if (!this.keys.has(type)) {
 			this.types.push(new TypeData(type, kind));
-			this.keys.add(key);
+			this.keys.add(type);
 		}
 	}
 
@@ -134,12 +127,12 @@ export class TypeInfo {
 					})
 			);
 
-			if (result.key() === ANY_TYPE.key()) {
+			if (result === ANY_TYPE) {
 				return this.objectType.pointer();
 			} else {
 				return result.pointer();
 			}
-		} else if (this.types.length === 1 && this.types[0].getType().key() !== ANY_TYPE.key()) {
+		} else if (this.types.length === 1 && this.types[0].getType() !== ANY_TYPE) {
 			return this.types[0].getPointerOrPrimitive();
 		} else {
 			return this.objectType.pointer();
@@ -151,24 +144,11 @@ export class TypeInfo {
 			if (!type.needsPointer()) {
 				return [type.getType()];
 			} else {
-				const typeType = type.getType();
-				let name;
-
-				if (typeType instanceof NamedType) {
-					name = typeType.getName();
-				} else if (typeType instanceof DeclaredType) {
-					name = typeType.getDeclaration().getName()
-				} else if (typeType instanceof TemplateType) {
-					let inner = typeType.getInner();
-
-					if (inner instanceof NamedType) {
-						name = inner.getName();
-					}
-				}
-
-				if (name && REFERENCE_TYPES.includes(name)) {
+				switch (type.getType().getName()) {
+				case "String":
+				case "Function":
 					return [type.getType().constReference()];
-				} else {
+				default:
 					return [type.getType().constPointer()];
 				}
 			}

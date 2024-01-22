@@ -39,7 +39,7 @@ export class QualifiedType extends Type {
 	private readonly inner: Type;
 	private readonly qualifier: TypeQualifier;
 
-	public constructor(inner: Type, qualifier: TypeQualifier) {
+	private constructor(inner: Type, qualifier: TypeQualifier) {
 		super();
 		this.inner = inner;
 		this.qualifier = qualifier;
@@ -114,5 +114,9 @@ export class QualifiedType extends Type {
 		} else {
 			return this;
 		}
+	}
+
+	public static create(inner: Type, qualifier: TypeQualifier): QualifiedType {
+		return new QualifiedType(inner, qualifier).intern();
 	}
 }

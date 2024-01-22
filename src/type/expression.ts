@@ -2,11 +2,17 @@ import { Dependency, State, Dependencies } from "../target.js";
 import { Type } from "./type.js";
 import { Writer, StringWriter } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
-import { Key, options } from "../utility.js";
+import { options } from "../utility.js";
+
+const EXPRESSIONS = new Map;
 
 // An ordinary C++ expression, like `std::is_same_v<T, double>`. Types are also
 // expressions, see "src/type/type.ts" for more info.
-export abstract class Expression implements Key {
+//
+// Expressions are interned (using the `intern` function), meaning that every
+// distinct expression shares one instance. The `EXPRESSIONS` map tracks
+// expression instances for the purpose of interning.
+export abstract class Expression {
 	// Return all dependencies of this type. Some compound types depend on
 	// multiple declarations, for example, `TArray<String*>*` depends on both
 	// `TArray` and `String`.
@@ -70,4 +76,27 @@ export abstract class Expression implements Key {
 		this.write(writer, namespace);
 		return writer.getString();
 	}
+
+	protected intern(): this {
+		const key = this.key();
+		const value = EXPRESSIONS.get(key);
+
+		if (value) {
+			return value;
+		}
+
+		EXPRESSIONS.set(key, this);
+		return this;
+	}
+
+	// A public version of `intern`, this is called unsafe because it should
+	// only be used with `createUnsafe` functions, which are very dangerous.
+	public internUnsafe(): this {
+		return this.intern();
+	}
 }
+// Returns a new array where every key occurs at most once.
+export function removeDuplicateExpressions<T extends Expression>(expressions: ReadonlyArray<T>): ReadonlyArray<T> {
+	return [...new Set(expressions)];
+}
+

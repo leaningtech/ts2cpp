@@ -1,13 +1,13 @@
 import { Namespace, Flags } from "./namespace.js";
 import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies } from "../target.js";
+import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies, removeDuplicateDeclarations } from "../target.js";
 import { Expression } from "../type/expression.js";
 import { Type } from "../type/type.js";
 import { DeclaredType } from "../type/declaredType.js";
 import { TemplateType } from "../type/templateType.js";
 import { Function } from "./function.js";
 import { Writer } from "../writer.js";
-import { options, removeDuplicates } from "../utility.js";
+import { options } from "../utility.js";
 
 export enum Visibility {
 	Public,
@@ -32,10 +32,6 @@ export class Member implements Target {
 
 	public getDeclaration(): Declaration {
 		return this.declaration;
-	}
-
-	public key(): string {
-		return this.declaration.key();
 	}
 
 	public getVisibility(): Visibility {
@@ -141,8 +137,8 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public removeDuplicates(): void {
-		this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType().key(), base])).values());
-		this.members.splice(0, this.members.length, ...removeDuplicates(this.members));
+		this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType(), base])).values());
+		this.members.splice(0, this.members.length, ...removeDuplicateDeclarations(this.members));
 	}
 
 	public removeMember(name: string): void {
@@ -274,18 +270,17 @@ export class Class extends TemplateDeclaration {
 
 	// Recursively find all base types, and count how many times each one
 	// occurs.
-	private countRecursiveBaseKeys(map: Map<string, number>): void {
+	private countRecursiveBases(map: Map<Type, number>): void {
 		for (const base of this.bases) {
 			const type = base.getInnerType();
-			const key = type.key();
-			const value = map.get(key) ?? 0;
-			map.set(key, value + 1);
+			const value = map.get(type) ?? 0;
+			map.set(type, value + 1);
 
 			if (value === 0 && type instanceof DeclaredType) {
 				const declaration = type.getDeclaration();
 
 				if (declaration instanceof Class) {
-					declaration.countRecursiveBaseKeys(map);
+					declaration.countRecursiveBases(map);
 				}
 			}
 		}
@@ -300,12 +295,12 @@ export class Class extends TemplateDeclaration {
 			.filter(([base, declaration]) => declaration instanceof Class) as [Base, Class][];
 	}
 
-	public computeVirtualBaseClasses(keys?: ReadonlySet<string>): void {
+	public computeVirtualBaseClasses(keys?: ReadonlySet<Type>): void {
 		if (!keys) {
 			// 1. Count how many times each base class appears in the
 			// inheritance tree, recursively.
-			const map = new Map<string, number>;
-			this.countRecursiveBaseKeys(map);
+			const map = new Map<Type, number>;
+			this.countRecursiveBases(map);
 
 			// 2. Filter out bases that only occur once, they do not need to be
 			// virtual.
@@ -319,7 +314,7 @@ export class Class extends TemplateDeclaration {
 		// 3. If any of our base classes occurs anywhere else in the
 		// inheritance tree, mark it as virtual.
 		for (const base of this.bases) {
-			if (keys.has(base.getInnerType().key())) {
+			if (keys.has(base.getInnerType())) {
 				base.setVirtual(true);
 			}
 		}

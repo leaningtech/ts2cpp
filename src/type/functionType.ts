@@ -10,7 +10,7 @@ export class FunctionType extends Type {
 	private readonly returnType: Type;
 	private readonly parameters: Array<Type> = new Array;
 
-	public constructor(returnType: Type) {
+	private constructor(returnType: Type) {
 		super();
 		this.returnType = returnType;
 	}
@@ -21,10 +21,6 @@ export class FunctionType extends Type {
 
 	public getParameters(): ReadonlyArray<Type> {
 		return this.parameters;
-	}
-
-	public addParameter(parameter: Type): void {
-		this.parameters.push(parameter);
 	}
 
 	// The dependencies of a function type are:
@@ -69,5 +65,11 @@ export class FunctionType extends Type {
 			.map(parameter => parameter.key()).join("");
 
 		return `f${this.returnType.key()}${parameters};`;
+	}
+
+	public static create(returnType: Type, ...parameters: ReadonlyArray<Type>): FunctionType {
+		const result = new FunctionType(returnType);
+		result.parameters.push(...parameters);
+		return result.intern();
 	}
 }

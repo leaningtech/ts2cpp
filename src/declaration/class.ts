@@ -368,6 +368,7 @@ export class Class extends TemplateDeclaration {
 		}
 	}
 
+	// Generate the list of `usingDeclarations`.
 	public useBaseMembers(): void {
 		// A list of which base members to generate using declarations for.
 		//

@@ -190,33 +190,6 @@ export class TemplateType extends Type {
 		return TemplateType.create(ARRAY_ELEMENT_TYPE, array);
 	}
 
-	// Construct a `_Union<T...>` template.
-	//
-	// Any duplicates in the argument list are removed first.
-	public static union(...types: ReadonlyArray<Type>): Type {
-		const typeParameters = [];
-
-		for (const type of removeDuplicateExpressions(types)) {
-			if (type === ANY_TYPE.pointer()) {
-				return ANY_TYPE;
-			}
-
-			typeParameters.push(type);
-		}
-
-		return TemplateType.create(UNION_TYPE, ...typeParameters);
-	}
-
-	// Construct a `std::is_same_v<T, U>` template.
-	public static isSame(lhs: Type, rhs: Type): TemplateType {
-		return TemplateType.create(IS_SAME, lhs, rhs);
-	}
-
-	// Construct a `std::is_convertible_v<T, U>` template.
-	public static isConvertible(from: Type, to: Type): TemplateType {
-		return TemplateType.create(IS_CONVERTIBLE, from, to);
-	}
-
 	// Construct a `IsAcceptableV<T, U...>` template.
 	//
 	// If U includes the `_Any` type, we do not construct a `IsAcceptableV`

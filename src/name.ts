@@ -174,7 +174,7 @@ export function escapeName(name: string): string {
 	return result;
 }
 
-type Name = ts.Identifier | ts.BindingName | ts.ModuleName | ts.PropertyName;
+export type Name = ts.Identifier | ts.BindingName | ts.ModuleName | ts.PropertyName;
 
 // Returns both the unescaped and escaped name of an identifier.
 export function getName(identifier?: Name): [string, string] {

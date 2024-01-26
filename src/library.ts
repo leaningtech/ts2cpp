@@ -398,7 +398,7 @@ export class LibraryWriter {
 			const includes = file.getIncludes()
 				.concat(this.library.getGlobalIncludes());
 			const guard = file.getName()
-				.replace(/[\/\.]/g, "_")
+				.replace(/[\/\.\-]/g, "_")
 				.toUpperCase();
 
 			writer.write("#ifndef");

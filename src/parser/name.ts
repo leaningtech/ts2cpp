@@ -174,10 +174,8 @@ export function escapeName(name: string): string {
 	return result;
 }
 
-export type Name = ts.Identifier | ts.BindingName | ts.ModuleName | ts.PropertyName;
-
-// Returns both the unescaped and escaped name of an identifier.
-export function getName(identifier?: Name): [string, string] {
-	const name = identifier!.getText();
+// Returns both the unescaped and escaped name of a declaration.
+export function getName(declaration: ts.NamedDeclaration): [string, string] {
+	const name = declaration.name!.getText();
 	return [name, escapeName(name)];
 }

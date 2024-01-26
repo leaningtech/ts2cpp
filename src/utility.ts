@@ -44,7 +44,7 @@ export function parseOptions(): Array<string> {
 		ignoreErrors: !!opts.ignoreErrors,
 		listFiles: !!opts.listFiles,
 		useConstraints: !!opts.constraints,
-		useFullNames: !!opts.fullnames,
+		useFullNames: !!opts.fullNames,
 		outputFile: opts.O,
 		namespace: opts.namespace,
 	};

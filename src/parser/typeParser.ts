@@ -1,10 +1,10 @@
 import { Parser } from "./parser.js";
-import { Type } from "./type/type.js";
+import { Type } from "../type/type.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
-import { QualifiedType } from "./type/qualifiedType.js";
-import { TemplateType } from "./type/templateType.js";
-import { NULLPTR_TYPE, FUNCTION_TYPE, ANY_TYPE, VOID_TYPE, DOUBLE_TYPE, BOOL_TYPE } from "./type/namedType.js";
-import { FunctionType } from "./type/functionType.js";
+import { QualifiedType } from "../type/qualifiedType.js";
+import { TemplateType } from "../type/templateType.js";
+import { NULLPTR_TYPE, FUNCTION_TYPE, ANY_TYPE, VOID_TYPE, DOUBLE_TYPE, BOOL_TYPE } from "../type/namedType.js";
+import { FunctionType } from "../type/functionType.js";
 import { asTypeReference } from "./generics.js";
 import * as ts from "typescript";
 
@@ -103,7 +103,7 @@ export class TypeParser {
 			const templateType = TemplateType.createUnsafe(genericTarget);
 			this.visited.set(type, templateType);
 
-			this.parser.getTypeChecker().getTypeArguments(typeReference)
+			this.parser.getTypeArguments(typeReference)
 				.filter(typeArgument => !(typeArgument as any).isThisType)
 				.map(typeArgument => this.getInfo(typeArgument).asTypeParameter())
 				.forEach(type => templateType.addTypeParameterUnsafe(type));
@@ -126,11 +126,13 @@ export class TypeParser {
 
 	public getNodeInfo(node?: ts.TypeNode): TypeInfo {
 		if (node) {
-			const type = this.parser.getTypeChecker().getTypeFromTypeNode(node);
+			const type = this.parser.getTypeFromTypeNode(node);
 			return this.getInfo(ts.isThisTypeNode(node) ? type.getConstraint()! : type);
 		} else {
-			const type = this.parser.getTypeChecker().getAnyType();
-			return this.getInfo(type);
+			const info = new TypeInfo;
+			info.addType(ANY_TYPE, TypeKind.Class);
+			info.setOptional();
+			return info;
 		}
 	}
 
@@ -139,7 +141,7 @@ export class TypeParser {
 
 		if (typeReference) {
 			const result = new Map(
-				this.parser.getTypeChecker().getTypeArguments(typeReference)
+				this.parser.getTypeArguments(typeReference)
 					.map(typeArgument => this.getInfo(typeArgument).asTypeParameter())
 					.map((type, i) => [typeReference.target.typeParameters![i], type])
 			);

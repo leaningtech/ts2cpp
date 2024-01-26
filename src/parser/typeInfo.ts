@@ -9,12 +9,12 @@
 // converted to pointer types, this is the file to change.
 
 import { Parser } from "./parser.js";
-import { Expression, removeDuplicateExpressions } from "./type/expression.js";
-import { Type } from "./type/type.js";
-import { NamedType, ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "./type/namedType.js";
-import { TemplateType } from "./type/templateType.js";
-import { TypeQualifier } from "./type/qualifiedType.js";
-import { DeclaredType } from "./type/declaredType.js";
+import { Expression, removeDuplicateExpressions } from "../type/expression.js";
+import { Type } from "../type/type.js";
+import { NamedType, ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "../type/namedType.js";
+import { TemplateType } from "../type/templateType.js";
+import { TypeQualifier } from "../type/qualifiedType.js";
+import { DeclaredType } from "../type/declaredType.js";
 
 export enum TypeKind {
 	Class,

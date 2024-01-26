@@ -58,7 +58,7 @@ export class Namespace {
 
 	// The path of a declaration starting at the namespace `namespace`.
 	public getPathSafe(namespace?: Namespace): string {
-		return this.parent && this.parent !== namespace ? `${this.parent.getPath(namespace)}::${this.name}` : this.name;
+		return this.parent && this.parent !== namespace ? `${this.parent.getPathSafe(namespace)}::${this.name}` : this.name;
 	}
 
 	// `getPathSafe` generates a full path when this is not a descendant of

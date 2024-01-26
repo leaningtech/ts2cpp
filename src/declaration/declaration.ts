@@ -49,7 +49,7 @@ export class ReferenceData {
 //
 // Like namespaces, `Declaration` does not store its own children, but it does
 // provide an interface for querying the children. Currently the only type of
-// declaration with children in `Class` (in "src/declaration/class.ts").
+// declaration with children is `Class` (in "src/declaration/class.ts").
 export abstract class Declaration extends Namespace {
 	private referenceData?: ReferenceData;
 	private id: number;
@@ -74,8 +74,8 @@ export abstract class Declaration extends Namespace {
 		this.file = file;
 	}
 
-	public setDecl(decl: ts.Node): void {
-		this.file = decl.getSourceFile().fileName;
+	public setDeclaration(declaration: ts.Node): void {
+		this.file = declaration.getSourceFile().fileName;
 	}
 
 	// Return the first parent that is not a declaration.
@@ -257,6 +257,11 @@ export class TypeParameter {
 export abstract class TemplateDeclaration extends Declaration {
 	private typeParameters?: Array<TypeParameter>;
 
+	// For some declarations we generate both basic and generic (prefixed with
+	// "T") versions. For the generic versions of these declarations,
+	// `basicVersion` stores a reference to the basic version.
+	private basicVersion?: this;
+
 	public getTypeParameters(): ReadonlyArray<TypeParameter> {
 		return this.typeParameters ?? [];
 	}
@@ -274,6 +279,18 @@ export abstract class TemplateDeclaration extends Declaration {
 	// We only check the last parameter for if it's variadic.
 	public isVariadic(): boolean {
 		return !!this.typeParameters && this.typeParameters.length > 0 && this.typeParameters[this.typeParameters.length - 1]?.isVariadic();
+	}
+
+	public setBasicVersion(declaration: this): void {
+		this.basicVersion = declaration;
+	}
+
+	public getBasicVersion(): this | undefined {
+		return this.basicVersion;
+	}
+
+	public isGenericVersion(): boolean {
+		return !!this.basicVersion;
 	}
 
 	public static writeParameters(writer: Writer, parameters: ReadonlyArray<TypeParameter>): void {

@@ -7,7 +7,7 @@ import { DeclaredType } from "./type/declaredType.js";
 import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./type/namedType.js";
 import { QualifiedType, TypeQualifier } from "./type/qualifiedType.js";
 import { TemplateType } from "./type/templateType.js";
-import { Parser } from "./parser.js";
+import { Parser } from "./parser/parser.js";
 import { Library } from "./library.js";
 import { State } from "./target.js";
 

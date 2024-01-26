@@ -224,4 +224,10 @@ export class TemplateType extends Type {
 
 		return TemplateType.create(IS_ACCEPTABLE_ARGS, from, ...removeDuplicateExpressions(to));
 	}
+
+	// Construct an `std::enable_if_t` template whose condition is the
+	// conjunction of all given constraints.
+	public static makeConstraint(type: Type, constraints: ReadonlySet<Expression>): Type {
+		return TemplateType.enableIf(CompoundExpression.and(...constraints), type);
+	}
 }

@@ -1,4 +1,4 @@
-import { Parser } from "./parser.js";
+import { Parser } from "./parser/parser.js";
 import { catchErrors } from "./error.js";
 import { Library } from "./library.js";
 import { withTimer, parseOptions, options } from "./utility.js";

@@ -1,9 +1,9 @@
-import { Name, getName } from "./name.js";
-import { Class, Visibility } from "./declaration/class.js";
-import { TypeAlias } from "./declaration/typeAlias.js";
+import { getName } from "./name.js";
+import { Class, Visibility } from "../declaration/class.js";
+import { TypeAlias } from "../declaration/typeAlias.js";
 import { Parser } from "./parser.js";
-import { VOID_TYPE } from "./type/namedType.js";
-import { DeclaredType } from "./type/declaredType.js";
+import { VOID_TYPE } from "../type/namedType.js";
+import { DeclaredType } from "../type/declaredType.js";
 import * as ts from "typescript";
 
 export type ClassDeclaration = ts.InterfaceDeclaration | ts.ClassDeclaration;
@@ -24,14 +24,14 @@ export class Node {
 		return this.children?.size ?? 0;
 	}
 
-	public getOrInsert(name?: Name): Child {
-		const [interfaceName, escapedName] = getName(name);
-		let node = this.getChild(escapedName);
+	private getOrInsert(declaration: ts.NamedDeclaration): Child {
+		const [_, name] = getName(declaration);
+		let node = this.getChild(name);
 
 		if (!node) {
-			node = new Child(interfaceName, escapedName);
+			node = new Child(name);
 			this.children ??= new Map;
-			this.children.set(escapedName, node);
+			this.children.set(name, node);
 		}
 
 		return node;
@@ -40,39 +40,40 @@ export class Node {
 	public discover(parser: Parser, parent: ts.Node): void {
 		ts.forEachChild(parent, node => {
 			if (ts.isInterfaceDeclaration(node)) {
-				const child = this.getOrInsert(node.name);
+				const child = this.getOrInsert(node);
 				child.interfaceDeclarations ??= [];
 				child.interfaceDeclarations.push(node);
 				child.discoverClass(parser, node);
 			} else if (ts.isFunctionDeclaration(node)) {
-				const child = this.getOrInsert(node.name);
+				const child = this.getOrInsert(node);
 				child.functionDeclarations ??= [];
 				child.functionDeclarations.push(node);
 			} else if (ts.isVariableStatement(node)) {
 				if (parser.includesDeclaration(node)) {
 					for (const declaration of node.declarationList.declarations) {
-						const child = this.getOrInsert(declaration.name);
+						const child = this.getOrInsert(declaration);
 						child.variableDeclaration = declaration;
 					}
 				}
 			} else if (ts.isTypeAliasDeclaration(node)) {
-				const child = this.getOrInsert(node.name);
+				const child = this.getOrInsert(node);
 				child.typeAliasDeclaration = node;
 				child.basicTypeAlias = new TypeAlias(child.getName(), VOID_TYPE);
 
 				if (node.typeParameters && node.typeParameters.length > 0) {
 					child.genericTypeAlias = new TypeAlias(`T${child.getName()}`, VOID_TYPE);
+					child.genericTypeAlias.setBasicVersion(child.basicTypeAlias);
 				}
 			} else if (ts.isModuleDeclaration(node)) {
 				if (node.name.text === "global") {
 					parser.getRootNode().discover(parser, node.body!);
 				} else {
-					const child = this.getOrInsert(node.name);
+					const child = this.getOrInsert(node);
 					child.moduleDeclaration = node;
 					child.discover(parser, node.body!);
 				}
 			} else if (ts.isClassDeclaration(node)) {
-				const child = this.getOrInsert(node.name);
+				const child = this.getOrInsert(node);
 				child.classDeclaration = node;
 				child.discoverClass(parser, node);
 			}
@@ -88,7 +89,6 @@ export class Node {
 }
 
 export class Child extends Node {
-	private readonly interfaceName: string;
 	private readonly name: string;
 	public interfaceDeclarations?: Array<ts.InterfaceDeclaration>;
 	public functionDeclarations?: Array<ts.FunctionDeclaration>;
@@ -101,9 +101,8 @@ export class Child extends Node {
 	public basicTypeAlias?: TypeAlias;
 	public genericTypeAlias?: TypeAlias;
 
-	public constructor(interfaceName: string, name: string) {
+	public constructor(name: string) {
 		super();
-		this.interfaceName = interfaceName;
 		this.name = name;
 	}
 
@@ -125,14 +124,14 @@ export class Child extends Node {
 
 	public discoverClass(parser: Parser, node: ts.Node): void {
 		if (!this.basicClass) {
-			const typeChecker = parser.getTypeChecker();
-			const type = typeChecker.getTypeAtLocation(node) as ts.InterfaceType;
+			const type = parser.getTypeAtLocation(node) as ts.InterfaceType;
 			this.basicClass = new Class(this.name);
 			const basicType = DeclaredType.create(this.basicClass);
 			parser.addBasicDeclaredClass(type, basicType);
 
 			if (type.typeParameters && type.typeParameters.length > 0) {
 				this.genericClass = new Class(`T${this.name}`);
+				this.genericClass.setBasicVersion(this.basicClass);
 				this.genericClass.addBase(basicType, Visibility.Public);
 				parser.addGenericDeclaredClass(type, DeclaredType.create(this.genericClass));
 			}

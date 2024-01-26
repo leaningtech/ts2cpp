@@ -111,7 +111,7 @@ export class Class extends TemplateDeclaration {
 		if (declaration instanceof Function || declaration.getName() !== this.getName()) {
 			this.members ??= [];
 			this.members.push(new Member(declaration, visibility));
-			declaration.setParent(this);
+			declaration.setParent(this); // TODO: remove
 		}
 	}
 
@@ -149,19 +149,12 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public removeDuplicates(): void {
-		if (this.bases) {
-			this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType(), base])).values());
-		}
-
-		if (this.members) {
-			this.members.splice(0, this.members.length, ...removeDuplicateDeclarations(this.members));
-		}
+		this.bases && this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType(), base])).values());
+		this.members && this.members.splice(0, this.members.length, ...removeDuplicateDeclarations(this.members));
 	}
 
 	public removeMember(name: string): void {
-		if (this.members) {
-			this.members.splice(0, this.members.length, ...this.members.filter(member => member.getDeclaration().getName() !== name));
-		}
+		this.members && this.members.splice(0, this.members.length, ...this.members.filter(member => member.getDeclaration().getName() !== name));
 	}
 
 	public maxState(): State {

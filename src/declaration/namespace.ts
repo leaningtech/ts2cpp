@@ -44,7 +44,7 @@ export class Namespace {
 		this.name = name;
 	}
 
-	public setInterfaceName(name: string): void {
+	public setInterfaceName(name?: string): void {
 		this.interfaceName = name;
 	}
 

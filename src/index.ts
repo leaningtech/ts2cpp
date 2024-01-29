@@ -82,7 +82,7 @@ if (!options.isDefaultLib) {
 
 // 7. Convert the typescript AST into a C++ AST.
 const parser = withTimer("parse", () => {
-	return new Parser(tsProgram, library, options.isDefaultLib);
+	return new Parser(tsProgram, library).run(options.isDefaultLib);
 });
 
 // 8. Write everything into C++ headers.

@@ -23,7 +23,7 @@ function isPropertyLike(node: ts.Node): node is ts.PropertySignature | ts.Proper
 	return ts.isPropertySignature(node) || ts.isPropertyDeclaration(node);
 }
 
-function isConstructorLike(node: ts.Node): node is ts.InterfaceDeclaration | ts.ClassDeclaration | ts.TypeLiteralNode {
+function isConstructorClassLike(node: ts.Node): node is ts.InterfaceDeclaration | ts.ClassDeclaration | ts.TypeLiteralNode {
 	return ts.isInterfaceDeclaration(node) || ts.isClassDeclaration(node) || ts.isTypeLiteralNode(node);
 }
 
@@ -59,7 +59,7 @@ function parseConstructor(parser: Parser, node: Child, declaration: ts.VariableD
 
 	const members = (symbol?.declarations ?? [])
 		.filter(declaration => parser.includesDeclaration(declaration))
-		.filter(declaration => isConstructorLike(declaration))
+		.filter(declaration => isConstructorClassLike(declaration))
 		.flatMap(declaration => (declaration as any).members);
 
 	for (const member of members) {
@@ -103,8 +103,6 @@ export function parseClass(parser: Parser, node: Child, object: Class, generics:
 	const heritageTypes = includedDeclarations
 		.flatMap(declaration => declaration.heritageClauses ?? [])
 		.flatMap(heritageClause => heritageClause.types);
-
-	const basicVersion = object.getBasicVersion();
 
 	for (const heritageType of heritageTypes) {
 		const type = parser.getTypeAtLocation(heritageType);

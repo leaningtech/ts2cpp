@@ -3,18 +3,24 @@ import { Generics } from "./generics.js";
 import { Namespace, Flags } from "../declaration/namespace.js";
 import { Class } from "../declaration/class.js";
 import { VOID_TYPE } from "../type/namedType.js";
+import { getName } from "./name.js";
+import { Variable } from "../declaration/variable.js";
 import * as ts from "typescript";
 
 export function parseVariable(parser: Parser, declaration: ts.VariableDeclaration | ts.PropertySignature | ts.PropertyDeclaration, generics: Generics, parent?: Namespace): void {
-	const variable = parser.createVar(declaration, generics, parent instanceof Class);
+	const member = parent instanceof Class;
+	const [interfaceName, escapedName] = getName(declaration);
+	const info = parser.getTypeNodeInfo(declaration.type, generics);
 
-	if (variable.getType() !== VOID_TYPE) {
-		if (parent instanceof Class) {
-			variable.addFlags(Flags.Static);
-		} else {
-			variable.addFlags(Flags.Extern);
-		}
+	if (ts.isPropertySignature(declaration) && declaration.questionToken) {
+		info.setOptional();
 	}
 
-	parser.addDeclaration(variable, parent);
+	const object = new Variable(escapedName, info.asVariableType(member));
+
+	if (object.getType() !== VOID_TYPE) {
+		object.addFlags(member ? Flags.Static : Flags.Extern);
+		object.setDeclaration(declaration);
+		parser.addDeclaration(object, parent);
+	}
 }

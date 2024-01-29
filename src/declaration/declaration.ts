@@ -57,6 +57,10 @@ export abstract class Declaration extends Namespace {
 
 	private static count: number = 0;
 
+	public static getCount(): number {
+		return Declaration.count;
+	}
+
 	public constructor(name: string, parent?: Namespace) {
 		super(name, parent);
 		this.id = Declaration.count++;

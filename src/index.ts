@@ -2,6 +2,8 @@ import { Parser } from "./parser/parser.js";
 import { catchErrors } from "./error.js";
 import { Library } from "./library.js";
 import { withTimer, parseOptions, options } from "./utility.js";
+import { Declaration } from "./declaration/declaration.js";
+import { Expression } from "./type/expression.js";
 import * as ts from "typescript";
 
 // 1. Parse command line options.
@@ -91,3 +93,9 @@ catchErrors(() => {
 		library.write({ pretty: options.isPretty });
 	});
 });
+
+// 9. Write debug info in verbose mode.
+if (options.isVerbose) {
+	console.log(`declaration count: ${Declaration.getCount()}`);
+	console.log(`expression count: ${Expression.getCount()}`);
+}

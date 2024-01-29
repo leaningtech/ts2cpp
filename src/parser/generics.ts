@@ -3,21 +3,19 @@ import { Type } from "../type/type.js";
 import { NamedType } from "../type/namedType.js";
 import { Expression } from "../type/expression.js";
 import { options } from "../utility.js";
+import { TypeInfo, TypeKind } from "./typeInfo.js";
 import * as ts from "typescript";
 
-export function asTypeReference(type: ts.Type): ts.TypeReference | undefined {
-	if (type.flags & ts.TypeFlags.Object) {
-		const objectType = type as ts.ObjectType;
-
-		if (objectType.objectFlags & ts.ObjectFlags.Reference) {
-			return objectType as ts.TypeReference;
-		}
-	}
+export function isObjectType(type: ts.Type): type is ts.ObjectType {
+	return !!(type.flags & ts.TypeFlags.Object);
 }
 
-export function *getUsedTypes(parser: Parser, type: ts.Type): IterableIterator<ts.Type> {
+export function isTypeReference(type: ts.Type): type is ts.TypeReference {
+	return isObjectType(type) && !!(type.objectFlags & ts.ObjectFlags.Reference);
+}
+
+function *getUsedTypes(parser: Parser, type: ts.Type): IterableIterator<ts.Type> {
 	const callSignatures = type.getCallSignatures();
-	const typeReference = asTypeReference(type);
 
 	if (type.isClassOrInterface()) {
 		yield *type.typeParameters ?? [];
@@ -32,13 +30,13 @@ export function *getUsedTypes(parser: Parser, type: ts.Type): IterableIterator<t
 		}
 	} else if (type.isUnion() || type.isIntersection()) {
 		yield *type.types;
-	} else if (typeReference) {
-		yield typeReference.target;
-		yield *parser.getTypeArguments(typeReference);
+	} else if (isTypeReference(type)) {
+		yield type.target;
+		yield *parser.getTypeArguments(type);
 	}
 }
 
-export function usesType(parser: Parser, types: ReadonlySet<ts.Type>, other: ts.Type): boolean {
+function usesType(parser: Parser, types: ReadonlySet<ts.Type>, other: ts.Type): boolean {
 	const queue = [...types];
 	const visited = new Set(queue);
 
@@ -72,26 +70,26 @@ function isClassLike(node: ts.Node): boolean {
 
 export class Generics {
 	private id: number;
-	private types?: Map<ts.Type, Type>;
+	private types?: Map<ts.Type, TypeInfo>;
 
-	public constructor(id?: number, types?: ReadonlyMap<ts.Type, Type>) {
+	public constructor(id?: number, types?: ReadonlyMap<ts.Type, TypeInfo>) {
 		this.id = id ?? 0;
 		this.types = types && new Map(types);
 	}
 
-	public clone(types?: ReadonlyMap<ts.Type, Type>): Generics {
+	public clone(types?: ReadonlyMap<ts.Type, TypeInfo>): Generics {
 		return new Generics(this.id, types ?? this.types);
 	}
 
-	public getTypes(): ReadonlyMap<ts.Type, Type> {
+	public getTypes(): ReadonlyMap<ts.Type, TypeInfo> {
 		return this.types ?? new Map;
 	}
 	
-	public getType(type: ts.Type): Type | undefined {
+	private getType(type: ts.Type): TypeInfo | undefined {
 		return this.types?.get(type);
 	}
 
-	public addType(type: ts.Type, override: Type): void {
+	private addType(type: ts.Type, override: TypeInfo): void {
 		this.types ??= new Map;
 		this.types.set(type, override);
 	}
@@ -119,13 +117,13 @@ export class Generics {
 
 				if (isClassLike(declaration) || usesType(parser, returnTypes, type)) {
 					types[i] ??= NamedType.create(`_T${this.id++}`);
-					this.addType(type, types[i]);
+					this.addType(type, new TypeInfo(types[i], TypeKind.Generic));
 
 					if (info && options.useConstraints) {
 						constraints.add(info.asTypeConstraint(types[i]));
 					}
 				} else if (info) {
-					this.addType(type, info.asTypeParameter());
+					this.addType(type, info);
 				}
 			}
 		}
@@ -143,7 +141,7 @@ export class Generics {
 				const info = constraint && parser.getTypeNodeInfo(constraint, this);
 
 				if (info && !this.getType(type)) {
-					this.addType(type, info.asTypeParameter());
+					this.addType(type, info);
 				}
 			}
 		}

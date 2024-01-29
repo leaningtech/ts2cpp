@@ -185,7 +185,7 @@ export class Parser {
 		return new TypeParser(this, generics.getTypes()).getNodeInfo(node);
 	}
 
-	public getSymbol(type: ts.Type, generics: Generics): [ts.Symbol | undefined, Map<ts.Type, Type>] {
+	public getSymbol(type: ts.Type, generics: Generics): [ts.Symbol | undefined, Map<ts.Type, TypeInfo>] {
 		return new TypeParser(this, generics.getTypes()).getSymbol(type);
 	}
 

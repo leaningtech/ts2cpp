@@ -111,7 +111,6 @@ export class Class extends TemplateDeclaration {
 		if (declaration instanceof Function || declaration.getName() !== this.getName()) {
 			this.members ??= [];
 			this.members.push(new Member(declaration, visibility));
-			declaration.setParent(this); // TODO: remove
 		}
 	}
 

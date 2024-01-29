@@ -98,7 +98,7 @@ export class TypeInfo {
 	// list contains one entry for every type in the union. Depending on where
 	// the type is used, this might get converted into a set of overloads,
 	// a `_Union` type, or a type erased type.
-	private readonly types: Array<TypeData> = new Array;
+	private types?: Array<TypeData>;
 
 	// Will be set if the type is optional. This is the case when the type
 	// is a union type and it contains an `undefined` member. Or when it is
@@ -106,8 +106,14 @@ export class TypeInfo {
 	// a question mark `?` character.
 	private optional: boolean = false;
 
+	public constructor(type?: Type, kind?: TypeKind) {
+		if (type && kind !== undefined) {
+			this.addType(type, kind);
+		}
+	}
+
 	public getTypes(): ReadonlyArray<TypeData> {
-		return this.types;
+		return this.types ?? [];
 	}
 
 	// In some cases, two different typescript types can convert to the same
@@ -116,8 +122,19 @@ export class TypeInfo {
 	// types. This is especially common for unions of literal types. For
 	// example, `"mousemove" | "mousedown" | "mouseup" | ...`.
 	public addType(type: Type, kind: TypeKind): void {
-		if (!this.types.some(t => t.getType() === type)) {
+		if (!this.types || !this.types.some(t => t.getType() === type)) {
+			this.types ??= [];
 			this.types.push(new TypeData(type, kind));
+		}
+	}
+
+	public merge(info: TypeInfo): void {
+		if (info.optional) {
+			this.setOptional();
+		}
+
+		for (const data of info.getTypes()) {
+			this.addType(data.getType(), data.getKind());
 		}
 	}
 
@@ -134,8 +151,8 @@ export class TypeInfo {
 	// where we cannot meaningfully handle multiple types, such as when this
 	// type is used as the type of a variable.
 	public getSingle(): TypeData {
-		if (this.types.length === 1) {
-			return this.types[0];
+		if (this.getTypes().length === 1) {
+			return this.getTypes()[0];
 		} else {
 			return new TypeData(ANY_TYPE, TypeKind.Class);
 		}
@@ -146,8 +163,8 @@ export class TypeInfo {
 	// multiple types, such as generating overloads when this type is used as
 	// a function parameter.
 	public getPlural(): ReadonlyArray<TypeData> {
-		if (this.types.length > 0) {
-			return this.types;
+		if (this.getTypes().length > 0) {
+			return this.getTypes();
 		} else {
 			return [new TypeData(ANY_TYPE, TypeKind.Class)];
 		}
@@ -195,7 +212,7 @@ export class TypeInfo {
 	// and which shouldn't.
 	public asReturnType(parser: Parser): Type {
 		const types = removeDuplicateExpressions(
-			this.types
+			this.getTypes()
 				.filter(type => type.getKind() !== TypeKind.Function)
 				.map(type => type.getPointerOrPrimitive())
 		);

@@ -75,7 +75,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 		returnType = TemplateType.makeConstraint(returnType, constraints);
 	}
 
-	function createFunction(overload: ReadonlyArray<Parameter>, name: string, type?: Type): Function {
+	function createFunction(overload: ReadonlyArray<Parameter>, name: string, type?: Type, flags?: Flags): Function {
 		const object = new Function(name, type);
 		let variadicConstraint;
 		const forwardParameters = [];
@@ -115,6 +115,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 		object.setInterfaceName(interfaceName);
 		object.setDeclaration(declaration);
 		object.removeUnusedTypeParameters();
+		object.addFlags(flags ?? 0 as Flags);
 		parser.addDeclaration(object, parent);
 
 		if (parent instanceof Class && object.isVariadic() && !isConstructorLike(declaration)) {
@@ -135,6 +136,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 			helper.addVariadicTypeParameter("_Args");
 			helper.addParameter(ARGS.expand(), "data");
 			helper.addFlags(object.getFlags());
+			helper.setParent(parent);
 			parser.registerDeclaration(helper);
 			parent.addMember(helper, Visibility.Private);
 		}
@@ -144,8 +146,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 
 	for (const overload of parseOverloads(parser, declaration, generics)) {
 		if (isIndexLike(declaration)) {
-			const object = createFunction(overload, "operator[]", returnType);
-			object.addFlags(Flags.Const);
+			const object = createFunction(overload, "operator[]", returnType, Flags.Const);
 
 			if (overload.length === 1 && overload[0].type === DOUBLE_TYPE) {
 				const object = createFunction(overload, "operator[]", returnType!.reference());

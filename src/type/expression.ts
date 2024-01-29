@@ -13,6 +13,10 @@ const EXPRESSIONS = new Map;
 // distinct expression shares one instance. The `EXPRESSIONS` map tracks
 // expression instances for the purpose of interning.
 export abstract class Expression {
+	public static getCount(): number {
+		return EXPRESSIONS.size;
+	}
+
 	// Return all dependencies of this type. Some compound types depend on
 	// multiple declarations, for example, `TArray<String*>*` depends on both
 	// `TArray` and `String`.

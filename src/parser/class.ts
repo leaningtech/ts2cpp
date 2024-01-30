@@ -37,6 +37,7 @@ function parseProperty(parser: Parser, declaration: ts.PropertySignature | ts.Pr
 	
 	const func = new Function(`get_${escapedName}`, info.asReturnType(parser));
 	func.setInterfaceName(`get_${interfaceName}`);
+	func.setDeclaration(declaration);
 	parser.addDeclaration(func, parent);
 
 	const readonly = (declaration.modifiers ?? [])
@@ -46,6 +47,7 @@ function parseProperty(parser: Parser, declaration: ts.PropertySignature | ts.Pr
 		for (const parameter of info.asParameterTypes()) {
 			const func = new Function(`set_${escapedName}`, VOID_TYPE);
 			func.setInterfaceName(`set_${interfaceName}`);
+			func.setDeclaration(declaration);
 			func.addParameter(parameter, escapedName);
 			parser.addDeclaration(func, parent);
 		}

@@ -35,7 +35,7 @@ export function parseLibrary(parser: Parser, node: Node, parent?: Namespace): vo
 			for (const declaration of functionDeclarations) {
 				parseFunction(parser, declaration, EMPTY, false, parent);
 
-				if (parent === parser.getRootNamespace() && parser.includesDeclaration(declaration)) {
+				if (parent === parser.getRootNamespace()) {
 					for (const globalClass of getGlobalClasses(parser)) {
 						parseFunction(parser, declaration, EMPTY, false, globalClass);
 					}

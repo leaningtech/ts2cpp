@@ -6,6 +6,10 @@ import { TemplateType } from "../type/templateType.js";
 import * as ts from "typescript";
 
 export function parseTypeAlias(parser: Parser, declaration: ts.TypeAliasDeclaration, object: TypeAlias, generics: Generics, parent?: Namespace): void {
+	if (!parser.includesDeclaration(declaration)) {
+		return;
+	}
+
 	generics = generics.clone();
 	
 	if (object.isGenericVersion()) {

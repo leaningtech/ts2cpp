@@ -8,6 +8,10 @@ import { Variable } from "../declaration/variable.js";
 import * as ts from "typescript";
 
 export function parseVariable(parser: Parser, declaration: ts.VariableDeclaration | ts.PropertySignature | ts.PropertyDeclaration, generics: Generics, parent?: Namespace): void {
+	if (!parser.includesDeclaration(declaration)) {
+		return;
+	}
+
 	const member = parent instanceof Class;
 	const [interfaceName, escapedName] = getName(declaration);
 	const info = parser.getTypeNodeInfo(declaration.type, generics);

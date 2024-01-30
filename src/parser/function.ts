@@ -55,6 +55,10 @@ function *parseOverloads(parser: Parser, declaration: ts.SignatureDeclarationBas
 }
 
 export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarationBase, generics: Generics, isStatic: boolean, parent?: Namespace): void {
+	if (!parser.includesDeclaration(declaration)) {
+		return;
+	}
+
 	const parentClass = parent instanceof Class ? parent : undefined;
 	const forward = parentClass?.getBasicVersion()?.getName();
 	let interfaceName: string | undefined
@@ -133,6 +137,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 
 			object.addAttribute("gnu::always_inline");
 			helper.setInterfaceName(interfaceName);
+			helper.setDeclaration(declaration);
 			helper.addVariadicTypeParameter("_Args");
 			helper.addParameter(ARGS.expand(), "data");
 			helper.addFlags(object.getFlags());

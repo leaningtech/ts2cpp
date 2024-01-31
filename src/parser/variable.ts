@@ -8,23 +8,46 @@ import { Variable } from "../declaration/variable.js";
 import * as ts from "typescript";
 
 export function parseVariable(parser: Parser, declaration: ts.VariableDeclaration | ts.PropertySignature | ts.PropertyDeclaration, generics: Generics, parent?: Namespace): void {
+	// 1. If we're not going to emit this declaration anyways, there's no point
+	// in parsing it.
 	if (!parser.includesDeclaration(declaration)) {
 		return;
 	}
 
-	const member = parent instanceof Class;
+	const isMember = parent instanceof Class;
 	const [interfaceName, escapedName] = getName(declaration);
+
+	// 2. Parse the type of the variable.
 	const info = parser.getTypeNodeInfo(declaration.type, generics);
 
+	// 3. If this is an optional property, we mark the type as optional, this
+	// may have an effect on the qualifiers or attributes of the final C++
+	// type. An example of an optional property:
+	// ```
+	// declare interface Foo {
+	//     bar?: number;
+	// }
+	// ```
 	if (ts.isPropertySignature(declaration) && declaration.questionToken) {
 		info.setOptional();
 	}
 
-	const object = new Variable(escapedName, info.asVariableType(member));
+	// 4. Create the variable object.
+	const object = new Variable(escapedName, info.asVariableType(isMember));
 
-	if (object.getType() !== VOID_TYPE) {
-		object.addFlags(member ? Flags.Static : Flags.Extern);
-		object.setDeclaration(declaration);
-		parser.addDeclaration(object, parent);
+	// 5. Variables of type `void` are not allowed in C++, we just don't
+	// generate them at all. Another option might've beeen to generate them
+	// with type `_Any*`.
+	if (object.getType() === VOID_TYPE) {
+		return;
 	}
+
+	// 6. Some post processing:
+	// - mark the type alias as coming from the declaration `declaration`.
+	// - Add `static` to member variables and `extern` to global variables.
+	object.setDeclaration(declaration);
+	object.addFlags(isMember ? Flags.Static : Flags.Extern);
+
+	// 7. Add it to the parent declaration.
+	parser.addDeclaration(object, parent);
 }

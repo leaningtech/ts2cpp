@@ -57,7 +57,7 @@ function parseProperty(parser: Parser, declaration: ts.PropertySignature | ts.Pr
 function parseConstructor(parser: Parser, node: Child, declaration: ts.VariableDeclaration | ts.PropertySignature | ts.PropertyDeclaration, generics: Generics, parent: Class): void {
 	const type = parser.getTypeFromTypeNode(declaration.type!);
 	const [symbol, types] = parser.getSymbol(type, generics);
-	generics = new Generics(0, types);
+	generics = new Generics(generics.getNextId(), types);
 
 	const members = (symbol?.declarations ?? [])
 		.filter(declaration => parser.includesDeclaration(declaration))

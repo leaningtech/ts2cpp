@@ -106,12 +106,12 @@ function isClassLike(node: ts.Node): boolean {
 export class Generics {
 	// A counter that is incremented every time we create a new type argument,
 	// used to give them a unique name, _T0, _T1, _T2, etc...
-	private id: number;
+	private nextId: number;
 
 	private types?: Map<ts.Type, TypeInfo>;
 
-	public constructor(id?: number, types?: ReadonlyMap<ts.Type, TypeInfo>) {
-		this.id = id ?? 0;
+	public constructor(nextId?: number, types?: ReadonlyMap<ts.Type, TypeInfo>) {
+		this.nextId = nextId ?? 0;
 		this.types = types && new Map(types);
 	}
 
@@ -121,7 +121,11 @@ export class Generics {
 	// `createConstraints`, and the copy is discarded once the whole
 	// declaration has been parsed.
 	public clone(): Generics {
-		return new Generics(this.id, this.types);
+		return new Generics(this.nextId, this.types);
+	}
+
+	public getNextId(): number {
+		return this.nextId;
 	}
 
 	public getTypes(): ReadonlyMap<ts.Type, TypeInfo> {
@@ -210,7 +214,7 @@ export class Generics {
 				// constraint to the type argument map, and we do not generate
 				// a type argument at all.
 				if (isClassLike(declaration) || usesType(parser, returnTypes, type)) {
-					types[i] ??= NamedType.create(`_T${this.id++}`);
+					types[i] ??= NamedType.create(`_T${this.nextId++}`);
 					this.addType(type, new TypeInfo(types[i], TypeKind.Generic));
 
 					if (info && options.useConstraints) {

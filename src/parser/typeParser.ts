@@ -35,6 +35,38 @@ export class TypeParser {
 		this.overrides = overrides;
 	}
 
+	private addCallInfo(info: TypeInfo, callSignatures: ReadonlyArray<ts.Signature>, kind: TypeKind): void {
+		// Function calls.
+		//
+		// TODO: comment this after updating stuff.
+		info.addType(this.parser.getRootType("EventListener"), TypeKind.Function);
+		info.addType(NULLPTR_TYPE, TypeKind.Function);
+
+		for (const signature of callSignatures) {
+			const declaration = signature.getDeclaration();
+			const returnInfo = this.getNodeInfo(declaration.type);
+
+			for (const returnType of returnInfo.asParameterTypes()) {
+				for (let i = 0; i <= declaration.parameters.length; i++) {
+					const parameterTypes = declaration.parameters.slice(0, i)
+						.map(parameter => this.getNodeInfo(parameter.type))
+						.map(info => info.asReturnType(this.parser));
+
+					const functionType = TemplateType.create(
+						FUNCTION_TYPE,
+						FunctionType.create(returnType, ...parameterTypes)
+					);
+
+					if (i === declaration.parameters.length) {
+						info.addType(functionType, kind);
+					} else {
+						info.addType(functionType, TypeKind.Function);
+					}
+				}
+			}
+		}
+	}
+
 	// `addInfo` is where most of the work happens. The type `type` is parsed
 	// and `info` is updated accordingly.
 	//
@@ -104,40 +136,25 @@ export class TypeParser {
 				.forEach(type => templateType.addTypeParameterUnsafe(type));
 
 			info.addType(templateType.internUnsafe(), TypeKind.Class);
+
+			// If the class has call signatures, we add those as well. This
+			// makes it so we can use `cheerp::Callback` without casting to the
+			// class type because it will also generate overloads for
+			// `_Function`.
+			if (callSignatures.length > 0) {
+				this.addCallInfo(info, callSignatures, TypeKind.Function);
+			}
 		} else if (basicClass && type.isClassOrInterface()) {
 			// A typescript class for which we have a basic (not generic)
 			// declaration. We simply add the class declaration to the info.
 			info.addType(basicClass, TypeKind.Class);
-		} else if (callSignatures.length > 0) {
-			// Function calls.
-			//
-			// TODO: comment this after updating stuff.
-			info.addType(this.parser.getRootType("EventListener"), TypeKind.Function);
-			info.addType(NULLPTR_TYPE, TypeKind.Function);
 
-			for (const signature of callSignatures) {
-				const declaration = signature.getDeclaration();
-				const returnInfo = this.getNodeInfo(declaration.type);
-
-				for (const returnType of returnInfo.asParameterTypes()) {
-					for (let i = 0; i <= declaration.parameters.length; i++) {
-						const parameterTypes = declaration.parameters.slice(0, i)
-							.map(parameter => this.getNodeInfo(parameter.type))
-							.map(info => info.asReturnType(this.parser));
-
-						const functionType = TemplateType.create(
-							FUNCTION_TYPE,
-							FunctionType.create(returnType, ...parameterTypes)
-						);
-
-						if (i === declaration.parameters.length) {
-							info.addType(functionType, TypeKind.Class);
-						} else {
-							info.addType(functionType, TypeKind.Function);
-						}
-					}
-				}
+			if (callSignatures.length > 0) {
+				this.addCallInfo(info, callSignatures, TypeKind.Function);
 			}
+		} else if (callSignatures.length > 0) {
+			// For function types, add their call signatures.
+			this.addCallInfo(info, callSignatures, TypeKind.Class);
 		} else if (type.isIntersection()) {
 			// HACK: For intersection types, we only use the first variant.
 			this.addInfo(info, type.types[0]);

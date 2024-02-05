@@ -231,7 +231,8 @@ export class TypeInfo {
 	// performs mostly the same conversion as `getPointerOrPrimitive`, except
 	// that:
 	// - `String` becomes a const reference.
-	// - other non-primitive types become *const* pointers.
+	// - Other non-primitive types become *const* pointers.
+	// - Generic types with `_Any*` are converted to their basic versions.
 	public asParameterTypes(): ReadonlyArray<Type> {
 		return this.getPlural().flatMap(type => {
 			if (!type.needsPointer()) {
@@ -240,9 +241,9 @@ export class TypeInfo {
 				switch (type.getType().getName()) {
 				case "String":
 				// case "Function":
-					return [type.getType().constReference()];
+					return [type.getType().orBasic().constReference()];
 				default:
-					return [type.getType().constPointer()];
+					return [type.getType().orBasic().constPointer()];
 				}
 			}
 		});

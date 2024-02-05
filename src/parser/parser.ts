@@ -73,28 +73,6 @@ export class Parser {
 		if (objectClass) {
 			objectClass.addAttribute("cheerp::client_layout");
 		}
-
-		const parameterTypesMap = new Map;
-		const basicArray = this.getRootClass("Array");
-		const genericArray = this.getGenericRootClass("Array");
-		const basicMap = this.getRootClass("Map");
-		const genericMap = this.getGenericRootClass("Map");
-
-		if (basicArray && genericArray) {
-			const anyArray = TemplateType.create(DeclaredType.create(genericArray), ANY_TYPE.pointer());
-			parameterTypesMap.set(anyArray.pointer(), DeclaredType.create(basicArray).pointer());
-			parameterTypesMap.set(anyArray.constPointer(), DeclaredType.create(basicArray).constPointer());
-		}
-
-		if (basicMap && genericMap) {
-			const anyMap = TemplateType.create(DeclaredType.create(genericMap), ANY_TYPE.pointer(), ANY_TYPE.pointer());
-			parameterTypesMap.set(anyMap.pointer(), DeclaredType.create(basicMap).pointer());
-			parameterTypesMap.set(anyMap.constPointer(), DeclaredType.create(basicMap).constPointer());
-		}
-
-		withTimer("rewrite parameter types", () => {
-			this.functions.forEach(declaration => declaration.rewriteParameterTypes(parameterTypesMap));
-		});
 	}
 
 	public getTypeAtLocation(node: ts.Node): ts.Type {

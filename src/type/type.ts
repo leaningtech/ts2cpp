@@ -8,7 +8,7 @@ import { Expression } from "./expression.js";
 // then we can just use `Expression`.
 export abstract class Type extends Expression {
 	// Add qualifier to the type. For example, this turns
-	// `new NamedType("String").qualify(Pointer)` into `String*`.
+	// `NamedType.create("String").qualify(Pointer)` into `String*`.
 	public qualify(qualifier: TypeQualifier): QualifiedType {
 		return QualifiedType.create(this, qualifier);
 	}
@@ -55,6 +55,13 @@ export abstract class Type extends Expression {
 	// if they can give a reasonable name for the type.
 	public getName(): string | undefined {
 		return undefined;
+	}
+
+	// If this is a generic type and all type arguments are `_Any*`, return the
+	// basic version of this type. For example, this turns `TArray<_Any*>` into
+	// `Array`. `TemplateType` overrides this to provide this functionality.
+	public orBasic(): Type {
+		return this;
 	}
 }
 

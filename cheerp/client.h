@@ -99,9 +99,9 @@ struct EscapedResourcesList
 template<class R>
 client::Map* EscapedResourcesList<R>::resources = nullptr;
 
-using EscapedListeners = EscapedResourcesList<client::EventListener>;
+using EscapedListeners = EscapedResourcesList<client::Function>;
 
-inline void freeCallback(client::EventListener* e)
+inline void freeCallback(client::Function* e)
 {
 	EscapedListeners::free(e);
 }
@@ -111,7 +111,7 @@ class Closure;
 template<class R, class... Args>
 class Closure<R(Args...)>
 {
-	client::EventListener* inner;
+	client::_Function<R(Args...)>* inner;
 	void(*deleter)(void*);
 	void* obj;
 
@@ -160,7 +160,7 @@ public:
 	{
 		using FF = typename std::remove_cv<typename std::remove_reference<F>::type>::type;
 		FF* newf = new FF(::cheerp::forward<F>(f));
-		inner = __builtin_cheerp_create_closure<client::EventListener>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
+		inner = __builtin_cheerp_create_closure<client::_Function<R(Args...)>>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
 		deleter = &do_delete<FF>;
 		obj = newf;
 	}
@@ -169,20 +169,20 @@ public:
 	{
 		using FF = typename std::remove_reference<F>::type;
 		FF* newf = new FF(::cheerp::forward<F>(f));
-		inner = __builtin_cheerp_create_closure<client::EventListener>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
+		inner = __builtin_cheerp_create_closure<client::_Function<R(Args...)>>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
 		deleter = nullptr;
 		obj = newf;
 	}
 	template<class F>
 	Closure(F f, _Convertible<F>* = 0)
 	{
-		inner = __builtin_cheerp_make_complete_object<client::EventListener>((func_t*)f);
+		inner = __builtin_cheerp_make_complete_object<client::_Function<R(Args...)>>((func_t*)f);
 		deleter = nullptr;
 		obj = nullptr;
 	}
 	Closure(R(*f)(Args...))
 	{
-		inner = __builtin_cheerp_make_complete_object<client::EventListener>(f);
+		inner = __builtin_cheerp_make_complete_object<client::_Function<R(Args...)>>(f);
 		deleter = nullptr;
 		obj = nullptr;
 	}
@@ -221,7 +221,7 @@ public:
 	{
 		return inner != nullptr;
 	}
-	operator client::EventListener*()
+	operator client::_Function<R(Args...)>*()
 	{
 		if (deleter)
 		{
@@ -232,9 +232,9 @@ public:
 		}
 		return inner;
 	}
-	operator client::_Function<R(Args...)>*()
+	operator client::EventListener*()
 	{
-		return reinterpret_cast<client::_Function<R(Args...)>*>(this->operator client::EventListener*());
+		return this->operator client::_Function<R(Args...)>*()->template cast<client::EventListener*>();
 	}
 	~Closure()
 	{
@@ -281,7 +281,7 @@ auto make_closure(T&& func) -> decltype(ClosureHelper<T, decltype(&std::remove_r
  * For functors and capturing lambdas an std::function object and a JavaScript closure are created.
  */
 template<class T>
-client::EventListener* Callback(T&& func)
+client::EventListener* OldCallback(T&& func)
 {
 	return make_closure(::cheerp::forward<T>(func));
 }
@@ -290,7 +290,7 @@ client::EventListener* Callback(T&& func)
  * The implementation directly forward the C++ function to JavaScript with zero overhead.
  */
 template<class R, class... Args>
-client::EventListener* Callback(R (*func)(Args...))
+client::EventListener* OldCallback(R (*func)(Args...))
 {
 	return Closure<R(Args...)>(func);
 }
@@ -300,7 +300,7 @@ client::EventListener* Callback(R (*func)(Args...))
  * For functors and capturing lambdas an std::function object and a JavaScript closure are created.
  */
 template<class T>
-auto Callback2(T&& func) -> client::_Function<typename ClosureHelper<T, decltype(&std::remove_reference<T>::type::operator())>::func_type>*
+auto Callback(T&& func) -> client::_Function<typename ClosureHelper<T, decltype(&std::remove_reference<T>::type::operator())>::func_type>*
 {
 	return make_closure(::cheerp::forward<T>(func));
 }
@@ -309,7 +309,7 @@ auto Callback2(T&& func) -> client::_Function<typename ClosureHelper<T, decltype
  * The implementation directly forward the C++ function to JavaScript with zero overhead.
  */
 template<class R, class... Args>
-client::_Function<R(Args...)>* Callback2(R (*func)(Args...))
+client::_Function<R(Args...)>* Callback(R (*func)(Args...))
 {
 	return Closure<R(Args...)>(func);
 }

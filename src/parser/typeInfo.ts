@@ -230,7 +230,7 @@ export class TypeInfo {
 	// rather than a union type so that overloads can be generated. This
 	// performs mostly the same conversion as `getPointerOrPrimitive`, except
 	// that:
-	// - `String` and `Function` become const references.
+	// - `String` becomes a const reference.
 	// - other non-primitive types become *const* pointers.
 	public asParameterTypes(): ReadonlyArray<Type> {
 		return this.getPlural().flatMap(type => {
@@ -239,7 +239,7 @@ export class TypeInfo {
 			} else {
 				switch (type.getType().getName()) {
 				case "String":
-				case "Function":
+				// case "Function":
 					return [type.getType().constReference()];
 				default:
 					return [type.getType().constPointer()];

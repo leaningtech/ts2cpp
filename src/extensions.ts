@@ -263,22 +263,6 @@ return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 	}
 }
 
-// Add Function extensions:
-// - conversion from `EventListener*`.
-//
-// TODO: this may no longer be needed after replacing `Callback` with
-// `Callback2`.
-function addFunctionExtensions(parser: Parser, functionClass: Class) {
-	const eventListenerClass = parser.getRootClass("EventListener");
-
-	if (eventListenerClass) {
-		const constEventListenerConstructor = addObjectInitializerConstructor(functionClass, DeclaredType.create(eventListenerClass).constPointer());
-		constEventListenerConstructor.addExtraDependency(eventListenerClass, State.Complete);
-		const eventListenerConstructor = addObjectInitializerConstructor(functionClass, DeclaredType.create(eventListenerClass).pointer());
-		eventListenerConstructor.addExtraDependency(eventListenerClass, State.Complete);
-	}
-}
-
 // Add Document extensions:
 // - set return type of `createElement` and `getElementsByTagName` to use
 // `HTMLElement` instead of just `Element`.
@@ -402,7 +386,6 @@ export function addExtensions(parser: Parser): void {
 	stringClass && addStringExtensions(parser, stringClass);
 	numberClass && addNumberExtensions(parser, numberClass);
 	mapClass && addMapExtensions(parser, mapClass);
-	functionClass && addFunctionExtensions(parser, functionClass);
 	documentClass && addDocumentExtensions(parser, documentClass);
 
 	// 4. Add extensions for typed arrays.

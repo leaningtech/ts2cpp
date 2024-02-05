@@ -6,6 +6,7 @@ import { TemplateType } from "../type/templateType.js";
 import { NULLPTR_TYPE, FUNCTION_TYPE, ANY_TYPE, VOID_TYPE, DOUBLE_TYPE, BOOL_TYPE } from "../type/namedType.js";
 import { FunctionType } from "../type/functionType.js";
 import { isTypeReference } from "./generics.js";
+import { getName } from "./name.js";
 import * as ts from "typescript";
 
 // The main job of a `TypeParser` is to create a `TypeInfo` object from a
@@ -39,16 +40,31 @@ export class TypeParser {
 		// Function calls.
 		//
 		// TODO: comment this after updating stuff.
-		info.addType(this.parser.getRootType("EventListener"), TypeKind.Function);
+		// info.addType(this.parser.getRootType("EventListener"), TypeKind.Function);
 		info.addType(NULLPTR_TYPE, TypeKind.Function);
 
 		for (const signature of callSignatures) {
 			const declaration = signature.getDeclaration();
 			const returnInfo = this.getNodeInfo(declaration.type);
+			const returnTypes = new Set(returnInfo.asParameterTypes());
 
-			for (const returnType of returnInfo.asParameterTypes()) {
-				for (let i = 0; i <= declaration.parameters.length; i++) {
-					const parameterTypes = declaration.parameters.slice(0, i)
+			if (returnInfo.isOptional()) {
+				returnTypes.add(VOID_TYPE);
+			}
+
+			for (const returnType of returnTypes) {
+				let start = 0;
+
+				if (declaration.parameters.length > 0) {
+					const [interfaceName, _] = getName(declaration.parameters[0]);
+
+					if (interfaceName === "this") {
+						start = 1;
+					}
+				}
+
+				for (let i = start; i <= declaration.parameters.length; i++) {
+					const parameterTypes = declaration.parameters.slice(start, i)
 						.map(parameter => this.getNodeInfo(parameter.type))
 						.map(info => info.asReturnType(this.parser));
 

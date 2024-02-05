@@ -36,6 +36,31 @@ export class TypeParser {
 		this.overrides = overrides;
 	}
 
+	// TODO: comment
+	private *parseOverloads(declaration: ts.SignatureDeclarationBase): Generator<ReadonlyArray<Type>, void, undefined> {
+		let overloads: Array<Array<Type>> = [[]];
+
+		for (const parameter of declaration.parameters) {
+			const [interfaceName, name] = getName(parameter);
+
+			if (interfaceName !== "this") {
+				yield *overloads;
+
+				if (parameter.dotDotDotToken) {
+					break;
+				}
+
+				const info = this.getNodeInfo(parameter.type!);
+
+				overloads = info.asCallbackParameterTypes(this.parser).flatMap(type => {
+					return overloads.map(parameters => [...parameters, type]);
+				});
+			}
+		}
+
+		yield *overloads;
+	}
+
 	private addCallInfo(info: TypeInfo, callSignatures: ReadonlyArray<ts.Signature>, kind: TypeKind): void {
 		// Function calls.
 		//
@@ -46,34 +71,17 @@ export class TypeParser {
 		for (const signature of callSignatures) {
 			const declaration = signature.getDeclaration();
 			const returnInfo = this.getNodeInfo(declaration.type);
-			const returnTypes = new Set(returnInfo.asParameterTypes());
 
-			if (returnInfo.isOptional()) {
-				returnTypes.add(VOID_TYPE);
-			}
+			for (const returnType of returnInfo.asCallbackReturnTypes()) {
+				const overloads = [...this.parseOverloads(declaration)];
 
-			for (const returnType of returnTypes) {
-				let start = 0;
-
-				if (declaration.parameters.length > 0) {
-					const [interfaceName, _] = getName(declaration.parameters[0]);
-
-					if (interfaceName === "this") {
-						start = 1;
-					}
-				}
-
-				for (let i = start; i <= declaration.parameters.length; i++) {
-					const parameterTypes = declaration.parameters.slice(start, i)
-						.map(parameter => this.getNodeInfo(parameter.type))
-						.map(info => info.asReturnType(this.parser));
-
+				for (let i = 0; i < overloads.length; i++) {
 					const functionType = TemplateType.create(
 						FUNCTION_TYPE,
-						FunctionType.create(returnType, ...parameterTypes)
+						FunctionType.create(returnType, ...overloads[i])
 					);
 
-					if (i === declaration.parameters.length) {
+					if (i === overloads.length) {
 						info.addType(functionType, kind);
 					} else {
 						info.addType(functionType, TypeKind.Function);

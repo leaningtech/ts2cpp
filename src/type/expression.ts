@@ -100,7 +100,7 @@ export abstract class Expression {
 	}
 }
 // Returns a new array where every key occurs at most once.
-export function removeDuplicateExpressions<T extends Expression>(expressions: ReadonlyArray<T>): ReadonlyArray<T> {
+export function removeDuplicateExpressions<T extends Expression>(expressions: ReadonlyArray<T>): Array<T> {
 	return [...new Set(expressions)];
 }
 

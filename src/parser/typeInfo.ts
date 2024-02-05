@@ -18,7 +18,7 @@ import { DeclaredType } from "../type/declaredType.js";
 
 export enum TypeKind {
 	Class,
-	Function,
+	Function, // TODO: comment
 	Primitive,
 	Generic,
 }
@@ -211,18 +211,15 @@ export class TypeInfo {
 	// `getPointerOrPrimitive` is used to decide which types should be pointers
 	// and which shouldn't.
 	public asReturnType(parser: Parser): Type {
-		const types = removeDuplicateExpressions(
-			this.getTypes()
-				.filter(type => type.getKind() !== TypeKind.Function)
-				.map(type => type.getPointerOrPrimitive())
-		);
+		const types = this.getTypes().filter(type => type.getKind() !== TypeKind.Function);
 
-		if (types.length === 0 || types.includes(ANY_TYPE.pointer())) {
+		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
 			return parser.getRootType("Object").pointer();
 		} else if (types.length > 1) {
-			return TemplateType.create(UNION_TYPE, ...types).pointer();
+			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
+			return TemplateType.create(UNION_TYPE, ...transformedTypes).pointer();
 		} else {
-			return types[0];
+			return types[0].getPointerOrPrimitive();
 		}
 	}
 
@@ -234,19 +231,56 @@ export class TypeInfo {
 	// - Other non-primitive types become *const* pointers.
 	// - Generic types with `_Any*` are converted to their basic versions.
 	public asParameterTypes(): ReadonlyArray<Type> {
-		return this.getPlural().flatMap(type => {
+		return this.getPlural().map(type => {
+			const inner = type.getType();
+
 			if (!type.needsPointer()) {
-				return [type.getType()];
+				return inner;
+			} else if (inner.getName() === "String") {
+				return inner.orBasic().constReference();
 			} else {
-				switch (type.getType().getName()) {
-				case "String":
-				// case "Function":
-					return [type.getType().orBasic().constReference()];
-				default:
-					return [type.getType().orBasic().constPointer()];
-				}
+				return inner.orBasic().constPointer();
 			}
 		});
+	}
+
+	// TODO: comment
+	public asCallbackReturnTypes(): ReadonlyArray<Type> {
+		const types = this.getPlural().flatMap(type => {
+			const inner = type.getType();
+
+			if (!type.needsPointer()) {
+				return [inner];
+			} else {
+				return [inner.pointer(), inner.orBasic().pointer()];
+			}
+		});
+
+		if (this.optional) {
+			types.push(VOID_TYPE);
+		}
+
+		return removeDuplicateExpressions(types);
+	}
+
+	// TODO: comment
+	public asCallbackParameterTypes(parser: Parser): ReadonlyArray<Type> {
+		const types = this.getTypes().filter(type => type.getKind() !== TypeKind.Function);
+
+		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
+			return [parser.getRootType("Object").pointer(), ANY_TYPE.pointer()];
+		} else if (types.length > 1) {
+			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
+			return [TemplateType.create(UNION_TYPE, ...transformedTypes).pointer()];
+		} else {
+			const inner = types[0].getType();
+
+			if (!types[0].needsPointer()) {
+				return [inner];
+			} else {
+				return removeDuplicateExpressions([inner.pointer(), inner.orBasic().pointer()]);
+			}
+		}
 	}
 
 	// Used when generating the types of variables.

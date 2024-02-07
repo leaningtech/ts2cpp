@@ -2,61 +2,17 @@
 #define CHEERP_JSHELPER_H
 #include <type_traits>
 namespace [[cheerp::genericjs]] client {
-	class Object;
-	class String;
-	class [[cheerp::client_layout]] _Any {
-		struct [[cheerp::client_layout]] Cast {
-			template<class T>
-			[[gnu::always_inline]]
-			operator T() const {
-				T out;
-				asm("%1" : "=r"(out) : "r"(this));
-				return out;
-			}
-		};
-	public:
-		template<class T>
-		[[gnu::always_inline]]
-		T cast() const {
-			T out;
-			asm("%1" : "=r"(out) : "r"(this));
-			return out;
-		}
-		[[gnu::always_inline]]
-		const Cast& cast() const {
-			return *this->cast<const Cast*>();
-		}
-		[[gnu::always_inline]]
-		explicit operator double() const {
-			return this->cast<double>();
-		}
-		[[gnu::always_inline]]
-		explicit operator int() const {
-			return this->cast<double>();
-		}
-	};
+	class _Any;
 	template<class... Variants>
-	class [[cheerp::client_layout]] _Union {
-	public:
-		template<class T>
-		[[gnu::always_inline]]
-		std::enable_if_t<(std::is_same_v<T, Variants> || ...), T> cast() const {
-			T out;
-			asm("%1" : "=r"(out) : "r"(this));
-			return out;
-		}
-		template<class T>
-		[[gnu::always_inline]]
-		operator T() const {
-			return this->cast<T>();
-		}
-	};
+	class _Union;
 	template<class F>
 	class _Function;
+	class Object;
+	class String;
 	template<class T>
 	class TArray;
 }
-namespace cheerp {
+namespace [[cheerp::genericjs]] cheerp {
 	template<class T>
 	struct ArrayElementTypeImpl {
 		using type = client::_Any*;
@@ -92,7 +48,7 @@ namespace cheerp {
 		constexpr static bool test(void*) {
 			return false;
 		}
-		constexpr static bool value = test(&std::declval<From>());
+		constexpr static bool value = test((From*) nullptr);
 	};
 	template<template<class...> class Class, class... From, class... To>
 	struct CanCastHelper<Class<From...>, Class<To...>> {
@@ -106,6 +62,79 @@ namespace cheerp {
 	struct CanCastHelper<client::_Function<From(FromFirstArg, FromArgs...)>, client::_Function<To(ToFirstArg, ToArgs...)>> {
 		constexpr static bool value = CanCast<ToFirstArg, FromFirstArg> && CanCastHelper<client::_Function<From(FromArgs...)>, client::_Function<To(ToArgs...)>>::value;
 	};
+	template<class... From, class... To>
+	struct CanCastHelper<client::_Union<From...>, client::_Union<To...>> {
+		constexpr static bool value = (CanCast<From, client::_Union<To...>> && ...);
+	};
+	template<class... From, class To>
+	struct CanCastHelper<client::_Union<From...>, To> {
+		constexpr static bool value = (CanCast<From, To> && ...);
+	};
+	template<class From, class... To>
+	struct CanCastHelper<From, client::_Union<To...>> {
+		constexpr static bool value = (CanCast<From, To> || ...);
+	};
+}
+namespace [[cheerp::genericjs]] client {
+	class [[cheerp::client_layout]] _Any {
+		struct [[cheerp::client_layout]] Cast {
+			template<class T>
+			[[gnu::always_inline]]
+			operator T() const {
+				T out;
+				asm("%1" : "=r"(out) : "r"(this));
+				return out;
+			}
+		};
+	public:
+		template<class T>
+		[[gnu::always_inline]]
+		T cast() const {
+			T out;
+			asm("%1" : "=r"(out) : "r"(this));
+			return out;
+		}
+		[[gnu::always_inline]]
+		const Cast& cast() const {
+			return *reinterpret_cast<const Cast*>(this);
+		}
+		template<class T>
+		[[gnu::always_inline]]
+		explicit operator T() const {
+			return this->cast<T>();
+		}
+	};
+	template<class... Variants>
+	class [[cheerp::client_layout]] _Union {
+		struct [[cheerp::client_layout]] Cast {
+			template<class T, class = std::enable_if_t<(cheerp::CanCast<Variants, T> || ...)>>
+			[[gnu::always_inline]]
+			operator T() const {
+				T out;
+				asm("%1" : "=r"(out) : "r"(this));
+				return out;
+			}
+		};
+	public:
+		template<class T, class = std::enable_if_t<(cheerp::CanCast<Variants, T> || ...)>>
+		[[gnu::always_inline]]
+		T cast() const {
+			T out;
+			asm("%1" : "=r"(out) : "r"(this));
+			return out;
+		}
+		[[gnu::always_inline]]
+		const Cast& cast() const {
+			return *reinterpret_cast<const Cast*>(this);
+		}
+		template<class T, class = std::enable_if_t<(cheerp::CanCast<Variants, T> || ...)>>
+		[[gnu::always_inline]]
+		explicit operator T() const {
+			return this->cast<T>();
+		}
+	};
+}
+namespace cheerp {
 	[[cheerp::genericjs, gnu::always_inline]]
 	inline client::String* makeString(const char* str);
 	template<class T>

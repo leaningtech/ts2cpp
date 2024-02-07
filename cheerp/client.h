@@ -88,7 +88,7 @@ struct EscapedResourcesList
 	{
 		if (resources == nullptr)
 			return;
-		client::Object* o = resources->get(r);
+		client::Object* o = resources->get<R*, client::Object*>(r);
 		asm("%1===undefined?null:%2" : "=r"(o) : "r"(o),"r"(o));
 		if (o == nullptr)
 			return;
@@ -99,9 +99,9 @@ struct EscapedResourcesList
 template<class R>
 client::Map* EscapedResourcesList<R>::resources = nullptr;
 
-using EscapedListeners = EscapedResourcesList<client::Function>;
+using EscapedListeners = EscapedResourcesList<client::EventListener>;
 
-inline void freeCallback(client::Function* e)
+inline void freeCallback(client::EventListener* e)
 {
 	EscapedListeners::free(e);
 }
@@ -111,7 +111,7 @@ class Closure;
 template<class R, class... Args>
 class Closure<R(Args...)>
 {
-	client::_Function<R(Args...)>* inner;
+	client::EventListener* inner;
 	void(*deleter)(void*);
 	void* obj;
 
@@ -134,7 +134,7 @@ class Closure<R(Args...)>
 		static constexpr bool value = V;
 	};
 	template <class _Tp> struct _must_destroy
-	    : public _bool_const<!__is_trivially_destructible(typename std::remove_reference<_Tp>::type)> {};
+	    : public _bool_const<!__has_trivial_destructor(typename std::remove_reference<_Tp>::type)> {};
 
 	template<class T>
 	static void do_delete(void* o)
@@ -160,7 +160,7 @@ public:
 	{
 		using FF = typename std::remove_cv<typename std::remove_reference<F>::type>::type;
 		FF* newf = new FF(::cheerp::forward<F>(f));
-		inner = __builtin_cheerp_create_closure<client::_Function<R(Args...)>>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
+		inner = __builtin_cheerp_create_closure<client::EventListener>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
 		deleter = &do_delete<FF>;
 		obj = newf;
 	}
@@ -169,20 +169,20 @@ public:
 	{
 		using FF = typename std::remove_reference<F>::type;
 		FF* newf = new FF(::cheerp::forward<F>(f));
-		inner = __builtin_cheerp_create_closure<client::_Function<R(Args...)>>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
+		inner = __builtin_cheerp_create_closure<client::EventListener>(&InvokeHelper<R>::template invoke<FF, Args...>, newf);
 		deleter = nullptr;
 		obj = newf;
 	}
 	template<class F>
 	Closure(F f, _Convertible<F>* = 0)
 	{
-		inner = __builtin_cheerp_make_complete_object<client::_Function<R(Args...)>>((func_t*)f);
+		inner = __builtin_cheerp_make_complete_object<client::EventListener>((func_t*)f);
 		deleter = nullptr;
 		obj = nullptr;
 	}
 	Closure(R(*f)(Args...))
 	{
-		inner = __builtin_cheerp_make_complete_object<client::_Function<R(Args...)>>(f);
+		inner = __builtin_cheerp_make_complete_object<client::EventListener>(f);
 		deleter = nullptr;
 		obj = nullptr;
 	}
@@ -221,7 +221,7 @@ public:
 	{
 		return inner != nullptr;
 	}
-	operator client::_Function<R(Args...)>*()
+	operator client::EventListener*()
 	{
 		if (deleter)
 		{
@@ -231,10 +231,6 @@ public:
 			deleter = nullptr;
 		}
 		return inner;
-	}
-	operator client::EventListener*()
-	{
-		return this->operator client::_Function<R(Args...)>*()->template cast<client::EventListener*>();
 	}
 	~Closure()
 	{
@@ -281,7 +277,7 @@ auto make_closure(T&& func) -> decltype(ClosureHelper<T, decltype(&std::remove_r
  * For functors and capturing lambdas an std::function object and a JavaScript closure are created.
  */
 template<class T>
-client::EventListener* OldCallback(T&& func)
+client::EventListener* Callback(T&& func)
 {
 	return make_closure(::cheerp::forward<T>(func));
 }
@@ -290,26 +286,7 @@ client::EventListener* OldCallback(T&& func)
  * The implementation directly forward the C++ function to JavaScript with zero overhead.
  */
 template<class R, class... Args>
-client::EventListener* OldCallback(R (*func)(Args...))
-{
-	return Closure<R(Args...)>(func);
-}
-/**
- * Adapter from C++ functors and lambdas to code callable from JavaScript and the browser
- * The implementation tries hard to directly forward the C++ function to JavaScript woth zero overhead when possible.
- * For functors and capturing lambdas an std::function object and a JavaScript closure are created.
- */
-template<class T>
-auto Callback(T&& func) -> client::_Function<typename ClosureHelper<T, decltype(&std::remove_reference<T>::type::operator())>::func_type>*
-{
-	return make_closure(::cheerp::forward<T>(func));
-}
-/**
- * Adapter from C++ funtions to code callable from JavaScript and the browser
- * The implementation directly forward the C++ function to JavaScript with zero overhead.
- */
-template<class R, class... Args>
-client::_Function<R(Args...)>* Callback(R (*func)(Args...))
+client::EventListener* Callback(R (*func)(Args...))
 {
 	return Closure<R(Args...)>(func);
 }

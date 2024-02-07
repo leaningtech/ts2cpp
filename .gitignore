@@ -4,3 +4,5 @@
 /cheerp/types.h
 /cheerp/clientlib.h
 /install.sh
+/.vimrc
+/compile_commands.json

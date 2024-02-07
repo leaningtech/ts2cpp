@@ -226,6 +226,25 @@ return out;
 	mapClass.addMember(deleteFunc, Visibility.Public);
 }
 
+// Add function extensions:
+// - a conversion constructor from `EventListener*`, used by `_Function`.
+function addFunctionExtensions(parser: Parser, functionClass: Class): void {
+	const eventListenerType = parser.getRootType("EventListener");
+	const eventListenerConstructor = new Function(functionClass.getName());
+	const constEventListenerConstructor = new Function(functionClass.getName());
+
+	eventListenerConstructor.addParameter(eventListenerType.pointer(), "listener");
+	eventListenerConstructor.addInitializer("Object", "reinterpret_cast<Object*>(listener)");
+	eventListenerConstructor.setBody(``);
+
+	constEventListenerConstructor.addParameter(eventListenerType.constPointer(), "listener");
+	constEventListenerConstructor.addInitializer("Object", "reinterpret_cast<const Object*>(listener)");
+	constEventListenerConstructor.setBody(``);
+
+	functionClass.addMember(eventListenerConstructor, Visibility.Protected);
+	functionClass.addMember(constEventListenerConstructor, Visibility.Protected);
+}
+
 // Add typed array extensions:
 // - `operator[]` that returns the correct c++ type for the typed array.
 // - a copy constructor.
@@ -386,6 +405,7 @@ export function addExtensions(parser: Parser): void {
 	stringClass && addStringExtensions(parser, stringClass);
 	numberClass && addNumberExtensions(parser, numberClass);
 	mapClass && addMapExtensions(parser, mapClass);
+	functionClass && addFunctionExtensions(parser, functionClass);
 	documentClass && addDocumentExtensions(parser, documentClass);
 
 	// 4. Add extensions for typed arrays.

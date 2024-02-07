@@ -75,6 +75,10 @@ export class Function extends TemplateDeclaration {
 		this.type = type;
 	}
 
+	public isConstructor(): boolean {
+		return this.getName() === this.getParent()?.getName();
+	}
+
 	public getParameters(): ReadonlyArray<Parameter> {
 		return this.parameters ?? [];
 	}

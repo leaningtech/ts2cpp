@@ -7,7 +7,7 @@ import { Writer } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
 import { LiteralExpression, TRUE } from "./literalExpression.js";
 import { CompoundExpression } from "./compoundExpression.js";
-import { VOID_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, UNION_TYPE, IS_SAME, IS_CONVERTIBLE, IS_ACCEPTABLE, IS_ACCEPTABLE_ARGS } from "./namedType.js";
+import { VOID_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, IS_SAME, IS_CONVERTIBLE, CAN_CAST, CAN_CAST_ARGS } from "./namedType.js";
 import { removeDuplicateExpressions } from "./expression.js";
 
 // A template type is a generic type with template arguments
@@ -101,7 +101,7 @@ export class TemplateType extends Type {
 	public isAlwaysTrue(): boolean {
 		if (this.inner === IS_SAME) {
 			return this.getTypeParameters()[0] === this.getTypeParameters()[1];
-		} else if (this.inner === IS_ACCEPTABLE) {
+		} else if (this.inner === CAN_CAST || this.inner === CAN_CAST_ARGS) {
 			return this.getTypeParameters().slice(1).includes(ANY_TYPE.pointer());
 		} else {
 			return false;
@@ -218,12 +218,12 @@ export class TemplateType extends Type {
 	// extra conversions according to typescript rules. For example,
 	// `IsAcceptableV<double, _Any*>` returns true, while
 	// `std::is_convertible_v<double, _Any*>` returns false.
-	public static isAcceptable(from: Type, ...to: ReadonlyArray<Type>): Expression {
+	public static canCast(from: Type, ...to: ReadonlyArray<Type>): Expression {
 		if (to.includes(ANY_TYPE.pointer())) {
 			return TRUE;
 		}
 
-		return TemplateType.create(IS_ACCEPTABLE, from, ...removeDuplicateExpressions(to));
+		return TemplateType.create(CAN_CAST, from, ...removeDuplicateExpressions(to));
 	}
 
 	// Construct a `IsAcceptableArgsV<T, U...>` template.
@@ -236,12 +236,12 @@ export class TemplateType extends Type {
 	// conversion from `const char*` to `String*` is handled by
 	// `cheerp::clientCast`, which is only called in variadic functions (for
 	// now).
-	public static isAcceptableArgs(from: Type, ...to: ReadonlyArray<Type>): Expression {
+	public static canCastArgs(from: Type, ...to: ReadonlyArray<Type>): Expression {
 		if (to.includes(ANY_TYPE.pointer())) {
 			return TRUE;
 		}
 
-		return TemplateType.create(IS_ACCEPTABLE_ARGS, from, ...removeDuplicateExpressions(to));
+		return TemplateType.create(CAN_CAST_ARGS, from, ...removeDuplicateExpressions(to));
 	}
 
 	// Construct an `std::enable_if_t` template whose condition is the

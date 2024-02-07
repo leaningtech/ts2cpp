@@ -92,8 +92,8 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 				object.addVariadicTypeParameter("_Args");
 				object.addParameter(ARGS.expand(), parameter.name);
 				const arrayElement = TemplateType.arrayElementType(parameter.type);
-				const isAcceptable = TemplateType.isAcceptableArgs(ARGS, arrayElement);
-				variadicConstraint = CompoundExpression.and(isAcceptable, ELLIPSES);
+				const canCast = TemplateType.canCastArgs(ARGS, arrayElement);
+				variadicConstraint = CompoundExpression.and(canCast, ELLIPSES);
 				forwardParameters.push(parameter.name + "...");
 				helperParameters.push(`cheerp::clientCast(${parameter.name})...`);
 			} else {

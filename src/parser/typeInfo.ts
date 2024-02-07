@@ -15,10 +15,10 @@ import { NamedType, ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE
 import { TemplateType } from "../type/templateType.js";
 import { TypeQualifier } from "../type/qualifiedType.js";
 import { DeclaredType } from "../type/declaredType.js";
+import { FunctionType } from "../type/functionType.js";
 
 export enum TypeKind {
 	Class,
-	Function, // TODO: comment
 	Primitive,
 	Generic,
 }
@@ -43,15 +43,14 @@ export class TypeData {
 		return this.kind;
 	}
 
-	// Class and function (`_Function`) types need to be converted to pointer
-	// types, but primitives and generic types do not. One exception is
-	// `std::nullptr_t`, which is a class type but should not generate a
-	// `std::nullptr_t*`.
+	// Class types need to be converted to pointer types, but primitives and
+	// generic types do not. One exception is `std::nullptr_t`, which is a
+	// class type but should not generate a `std::nullptr_t*`.
 	//
 	// Good: `String*`, `_Function<void()>*`, `double`, `T`, `std::nullptr_t`
 	// Bad: `String`, `_Function<void()>`, `double*`, `T*`, `std::nullptr_t*`
 	public needsPointer(): boolean {
-		return (this.kind === TypeKind.Class || this.kind === TypeKind.Function) && this.type !== NULLPTR_TYPE;
+		return this.kind === TypeKind.Class && this.type !== NULLPTR_TYPE;
 	}
 
 	// Adds a pointer qualifier to a type only if it needs it, according to
@@ -177,7 +176,7 @@ export class TypeInfo {
 	// When this is a union type, this will generate an expression that
 	// evaluates to true if `type` matches any of the constraints.
 	public asTypeConstraint(type: Type): Expression {
-		return TemplateType.isAcceptable(type,
+		return TemplateType.canCast(type,
 			...this.getPlural().map(constraint => {
 				return constraint.getNonVoidPointerOrPrimitive();
 			})
@@ -204,14 +203,14 @@ export class TypeInfo {
 	// `Object*`.
 	//
 	// We return a `_Union` type with all types from the typescript union,
-	// except that:
+	// except:
 	// - If there was no type (this rarely happens), we return `Object*`.
 	// - If there was only one type, we just return that.
 	//
 	// `getPointerOrPrimitive` is used to decide which types should be pointers
 	// and which shouldn't.
 	public asReturnType(parser: Parser): Type {
-		const types = this.getTypes().filter(type => type.getKind() !== TypeKind.Function);
+		const types = this.getTypes();
 
 		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
 			return parser.getRootType("Object").pointer();
@@ -227,59 +226,42 @@ export class TypeInfo {
 	// rather than a union type so that overloads can be generated. This
 	// performs mostly the same conversion as `getPointerOrPrimitive`, except
 	// that:
-	// - `String` becomes a const reference.
+	// - `String` and `_Function` become const *references*.
 	// - Other non-primitive types become *const* pointers.
 	// - Generic types with `_Any*` are converted to their basic versions.
+	// - `Function` also generates a const reference to `_Function`.
 	public asParameterTypes(): ReadonlyArray<Type> {
-		return this.getPlural().map(type => {
-			const inner = type.getType();
-
-			if (!type.needsPointer()) {
-				return inner;
-			} else if (inner.getName() === "String") {
-				return inner.orBasic().constReference();
-			} else {
-				return inner.orBasic().constPointer();
-			}
-		});
-	}
-
-	// TODO: comment
-	public asCallbackReturnTypes(): ReadonlyArray<Type> {
-		const types = this.getPlural().flatMap(type => {
+		return this.getPlural().flatMap(type => {
 			const inner = type.getType();
 
 			if (!type.needsPointer()) {
 				return [inner];
+			} else if (inner.getName() === "Function") {
+				const functionType = TemplateType.create(
+					FUNCTION_TYPE,
+					FunctionType.create(VOID_TYPE)
+				);
+
+				return [inner.constPointer(), functionType.constReference()];
+			} else if (inner.getName() === "String" || inner.getName() === "_Function") {
+				return [inner.constReference()];
 			} else {
-				return [inner.pointer(), inner.orBasic().pointer()];
+				return [inner.orBasic().constPointer()];
 			}
 		});
-
-		if (this.optional) {
-			types.push(VOID_TYPE);
-		}
-
-		return removeDuplicateExpressions(types);
 	}
 
 	// TODO: comment
-	public asCallbackParameterTypes(parser: Parser): ReadonlyArray<Type> {
-		const types = this.getTypes().filter(type => type.getKind() !== TypeKind.Function);
+	public asCallbackType(): Type {
+		const types = this.getTypes();
 
 		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
-			return [parser.getRootType("Object").pointer(), ANY_TYPE.pointer()];
+			return ANY_TYPE.pointer();
 		} else if (types.length > 1) {
 			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
-			return [TemplateType.create(UNION_TYPE, ...transformedTypes).pointer()];
+			return TemplateType.create(UNION_TYPE, ...transformedTypes).pointer();
 		} else {
-			const inner = types[0].getType();
-
-			if (!types[0].needsPointer()) {
-				return [inner];
-			} else {
-				return removeDuplicateExpressions([inner.pointer(), inner.orBasic().pointer()]);
-			}
+			return types[0].getPointerOrPrimitive();
 		}
 	}
 

@@ -36,58 +36,24 @@ export class TypeParser {
 		this.overrides = overrides;
 	}
 
-	// TODO: comment
-	private *parseOverloads(declaration: ts.SignatureDeclarationBase): Generator<ReadonlyArray<Type>, void, undefined> {
-		let overloads: Array<Array<Type>> = [[]];
-
-		for (const parameter of declaration.parameters) {
-			const [interfaceName, name] = getName(parameter);
-
-			if (interfaceName !== "this") {
-				yield *overloads;
-
-				if (parameter.dotDotDotToken) {
-					break;
-				}
-
-				const info = this.getNodeInfo(parameter.type!);
-
-				overloads = info.asCallbackParameterTypes(this.parser).flatMap(type => {
-					return overloads.map(parameters => [...parameters, type]);
-				});
-			}
-		}
-
-		yield *overloads;
-	}
-
-	private addCallInfo(info: TypeInfo, callSignatures: ReadonlyArray<ts.Signature>, kind: TypeKind): void {
+	private addCallInfo(info: TypeInfo, callSignatures: ReadonlyArray<ts.Signature>): void {
 		// Function calls.
 		//
 		// TODO: comment this after updating stuff.
-		// info.addType(this.parser.getRootType("EventListener"), TypeKind.Function);
-		info.addType(NULLPTR_TYPE, TypeKind.Function);
-
 		for (const signature of callSignatures) {
 			const declaration = signature.getDeclaration();
-			const returnInfo = this.getNodeInfo(declaration.type);
+			const returnType = this.getNodeInfo(declaration.type).asCallbackType();
 
-			for (const returnType of returnInfo.asCallbackReturnTypes()) {
-				const overloads = [...this.parseOverloads(declaration)];
+			const parameterTypes = declaration.parameters
+				.map(parameter => this.getNodeInfo(parameter.type))
+				.map(info => info.asCallbackType());
 
-				for (let i = 0; i < overloads.length; i++) {
-					const functionType = TemplateType.create(
-						FUNCTION_TYPE,
-						FunctionType.create(returnType, ...overloads[i])
-					);
+			const functionType = TemplateType.create(
+				FUNCTION_TYPE,
+				FunctionType.create(returnType, ...parameterTypes)
+			);
 
-					if (i === overloads.length) {
-						info.addType(functionType, kind);
-					} else {
-						info.addType(functionType, TypeKind.Function);
-					}
-				}
-			}
+			info.addType(functionType, TypeKind.Class);
 		}
 	}
 
@@ -166,7 +132,7 @@ export class TypeParser {
 			// class type because it will also generate overloads for
 			// `_Function`.
 			if (callSignatures.length > 0) {
-				this.addCallInfo(info, callSignatures, TypeKind.Function);
+				this.addCallInfo(info, callSignatures);
 			}
 		} else if (basicClass && type.isClassOrInterface()) {
 			// A typescript class for which we have a basic (not generic)
@@ -174,11 +140,11 @@ export class TypeParser {
 			info.addType(basicClass, TypeKind.Class);
 
 			if (callSignatures.length > 0) {
-				this.addCallInfo(info, callSignatures, TypeKind.Function);
+				this.addCallInfo(info, callSignatures);
 			}
 		} else if (callSignatures.length > 0) {
 			// For function types, add their call signatures.
-			this.addCallInfo(info, callSignatures, TypeKind.Class);
+			this.addCallInfo(info, callSignatures);
 		} else if (type.isIntersection()) {
 			// HACK: For intersection types, we only use the first variant.
 			this.addInfo(info, type.types[0]);

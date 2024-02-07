@@ -58,57 +58,60 @@ namespace [[cheerp::genericjs]] client {
 }
 namespace cheerp {
 	template<class T>
-	struct ArrayElementType {
+	struct ArrayElementTypeImpl {
 		using type = client::_Any*;
 	};
 	template<class T>
-	struct ArrayElementType<client::TArray<T>> {
+	struct ArrayElementTypeImpl<client::TArray<T>> {
 		using type = T;
 	};
 	template<class T>
-	using RemoveCvRefT = std::remove_cv_t<std::remove_reference_t<T>>;
+	using ArrayElementType = typename ArrayElementTypeImpl<T>::type;
 	template<class T>
-	using ArrayElementTypeT = typename ArrayElementType<RemoveCvRefT<T>>::type;
+	using Normalize = std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<T>>>;
 	template<class T>
-	constexpr bool IsCharPointerV = std::is_pointer_v<std::decay_t<T>> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>, char>;
-	template<bool Variadic, class From, class To>
-	constexpr bool IsAcceptableImplV = std::is_same_v<std::remove_pointer_t<RemoveCvRefT<To>>, client::_Any> || std::is_same_v<std::remove_pointer_t<RemoveCvRefT<From>>, client::_Any> || std::is_convertible_v<From, To> || std::is_convertible_v<From, const std::remove_pointer_t<To>&> || (Variadic && IsCharPointerV<From> && std::is_same_v<To, client::String*>);
-	template<bool Variadic, class From, class To>
-	struct IsAcceptable {
-		constexpr static bool value = IsAcceptableImplV<Variadic, From, To>;
+	constexpr bool IsCharPointer = std::is_pointer_v<std::decay_t<T>> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>, char>;
+	template<class From, class To>
+	struct CanCastHelper {
+		constexpr static bool value = false;
 	};
-	template<bool Variadic, class From, template<class...> class To, class... T>
-	struct IsAcceptable<Variadic, From*, To<T...>*> {
+	template<class From, class To>
+	constexpr bool CanCastImpl = std::is_same_v<From, client::_Any> || std::is_same_v<To, client::_Any> || (std::is_arithmetic_v<From> && std::is_arithmetic_v<To> && std::is_convertible_v<From, To>) || std::is_base_of_v<To, From> || CanCastHelper<From, To>::value;
+	template<class From, class... To>
+	constexpr bool CanCast = (CanCastImpl<Normalize<From>, Normalize<To>> || ...);
+	template<class From, class... To>
+	constexpr bool CanCastArgs = CanCast<From, To...> || (IsCharPointer<From> && (CanCast<client::String*, To> || ...));
+	template<class From, template<class...> class To, class... T>
+	struct CanCastHelper<From, To<T...>> {
 		template<class... U>
 		[[cheerp::genericjs]]
 		constexpr static bool test(To<U...>* x) {
-			return IsAcceptable<Variadic, To<U...>*, To<T...>*>::value;
+			return CanCast<To<U...>*, To<T...>*>;
 		}
 		[[cheerp::genericjs]]
 		constexpr static bool test(void*) {
 			return false;
 		}
-		constexpr static bool value = IsAcceptableImplV<Variadic, From*, To<T...>*> || test((From*) nullptr);
+		constexpr static bool value = test(&std::declval<From>());
 	};
-	template<bool Variadic, template<class...> class Class, class... T, class... U>
-	struct IsAcceptable<Variadic, Class<T...>*, Class<U...>*> {
-		constexpr static bool value = (IsAcceptable<Variadic, T, U>::value && ...);
+	template<template<class...> class Class, class... From, class... To>
+	struct CanCastHelper<Class<From...>, Class<To...>> {
+		constexpr static bool value = (CanCast<From, To> && ...);
 	};
-	template<class From, class... To>
-	constexpr bool IsAcceptableV = (IsAcceptable<false, From, To>::value || ...);
-	template<class From, class... To>
-	constexpr bool IsAcceptableArgsV = (IsAcceptable<true, From, To>::value || ...);
-	template<class T>
-	[[cheerp::genericjs]]
-	T identity(T value) {
-		return value;
-	}
+	template<class From, class To, class... Args>
+	struct CanCastHelper<client::_Function<From()>, client::_Function<To(Args...)>> {
+		constexpr static bool value = CanCast<From, To> || std::is_void_v<To>;
+	};
+	template<class From, class To, class FromFirstArg, class ToFirstArg, class... FromArgs, class... ToArgs>
+	struct CanCastHelper<client::_Function<From(FromFirstArg, FromArgs...)>, client::_Function<To(ToFirstArg, ToArgs...)>> {
+		constexpr static bool value = CanCast<ToFirstArg, FromFirstArg> && CanCastHelper<client::_Function<From(FromArgs...)>, client::_Function<To(ToArgs...)>>::value;
+	};
 	[[cheerp::genericjs, gnu::always_inline]]
 	inline client::String* makeString(const char* str);
 	template<class T>
 	[[cheerp::genericjs, gnu::always_inline]]
-	std::conditional_t<IsCharPointerV<T>, client::String*, T&&> clientCast(T&& value) {
-		if constexpr (IsCharPointerV<T>)
+	std::conditional_t<IsCharPointer<T>, client::String*, T&&> clientCast(T&& value) {
+		if constexpr (IsCharPointer<T>)
 			return makeString(value);
 		else
 			return value;

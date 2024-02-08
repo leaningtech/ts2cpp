@@ -236,10 +236,12 @@ function addFunctionExtensions(parser: Parser, functionClass: Class): void {
 	eventListenerConstructor.addParameter(eventListenerType.pointer(), "listener");
 	eventListenerConstructor.addInitializer("Object", "reinterpret_cast<Object*>(listener)");
 	eventListenerConstructor.setBody(``);
+	eventListenerConstructor.addAttribute("gnu::always_inline");
 
 	constEventListenerConstructor.addParameter(eventListenerType.constPointer(), "listener");
 	constEventListenerConstructor.addInitializer("Object", "reinterpret_cast<const Object*>(listener)");
 	constEventListenerConstructor.setBody(``);
+	constEventListenerConstructor.addAttribute("gnu::always_inline");
 
 	functionClass.addMember(eventListenerConstructor, Visibility.Protected);
 	functionClass.addMember(constEventListenerConstructor, Visibility.Protected);

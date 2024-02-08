@@ -134,11 +134,11 @@ namespace [[cheerp::genericjs]] client {
 		}
 	};
 }
-namespace cheerp {
-	[[cheerp::genericjs, gnu::always_inline]]
+namespace [[cheerp::genericjs]] cheerp {
+	[[gnu::always_inline]]
 	inline client::String* makeString(const char* str);
 	template<class T>
-	[[cheerp::genericjs, gnu::always_inline]]
+	[[gnu::always_inline]]
 	std::conditional_t<IsCharPointer<T>, client::String*, T&&> clientCast(T&& value) {
 		if constexpr (IsCharPointer<T>)
 			return makeString(value);

@@ -32,6 +32,7 @@ namespace [[cheerp::genericjs]] client {
 		template<class R, class... Args, class = std::enable_if_t<cheerp::CanCast<_Function<R(Args...)>, _Function<F>>>>
 		_Function(R(*func)(Args...)) : Function(cheerp::Callback(func)) {
 		}
+		[[gnu::always_inline]]
 		_Function(const EventListener* listener) : Function(listener) {
 		}
 	};

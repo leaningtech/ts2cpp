@@ -63,6 +63,24 @@ export class TypeData {
 		}
 	}
 
+	// TODO: comment
+	public getBasicPointerOrPrimitive(): Type {
+		if (this.needsPointer()) {
+			return this.type.orBasic().pointer();
+		} else {
+			return this.type;
+		}
+	}
+
+	// TODO: comment
+	public getBasicConstPointerOrPrimitive(): Type {
+		if (this.needsPointer()) {
+			return this.type.orBasic().constPointer();
+		} else {
+			return this.type;
+		}
+	}
+
 	// Same as `getPointerOrPrimitive`, except that if this type is void it is
 	// converted to `_Any*`. This is necessary because `void` cannot be used
 	// in many places in C++.
@@ -223,32 +241,42 @@ export class TypeInfo {
 	}
 
 	// Used when generating function parameter types. This returns an array
-	// rather than a union type so that overloads can be generated. This
-	// performs mostly the same conversion as `getPointerOrPrimitive`, except
-	// that:
-	// - `String` and `_Function` become const *references*.
+	// so that overloads can be generated. This performs mostly the same
+	// conversion as `getPointerOrPrimitive`, except that:
+	// - `String` and `_Function` become a const references.
 	// - Other non-primitive types become *const* pointers.
 	// - Generic types with `_Any*` are converted to their basic versions.
 	// - `Function` also generates a const reference to `_Function`.
+	// - union types generate const reference to `_Union`.
 	public asParameterTypes(): ReadonlyArray<Type> {
-		return this.getPlural().flatMap(type => {
+		const unionTypes = [];
+		const overloadTypes = [];
+
+		for (const type of this.getPlural()) {
 			const inner = type.getType();
 
-			if (!type.needsPointer()) {
-				return [inner];
-			} else if (inner.getName() === "Function") {
-				const functionType = TemplateType.create(
+			if (inner.getName() === "Function") {
+				unionTypes.push(type);
+
+				overloadTypes.push(TemplateType.create(
 					FUNCTION_TYPE,
 					FunctionType.create(VOID_TYPE)
-				);
-
-				return [inner.constPointer(), functionType.constReference()];
+				).constReference());
 			} else if (inner.getName() === "String" || inner.getName() === "_Function") {
-				return [inner.constReference()];
+				overloadTypes.push(inner.constReference());
 			} else {
-				return [inner.orBasic().constPointer()];
+				unionTypes.push(type);
 			}
-		});
+		}
+
+		if (unionTypes.length === 1) {
+			overloadTypes.push(unionTypes[0].getBasicConstPointerOrPrimitive());
+		} else if (unionTypes.length > 1) {
+			const transformedTypes = unionTypes.map(type => type.getBasicPointerOrPrimitive());
+			overloadTypes.push(TemplateType.create(UNION_TYPE, ...transformedTypes).constReference());
+		}
+
+		return overloadTypes;
 	}
 
 	// TODO: comment

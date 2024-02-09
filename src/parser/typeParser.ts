@@ -183,12 +183,8 @@ export class TypeParser {
 			info.addType(templateType.internUnsafe(), TypeKind.Class);
 		} else if (type.isTypeParameter()) {
 			// A type parameter that was not in the `overrides` map. We have no
-			// idea what type this is so this should just be the same as `any`,
-			// but in practice this often appears in functions that we want to
-			// call with `number` arguments. So we also add the `double` type
-			// to generate overloads that take `double`.
+			// idea what type this is so this should just be the same as `any`.
 			info.addType(ANY_TYPE, TypeKind.Class);
-			info.addType(DOUBLE_TYPE, TypeKind.Primitive);
 			info.setOptional();
 		} else {
 			// Any other type is just `client::Object`.

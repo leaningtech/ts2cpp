@@ -243,7 +243,7 @@ export class TypeInfo {
 	// Used when generating function parameter types. This returns an array
 	// so that overloads can be generated. This performs mostly the same
 	// conversion as `getPointerOrPrimitive`, except that:
-	// - `String` and `_Function` become a const references.
+	// - `String`, `_Function`, and `_Any` become a const references.
 	// - Other non-primitive types become *const* pointers.
 	// - Generic types with `_Any*` are converted to their basic versions.
 	// - `Function` also generates a const reference to `_Function`.
@@ -269,7 +269,9 @@ export class TypeInfo {
 			}
 		}
 
-		if (unionTypes.length === 1) {
+		if (unionTypes.some(type => type.getType() === ANY_TYPE)) {
+			overloadTypes.push(ANY_TYPE.constReference());
+		} else if (unionTypes.length === 1) {
 			overloadTypes.push(unionTypes[0].getBasicConstPointerOrPrimitive());
 		} else if (unionTypes.length > 1) {
 			const transformedTypes = unionTypes.map(type => type.getBasicPointerOrPrimitive());

@@ -44,37 +44,39 @@ function *getUsedTypes(parser: Parser, type: ts.Type): IterableIterator<ts.Type>
 	}
 }
 
-// Do any of the types in `types` use the type `other`? This function
-// implements a depth first search to find out.
-function usesType(parser: Parser, types: ReadonlySet<ts.Type>, other: ts.Type): boolean {
-	const queue = [...types];
-	const visited = new Set(queue);
-
-	for (let type = queue.pop(); type; type = queue.pop()) {
-		if (type === other) {
-			return true;
-		}
-
-		for (const inner of getUsedTypes(parser, type)) {
-			if (!visited.has(inner)) {
-				visited.add(inner);
-				queue.push(inner);
-			}
-		}
+function countTypes(parser: Parser, cache: Map<ts.Type, number>, type: ts.Type): number {
+	if (cache.has(type)) {
+		return cache.get(type)!;
 	}
 
-	return false;
+	cache.set(type, 0);
+
+	const count = [...getUsedTypes(parser, type)]
+		.map(type => countTypes(parser, cache, type))
+		.reduce((a, b) => a + b, 0);
+
+	cache.set(type, count);
+
+	return count;
 }
 
-function isFunctionLike(node: ts.Node): boolean {
+function usesType(parser: Parser, types: Iterable<ts.Type>, other: ts.Type): number {
+	const cache = new Map([[other, 1]]);
+
+	return [...types]
+		.map(type => countTypes(parser, cache, type))
+		.reduce((a, b) => a + b, 0);
+}
+
+function isFunctionLike(node: ts.Node): node is ts.SignatureDeclarationBase {
 	return ts.isMethodDeclaration(node) || ts.isConstructSignatureDeclaration(node) || ts.isConstructorDeclaration(node) || ts.isIndexSignatureDeclaration(node) || ts.isMethodSignature(node) || ts.isMethodDeclaration(node) || ts.isFunctionDeclaration(node);
 }
 
-function isTypeAliasLike(node: ts.Node): boolean {
+function isTypeAliasLike(node: ts.Node): node is ts.TypeAliasDeclaration {
 	return ts.isTypeAliasDeclaration(node);
 }
 
-function isClassLike(node: ts.Node): boolean {
+function isClassLike(node: ts.Node): node is ts.ClassDeclaration | ts.InterfaceDeclaration {
 	return ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node);
 }
 
@@ -152,12 +154,16 @@ export class Generics {
 	public createParameters(parser: Parser, declarations: ReadonlyArray<any>): [Array<NamedType>, Set<Expression>] {
 		const types = new Array<NamedType>;
 		const constraints = new Set<Expression>;
-		const returnTypes = new Set<ts.Type>;
+		const aliasTypes = new Set<ts.Type>;
+		const usedTypes = new Array<ts.Type>;
 
-		// 1. Gather a list of types that are used in places where C++ does not
-		// perform "template argument deduction". This information is used to
-		// ellide and completely remove the type argument in some cases. Type
-		// arguments of generic classes are ignored here and are never ellided.
+		// 1. Collect the types used by this declaration. This information is
+		// used to ellide type arguments in some cases. Type arguments of
+		// classes are ignored here and never ellided.
+		//
+		// For function types, we gather all types used in the function
+		// signature. Type arguments for functions can be ellided if they
+		// appear at most once in the signature.
 		//
 		// For example, consider the conversion of this typescript code:
 		// ```
@@ -167,24 +173,28 @@ export class Generics {
 		//
 		// In the function `foo`, the type argument `T` must be present,
 		// because otherwise we would not be able to accurately specify the
-		// return type. The type argument `T` is required to specify that the
-		// return type is the same as the type of `arg`.
+		// relation that the return type is the same as the argument type. 
 		//
 		// In the function `bar` however, because `T` is not used in the return
-		// type, we can remove the whole type parameter `T` and replace the
-		// type of `arg` with `any`. No type information is lost because `T`
-		// could have been `any` to begin with, and nothing is gained by using
-		// a type more specific than `any`.
+		// type, or in any other argument, we can remove the whole type
+		// parameter `T` and replace the type of `arg` with `any`. No type
+		// information is lost because `T` could have been `any` to begin with,
+		// and nothing is gained by using a type more specific than `any`.
 		//
 		// The same applies when `T` has a type constraint, except instead of
 		// replacing `T` with `any` it is replaced with the constraint.
+		//
+		// For alias types, the type argument only needs to be used once. If it
+		// is not used at all, then it can be ellided.
 		for (const declaration of declarations) {
-			if (isFunctionLike(declaration) && declaration.type) {
-				// Cannot ellide `T` if it is the return type of a function.
-				returnTypes.add(parser.getTypeFromTypeNode(declaration.type));
+			if (isFunctionLike(declaration)) {
+				usedTypes.push(parser.getTypeFromTypeNode(declaration.type!));
+
+				for (const parameter of declaration.parameters) {
+					usedTypes.push(parser.getTypeFromTypeNode(parameter.type!));
+				}
 			} else if (isTypeAliasLike(declaration)) {
-				// Cannot ellide `T` if it is the aliased type of a type alias.
-				returnTypes.add(parser.getTypeFromTypeNode(declaration.type));
+				aliasTypes.add(parser.getTypeFromTypeNode(declaration.type));
 			}
 		}
 
@@ -213,7 +223,7 @@ export class Generics {
 				// If the type parameter can be ellided, we only add the
 				// constraint to the type argument map, and we do not generate
 				// a type argument at all.
-				if (isClassLike(declaration) || usesType(parser, returnTypes, type)) {
+				if (isClassLike(declaration) || usesType(parser, aliasTypes, type) > 0 || usesType(parser, usedTypes, type) > 1) {
 					types[i] ??= NamedType.create(`_T${this.nextId++}`);
 					this.addType(type, new TypeInfo(types[i], TypeKind.Generic));
 

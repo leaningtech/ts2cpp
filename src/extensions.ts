@@ -234,14 +234,10 @@ function addFunctionExtensions(parser: Parser, functionClass: Class): void {
 	const constEventListenerConstructor = new Function(functionClass.getName());
 
 	eventListenerConstructor.addParameter(eventListenerType.pointer(), "listener");
-	eventListenerConstructor.addInitializer("Object", "reinterpret_cast<Object*>(listener)");
-	eventListenerConstructor.setBody(``);
-	eventListenerConstructor.addAttribute("gnu::always_inline");
+	eventListenerConstructor.addAttribute("cheerp::client_transparent");
 
 	constEventListenerConstructor.addParameter(eventListenerType.constPointer(), "listener");
-	constEventListenerConstructor.addInitializer("Object", "reinterpret_cast<const Object*>(listener)");
-	constEventListenerConstructor.setBody(``);
-	constEventListenerConstructor.addAttribute("gnu::always_inline");
+	constEventListenerConstructor.addAttribute("cheerp::client_transparent");
 
 	functionClass.addMember(eventListenerConstructor, Visibility.Protected);
 	functionClass.addMember(constEventListenerConstructor, Visibility.Protected);

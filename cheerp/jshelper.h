@@ -106,6 +106,10 @@ namespace [[cheerp::genericjs]] client {
 		explicit operator T() const {
 			return this->cast<T>();
 		}
+		[[gnu::always_inline]]
+		explicit operator int() const {
+			return this->cast<int>();
+		}
 	};
 	template<class... Variants>
 	class [[cheerp::client_layout]] _Union {

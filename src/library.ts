@@ -1,5 +1,5 @@
-import { Declaration } from "./declaration/declaration.js";
-import { State, Target, ResolverContext, resolveDependencies, removeDuplicateDeclarations } from "./target.js";
+import { Declaration, mergeDuplicateDeclarations } from "./declaration/declaration.js";
+import { State, Target, ResolverContext, resolveDependencies } from "./target.js";
 import { Options, StreamWriter } from "./writer.js";
 import { Include, File, FileWriter } from "./file.js";
 import * as fs from "fs";
@@ -120,7 +120,7 @@ export class Library {
 	}
 
 	public removeDuplicates(): void {
-		this.globals.splice(0, this.globals.length, ...removeDuplicateDeclarations(this.globals));
+		this.globals.splice(0, this.globals.length, ...mergeDuplicateDeclarations(this.globals));
 	}
 
 	public write(options?: Partial<Options>): void {

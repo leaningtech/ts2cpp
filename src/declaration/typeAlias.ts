@@ -50,8 +50,4 @@ export class TypeAlias extends TemplateDeclaration {
 		writer.write(";");
 		writer.writeLine(false);
 	}
-
-	public key(): string {
-		return `A${this.getPath()};`;
-	}
 }

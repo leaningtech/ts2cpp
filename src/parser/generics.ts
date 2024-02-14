@@ -2,7 +2,7 @@
 
 import { Parser } from "./parser.js";
 import { Type } from "../type/type.js";
-import { NamedType } from "../type/namedType.js";
+import { GenericType } from "../type/genericType.js";
 import { Expression } from "../type/expression.js";
 import { options } from "../utility.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
@@ -149,10 +149,10 @@ export class Generics {
 	// We return both a list of all the added type arguments, and a set of
 	// expressions that represent the constraints on the type arguments.
 	//
-	// In the simplest case, we construct a `NamedType` for every type argument
-	// and add it to the map.
-	public createParameters(parser: Parser, declarations: ReadonlyArray<any>): [Array<NamedType>, Set<Expression>] {
-		const types = new Array<NamedType>;
+	// In the simplest case, we construct a `GenericType` for every type
+	// argument and add it to the map.
+	public createParameters(parser: Parser, declarations: ReadonlyArray<any>): [Array<GenericType>, Set<Expression>] {
+		const types = new Array<GenericType>;
 		const constraints = new Set<Expression>;
 		const aliasTypes = new Set<ts.Type>;
 		const usedTypes = new Array<ts.Type>;
@@ -224,7 +224,7 @@ export class Generics {
 				// constraint to the type argument map, and we do not generate
 				// a type argument at all.
 				if (isClassLike(declaration) || usesType(parser, aliasTypes, type) > 0 || usesType(parser, usedTypes, type) > 1) {
-					types[i] ??= NamedType.create(`_T${this.nextId++}`);
+					types[i] ??= GenericType.create(`_T${this.nextId++}`);
 					this.addType(type, new TypeInfo(types[i], TypeKind.Generic));
 
 					if (info && options.useConstraints) {

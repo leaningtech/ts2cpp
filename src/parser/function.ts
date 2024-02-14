@@ -7,7 +7,8 @@ import { TemplateType } from "../type/templateType.js";
 import { CompoundExpression } from "../type/compoundExpression.js";
 import { Type } from "../type/type.js";
 import { Function } from "../declaration/function.js";
-import { DOUBLE_TYPE, ARGS, ANY_TYPE, ENABLE_IF } from "../type/namedType.js";
+import { DOUBLE_TYPE, ANY_TYPE, ENABLE_IF } from "../type/namedType.js";
+import { ARGS } from "../type/genericType.js"
 import { ELLIPSES } from "../type/literalExpression.js";
 import { options } from "../utility.js";
 import * as ts from "typescript";

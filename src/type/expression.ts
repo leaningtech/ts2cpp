@@ -99,8 +99,8 @@ export abstract class Expression {
 		return this.intern();
 	}
 }
+
 // Returns a new array where every key occurs at most once.
 export function removeDuplicateExpressions<T extends Expression>(expressions: ReadonlyArray<T>): Array<T> {
 	return [...new Set(expressions)];
 }
-

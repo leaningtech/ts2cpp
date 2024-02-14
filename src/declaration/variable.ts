@@ -53,8 +53,4 @@ export class Variable extends Declaration {
 		writer.write(";");
 		writer.writeLine(false);
 	}
-
-	public key(): string {
-		return `V${this.getPath()};`;
-	}
 }

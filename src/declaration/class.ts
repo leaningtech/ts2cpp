@@ -1,6 +1,6 @@
 import { Namespace, Flags } from "./namespace.js";
-import { Declaration, TemplateDeclaration } from "./declaration.js";
-import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies, removeDuplicateDeclarations } from "../target.js";
+import { Declaration, TemplateDeclaration, mergeDuplicateDeclarations } from "./declaration.js";
+import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies } from "../target.js";
 import { Expression } from "../type/expression.js";
 import { Type } from "../type/type.js";
 import { DeclaredType } from "../type/declaredType.js";
@@ -118,10 +118,18 @@ export class Class extends TemplateDeclaration {
 		return this.bases ?? [];
 	}
 
+	// Add `type` as a base class with the given `visibility`.
+	//
+	// Two things of note:
+	// - Any attempt to add the class itself as a base class is ignored.
+	// - Any attempt to add a duplicate base class is ignored.
 	public addBase(type: Type, visibility: Visibility): void {
 		if (!(type instanceof DeclaredType) || type.getDeclaration() !== this) {
 			this.bases ??= [];
-			this.bases.push(new Base(type, visibility));
+
+			if (!this.bases.some(base => base.getType() === type)) {
+				this.bases.push(new Base(type, visibility));
+			}
 		}
 	}
 
@@ -148,8 +156,7 @@ export class Class extends TemplateDeclaration {
 	}
 
 	public removeDuplicates(): void {
-		this.bases && this.bases.splice(0, this.bases.length, ...new Map(this.bases.map(base => [base.getType(), base])).values());
-		this.members && this.members.splice(0, this.members.length, ...removeDuplicateDeclarations(this.members));
+		this.members && this.members.splice(0, this.members.length, ...mergeDuplicateDeclarations(this.members));
 	}
 
 	public removeMember(name: string): void {
@@ -273,10 +280,6 @@ export class Class extends TemplateDeclaration {
 			writer.write(";");
 			writer.writeLine(false);
 		}
-	}
-
-	public key(): string {
-		return `C${this.getPath()};`;
 	}
 
 	// Recursively find all base types, and count how many times each one

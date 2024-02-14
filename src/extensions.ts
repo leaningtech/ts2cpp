@@ -5,6 +5,7 @@ import { Class, Visibility } from "./declaration/class.js";
 import { Type } from "./type/type.js";
 import { DeclaredType } from "./type/declaredType.js";
 import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./type/namedType.js";
+import { GenericType } from "./type/genericType.js";
 import { QualifiedType, TypeQualifier } from "./type/qualifiedType.js";
 import { TemplateType } from "./type/templateType.js";
 import { Parser } from "./parser/parser.js";
@@ -173,7 +174,7 @@ function addObjectExtensions(parser: Parser, objectClass: Class): void {
 	const genericSetFunc = new Function("set_", VOID_TYPE);
 	genericSetFunc.addTypeParameter("T");
 	genericSetFunc.addParameter(stringType.constReference(), "name");
-	genericSetFunc.addParameter(NamedType.create("T"), "v");
+	genericSetFunc.addParameter(GenericType.create("T"), "v");
 	
 	const indexFunc = new Function("operator[]", objectType.pointer());
 	indexFunc.addFlags(Flags.Const);
@@ -193,8 +194,8 @@ function addObjectExtensions(parser: Parser, objectClass: Class): void {
 // are both nicer to use and more type safe.
 // TODO: it is probably better to just modify the test case and remove these.
 function addMapExtensions(parser: Parser, mapClass: Class): void {
-	const keyType = NamedType.create("K");
-	const valueType = NamedType.create("V");
+	const keyType = GenericType.create("K");
+	const valueType = GenericType.create("V");
 
 	const getFunc = new Function("get", valueType);
 	getFunc.addTypeParameter("K");

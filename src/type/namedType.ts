@@ -63,4 +63,3 @@ export const ARRAY_ELEMENT_TYPE = NamedType.create("cheerp::ArrayElementType");
 export const ANY_TYPE = NamedType.create("_Any");
 export const UNION_TYPE = NamedType.create("_Union");
 export const FUNCTION_TYPE = NamedType.create("_Function");
-export const ARGS = NamedType.create("_Args");

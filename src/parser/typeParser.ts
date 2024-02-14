@@ -45,6 +45,7 @@ export class TypeParser {
 			const returnType = this.getNodeInfo(declaration.type).asCallbackType();
 
 			const parameterTypes = declaration.parameters
+				.filter(parameter => getName(parameter)[0] !== "this")
 				.map(parameter => this.getNodeInfo(parameter.type))
 				.map(info => info.asCallbackType());
 

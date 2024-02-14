@@ -9,9 +9,9 @@
 // converted to pointer types, this is the file to change.
 
 import { Parser } from "./parser.js";
-import { Expression, removeDuplicateExpressions } from "../type/expression.js";
+import { Expression } from "../type/expression.js";
 import { Type } from "../type/type.js";
-import { NamedType, ANY_TYPE, UNION_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "../type/namedType.js";
+import { NamedType, ANY_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "../type/namedType.js";
 import { TemplateType } from "../type/templateType.js";
 import { TypeQualifier } from "../type/qualifiedType.js";
 import { DeclaredType } from "../type/declaredType.js";
@@ -67,15 +67,6 @@ export class TypeData {
 	public getBasicPointerOrPrimitive(): Type {
 		if (this.needsPointer()) {
 			return this.type.orBasic().pointer();
-		} else {
-			return this.type;
-		}
-	}
-
-	// TODO: comment
-	public getBasicConstPointerOrPrimitive(): Type {
-		if (this.needsPointer()) {
-			return this.type.orBasic().constPointer();
 		} else {
 			return this.type;
 		}
@@ -232,11 +223,9 @@ export class TypeInfo {
 
 		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
 			return parser.getRootType("Object").pointer();
-		} else if (types.length > 1) {
-			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
-			return TemplateType.create(UNION_TYPE, ...transformedTypes).pointer();
 		} else {
-			return types[0].getPointerOrPrimitive();
+			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
+			return TemplateType.createUnion(TypeQualifier.Pointer, ...transformedTypes);
 		}
 	}
 
@@ -262,20 +251,25 @@ export class TypeInfo {
 					FUNCTION_TYPE,
 					FunctionType.create(VOID_TYPE)
 				).constReference());
-			} else if (inner.getName() === "String" || inner.getName() === "_Function") {
+			} else if (inner.getName() === "String" || inner.getName() === "_Function" || inner.getName() === "_Any") {
 				overloadTypes.push(inner.constReference());
 			} else {
 				unionTypes.push(type);
+
+				// If the type has any generic parameters, we also generate an
+				// overload for this type to help with template argument
+				// deduction.
+				if (inner.hasGenerics()) {
+					overloadTypes.push(type.getBasicPointerOrPrimitive());
+				}
 			}
 		}
 
 		if (unionTypes.some(type => type.getType() === ANY_TYPE)) {
 			overloadTypes.push(ANY_TYPE.constReference());
-		} else if (unionTypes.length === 1) {
-			overloadTypes.push(unionTypes[0].getBasicConstPointerOrPrimitive());
-		} else if (unionTypes.length > 1) {
+		} else if (unionTypes.length >= 1) {
 			const transformedTypes = unionTypes.map(type => type.getBasicPointerOrPrimitive());
-			overloadTypes.push(TemplateType.create(UNION_TYPE, ...transformedTypes).constReference());
+			overloadTypes.push(TemplateType.createUnion(TypeQualifier.ConstReference, ...transformedTypes));
 		}
 
 		return overloadTypes;
@@ -287,11 +281,9 @@ export class TypeInfo {
 
 		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
 			return ANY_TYPE.pointer();
-		} else if (types.length > 1) {
-			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
-			return TemplateType.create(UNION_TYPE, ...transformedTypes).pointer();
 		} else {
-			return types[0].getPointerOrPrimitive();
+			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
+			return TemplateType.createUnion(TypeQualifier.Pointer, ...transformedTypes);
 		}
 	}
 

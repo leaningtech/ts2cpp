@@ -2,8 +2,9 @@ import { State, Dependencies, ReasonKind, ResolverContext } from "../target.js";
 import { Namespace } from "./namespace.js";
 import { Writer } from "../writer.js";
 import { Type } from "../type/type.js";
-import { NamedType } from "../type/namedType.js";
+import { GenericType } from "../type/genericType.js";
 import { removeDuplicateExpressions } from "../type/expression.js";
+import type { Target } from "../target.js";
 import * as ts from "typescript";
 
 export class ReferenceData {
@@ -232,11 +233,10 @@ export abstract class Declaration extends Namespace {
 	// correct order.
 	public abstract write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void;
 
-	// Returns a key that identifies this declaration, it is used for removing
-	// duplicate declarations. The key should be specific enough so we don't
-	// remove any declarations that aren't actually duplicates, but it should
-	// should not allow conflicting overloads to exist together.
-	public abstract key(): string;
+	// TODO: comment
+	public merge(other: Declaration): boolean {
+		return false;
+	}
 }
 
 export class TypeParameter {
@@ -329,16 +329,11 @@ export abstract class TemplateDeclaration extends Declaration {
 		}
 	}
 
-	public templateKey(): string {
-		return this.getTypeParameters()
-			.map(typeParameter => typeParameter.getName() + ";").join("");
-	}
-
 	public removeUnusedTypeParameters(): void {
 		// Get all referenced types.
 		const referencedTypes = new Set(
 			this.getReferencedTypes()
-				.filter((type): type is NamedType => type instanceof NamedType)
+				.filter((type): type is GenericType => type instanceof GenericType)
 				.map(type => type.getName())
 		);
 
@@ -351,4 +346,34 @@ export abstract class TemplateDeclaration extends Declaration {
 			this.typeParameters.splice(0, this.typeParameters.length, ...typeParameters);
 		}
 	}
+}
+
+// TODO: comment
+export function mergeDuplicateDeclarations<T extends Target>(targets: ReadonlyArray<T>): ReadonlyArray<T> {
+	const map = new Map;
+
+	for (const target of targets) {
+		const declaration = target.getDeclaration();
+		const path = declaration.getPath();
+		let array = map.get(path);
+		let merged = false;
+
+		if (array === undefined) {
+			array = new Array;
+			map.set(path, array);
+		}
+
+		for (const other of array) {
+			if (other.getDeclaration().merge(declaration)) {
+				merged = true;
+				break;
+			}
+		}
+
+		if (!merged) {
+			array.push(target);
+		}
+	}
+
+	return [...map.values()].flat();
 }

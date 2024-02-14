@@ -17,6 +17,8 @@
 
 import { Declaration } from "./declaration/declaration.js";
 import { options } from "./utility.js";
+import { Function } from "./declaration/function.js";
+import { Flags } from "./declaration/namespace.js";
 
 // This enum represents how much of a declaration is written.
 // Partial: it is only forward declared (eg. "class Object;").
@@ -351,14 +353,3 @@ class DependencyResolver<T extends Target> {
 export function resolveDependencies<T extends Target>(context: ResolverContext, targets: ReadonlyArray<T>, resolve: ResolveFunction<T>): void {
 	new DependencyResolver(context, targets, resolve).resolveDependencies();
 }
-
-// Returns a new array where every key occurs at most once.
-export function removeDuplicateDeclarations<T extends Target>(targets: ReadonlyArray<T>): ReadonlyArray<T> {
-	const keys = new Set;
-
-	return targets.filter(target => {
-		const key = target.getDeclaration().key();
-		return !keys.has(key) && keys.add(key);
-	});
-}
-

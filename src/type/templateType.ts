@@ -1,14 +1,14 @@
 import { Type, UnqualifiedType } from "./type.js";
+import { TypeQualifier, QualifiedType } from "./qualifiedType.js";
 import { DeclaredType } from "./declaredType.js";
-import { Expression } from "./expression.js";
+import { Expression, removeDuplicateExpressions } from "./expression.js";
 import { Dependency, State, Dependencies } from "../target.js";
 import { Class } from "../declaration/class.js";
 import { Writer } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
 import { LiteralExpression, TRUE } from "./literalExpression.js";
 import { CompoundExpression } from "./compoundExpression.js";
-import { VOID_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, IS_SAME, IS_CONVERTIBLE, CAN_CAST, CAN_CAST_ARGS } from "./namedType.js";
-import { removeDuplicateExpressions } from "./expression.js";
+import { VOID_TYPE, UNION_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, IS_SAME, IS_CONVERTIBLE, CAN_CAST, CAN_CAST_ARGS } from "./namedType.js";
 
 // A template type is a generic type with template arguments
 // (`TArray<String*>`).
@@ -156,6 +156,31 @@ export class TemplateType extends Type {
 		}
 
 		return result.intern();
+	}
+
+	// TODO: comment
+	// TODO: merge derived type into base type
+	public static createUnion(qualifier: TypeQualifier, ...types: ReadonlyArray<Type>): Type {
+		types = removeDuplicateExpressions(
+			types
+				.flatMap(type => {
+					const nakedType = type.removeQualifiers();
+
+					if (nakedType instanceof TemplateType) {
+						if (nakedType.getInner() === UNION_TYPE) {
+							return nakedType.getTypeParameters() as ReadonlyArray<Type>;
+						}
+					}
+
+					return [type];
+				})
+		);
+
+		if (types.length === 1) {
+			return types[0];
+		} else {
+			return TemplateType.create(UNION_TYPE, ...types).qualify(qualifier);
+		}
 	}
 	
 	// Construct an `std::enable_if_t` template.

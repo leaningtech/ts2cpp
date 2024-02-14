@@ -63,6 +63,12 @@ export abstract class Type extends Expression {
 	public orBasic(): Type {
 		return this;
 	}
+
+	// Check recursively if the type references any type arguments of a
+	// template declaration.
+	public hasGenerics(): boolean {
+		return this.getReferencedTypes().some(type => type instanceof GenericType);
+	}
 }
 
 // A type to mark that this type has no qualifiers, this is used to restrict
@@ -74,3 +80,4 @@ export abstract class UnqualifiedType extends Type {
 
 import { TypeQualifier, QualifiedType } from "./qualifiedType.js";
 import { MemberType } from "./memberType.js";
+import { GenericType } from "./genericType.js";

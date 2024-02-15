@@ -81,6 +81,11 @@ export abstract class Expression {
 		return writer.getString();
 	}
 
+	// Replace all instances of `placeholder` with `type`.
+	public fix(placeholder: PlaceholderType, type: Expression): any {
+		return this as Expression === placeholder ? type : this;
+	}
+
 	protected intern(): this {
 		const key = this.key();
 		const value = EXPRESSIONS.get(key);
@@ -92,15 +97,11 @@ export abstract class Expression {
 		EXPRESSIONS.set(key, this);
 		return this;
 	}
-
-	// A public version of `intern`, this is called unsafe because it should
-	// only be used with `createUnsafe` functions, which are very dangerous.
-	public internUnsafe(): this {
-		return this.intern();
-	}
 }
 
 // Returns a new array where every key occurs at most once.
 export function removeDuplicateExpressions<T extends Expression>(expressions: ReadonlyArray<T>): Array<T> {
 	return [...new Set(expressions)];
 }
+
+import type { PlaceholderType } from "./placeholderType.js";

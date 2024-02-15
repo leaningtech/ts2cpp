@@ -233,7 +233,15 @@ export abstract class Declaration extends Namespace {
 	// correct order.
 	public abstract write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void;
 
-	// TODO: comment
+	// Merge this declaration with another declaration, this is used by
+	// `mergeDuplicateDeclarations` to remove duplicate declarations and avoid
+	// ambiguous overloads.
+	//
+	// The return value indicates whether the declaration could be merged.
+	// Subclasses should return true if the declaration was succesfully merged,
+	// indicating that the other declaration can be removed. And should return
+	// false if the declaration could not be merged, and the other declaration
+	// will stay.
 	public merge(other: Declaration): boolean {
 		return false;
 	}
@@ -348,7 +356,16 @@ export abstract class TemplateDeclaration extends Declaration {
 	}
 }
 
-// TODO: comment
+// For each declaration, try to merge it with every previous declaration with
+// the same name, until one is found where the merge was successful.
+//
+// If the merge was successful, the declaration is not removed from the list of
+// declarations. If the declaration could not be merged into any previous
+// declaration, or there were no previous declarations, the declaration is
+// added to the list of declarations.
+//
+// The actual merging behaviour is implemented in the `merge` function in
+// subclasses of `Declaration`.
 export function mergeDuplicateDeclarations<T extends Target>(targets: ReadonlyArray<T>): ReadonlyArray<T> {
 	const map = new Map;
 

@@ -1,4 +1,5 @@
 import { Type, UnqualifiedType } from "./type.js";
+import { PlaceholderType } from "./placeholderType.js";
 import { TypeQualifier, QualifiedType } from "./qualifiedType.js";
 import { DeclaredType } from "./declaredType.js";
 import { Expression, removeDuplicateExpressions } from "./expression.js";
@@ -8,7 +9,8 @@ import { Writer } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
 import { LiteralExpression, TRUE } from "./literalExpression.js";
 import { CompoundExpression } from "./compoundExpression.js";
-import { VOID_TYPE, UNION_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, IS_SAME, IS_CONVERTIBLE, CAN_CAST, CAN_CAST_ARGS } from "./namedType.js";
+import { FunctionType } from "./functionType.js";
+import { VOID_TYPE, UNION_TYPE, FUNCTION_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, IS_SAME, IS_CONVERTIBLE, CAN_CAST, CAN_CAST_ARGS } from "./namedType.js";
 
 // A template type is a generic type with template arguments
 // (`TArray<String*>`).
@@ -27,14 +29,6 @@ export class TemplateType extends Type {
 
 	public getTypeParameters(): ReadonlyArray<Expression> {
 		return this.typeParameters ?? [];
-	}
-
-	// This is unsafe because `TemplateType` should be immutable. There is a
-	// rare case where we need to modify it, but we should be very careful when
-	// doing so.
-	public addTypeParameterUnsafe(typeParameter: Expression): void {
-		this.typeParameters ??= [];
-		this.typeParameters.push(typeParameter);
 	}
 
 	// The dependencies of a template type are:
@@ -141,11 +135,11 @@ export class TemplateType extends Type {
 		return this;
 	}
 
-	// A version of `create` that does not intern the template type. Attempting
-	// to use the return value of this function may break things in subtle ways
-	// and should only be done with extreme caution.
-	public static createUnsafe(inner: UnqualifiedType): TemplateType {
-		return new TemplateType(inner);
+	public fix(placeholder: PlaceholderType, type: Expression): any {
+		return TemplateType.create(
+			this.inner.fix(placeholder, type),
+			...this.getTypeParameters().map(parameter => parameter.fix(placeholder, type))
+		);
 	}
 
 	public static create(inner: UnqualifiedType, ...typeParameters: ReadonlyArray<Expression>): TemplateType {
@@ -158,7 +152,12 @@ export class TemplateType extends Type {
 		return result.intern();
 	}
 
-	// TODO: comment
+	// Construct a `_Union` template.
+	//
+	// If the resulting union would contain a nested union, it is flattened.
+	// If the resulting union would only have one type parameter, that type is
+	// returned by itself and no union is constructed.
+	//
 	// TODO: merge derived type into base type
 	public static createUnion(qualifier: TypeQualifier, ...types: ReadonlyArray<Type>): Type {
 		types = removeDuplicateExpressions(
@@ -181,6 +180,11 @@ export class TemplateType extends Type {
 		} else {
 			return TemplateType.create(UNION_TYPE, ...types).qualify(qualifier);
 		}
+	}
+
+	// Construct a `_Function` template.
+	public static createFunction(returnType: Type, ...parameters: ReadonlyArray<Type>): TemplateType {
+		return TemplateType.create(FUNCTION_TYPE, FunctionType.create(returnType, ...parameters));
 	}
 	
 	// Construct an `std::enable_if_t` template.

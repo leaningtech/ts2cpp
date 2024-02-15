@@ -1,4 +1,5 @@
 import { Expression } from "./expression.js";
+import { PlaceholderType } from "./placeholderType.js";
 import { Dependency, State, Dependencies } from "../target.js";
 import { Type } from "./type.js";
 import { Writer } from "../writer.js";
@@ -102,6 +103,13 @@ export class CompoundExpression extends Expression {
 		case ExpressionKind.LogicalOr:
 			return this.getChildren().some(child => child.isAlwaysTrue());
 		}
+	}
+
+	public fix(placeholder: PlaceholderType, type: Expression): any {
+		return CompoundExpression.create(
+			this.kind,
+			...this.getChildren().map(member => member.fix(placeholder, type))
+		);
 	}
 
 	// Create a new compound expression.

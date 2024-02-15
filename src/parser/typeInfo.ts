@@ -11,7 +11,7 @@
 import { Parser } from "./parser.js";
 import { Expression } from "../type/expression.js";
 import { Type } from "../type/type.js";
-import { NamedType, ANY_TYPE, FUNCTION_TYPE, VOID_TYPE, NULLPTR_TYPE } from "../type/namedType.js";
+import { NamedType, ANY_TYPE, VOID_TYPE, NULLPTR_TYPE } from "../type/namedType.js";
 import { TemplateType } from "../type/templateType.js";
 import { TypeQualifier } from "../type/qualifiedType.js";
 import { DeclaredType } from "../type/declaredType.js";
@@ -63,7 +63,9 @@ export class TypeData {
 		}
 	}
 
-	// TODO: comment
+	// Similar to `getPointerOrPrimitive`, but generic types that take `_Any*`
+	// are converted to their basic version. This is useful for generating
+	// parameter types (see `asParameterTypes` on `TypeInfo`).
 	public getBasicPointerOrPrimitive(): Type {
 		if (this.needsPointer()) {
 			return this.type.orBasic().pointer();
@@ -246,11 +248,7 @@ export class TypeInfo {
 
 			if (inner.getName() === "Function") {
 				unionTypes.push(type);
-
-				overloadTypes.push(TemplateType.create(
-					FUNCTION_TYPE,
-					FunctionType.create(VOID_TYPE)
-				).constReference());
+				overloadTypes.push(TemplateType.createFunction(VOID_TYPE).constReference());
 			} else if (inner.getName() === "String" || inner.getName() === "_Function" || inner.getName() === "_Any") {
 				overloadTypes.push(inner.constReference());
 			} else {
@@ -275,7 +273,13 @@ export class TypeInfo {
 		return overloadTypes;
 	}
 
-	// TODO: comment
+	// Used to generate the arguments and return values of callback types.
+	// Both `T` and `U` in `_Function<T(U...)>` are generated using this
+	// method.
+	//
+	// This is almost the same as `asReturnType`, except that we do not convert
+	// `_Any*` to `Object*`. Callback types are a new addition and
+	// compatibility is not a concern.
 	public asCallbackType(): Type {
 		const types = this.getTypes();
 

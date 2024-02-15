@@ -254,29 +254,43 @@ export class Function extends TemplateDeclaration {
 		}
 	}
 
-	// TODO: comment
+	// Merge function types to remove duplicate declarations and avoid
+	// ambiguous overloads. Two functions are merged if and only if they have:
+	// - An equal number of parameters.
+	// - An equal number of template type parameters.
+	// - Equal constness.
+	// - Compatible parameter types.
+	//
+	// For each parameter type of this function and the corresponding type of
+	// the other function:
+	// - If both are the same type, it is used unchanged.
+	// - If both are `_Function` types, they are merged using `mergeFunction`.
+	// - If both are `_Union` types, they are merged by creating a new `_Union`
+	//   with all type parameters from both `_Union`s.
+	// - Otherwise, the parameters types are incompatible.
 	public merge(other: Declaration): boolean {
+		// Cannot merge if the other declaration is not also a function.
 		if (!(other instanceof Function)) {
-			return false;
-		}
-
-		if ((this.getFlags() ^ other.getFlags()) & Flags.Const) {
-			return false;
-		}
-
-		if (this.getTypeParameters().length !== other.getTypeParameters().length) {
 			return false;
 		}
 
 		const thisParameters = this.getParameters();
 		const otherParameters = other.getParameters();
+		const parameters = new Array;
+		let canMerge = true;
 
-		if (thisParameters.length !== otherParameters.length) {
+		canMerge &&= thisParameters.length === otherParameters.length;
+		canMerge &&= this.getTypeParameters().length === other.getTypeParameters().length;
+		canMerge &&= !((this.getFlags() ^ other.getFlags()) & Flags.Const);
+
+		if (!canMerge) {
 			return false;
 		}
 
 		for (let i = 0; i < thisParameters.length; i++) {
 			if (thisParameters[i].getType() === otherParameters[i].getType()) {
+				// Both parameters are the same type, use the type unchanged.
+				parameters.push(thisParameters[i].getType());
 				continue;
 			}
 
@@ -287,73 +301,66 @@ export class Function extends TemplateDeclaration {
 				return false;
 			}
 
-			if (thisParameter.getInner() !== otherParameter.getInner()) {
-				return false;
-			}
+			const thisInner = thisParameter.getInner();
+			const otherInner = otherParameter.getInner();
 
-			switch (thisParameter.getInner()) {
-			case UNION_TYPE:
-			case FUNCTION_TYPE:
-				break;
-			default:
-				return false;
-			}
-		}
-
-		this.type = mergeReturn(this.type, other.type);
-		
-		for (let i = 0; i < thisParameters.length; i++) {
-			if (thisParameters[i].getType() === otherParameters[i].getType()) {
-				continue;
-			}
-
-			const thisParameter = thisParameters[i].getType().removeQualifiers() as TemplateType;
-			const otherParameter = otherParameters[i].getType().removeQualifiers() as TemplateType;
-
-			switch (thisParameter.getInner()) {
-			case UNION_TYPE:
-				thisParameters[i].setType(TemplateType.createUnion(
+			if (thisInner === UNION_TYPE && otherInner === UNION_TYPE) {
+				// Both parameters are union types, create a new union with all
+				// type parameters from both unions.
+				parameters.push(TemplateType.createUnion(
 					TypeQualifier.ConstReference,
 					...thisParameter.getTypeParameters() as ReadonlyArray<Type>,
 					...otherParameter.getTypeParameters() as ReadonlyArray<Type>
 				));
-
-				break;
-			case FUNCTION_TYPE:
+			} else if (thisInner === FUNCTION_TYPE && otherInner === FUNCTION_TYPE) {
+				// Both parameters are function types, use `mergeFunction` to
+				// merge the function types.
 				const thisFunction = thisParameter.getTypeParameters()[0] as FunctionType;
 				const otherFunction = otherParameter.getTypeParameters()[0] as FunctionType;
-				let lesserParameters = thisFunction.getParameters();
-				let greaterParameters = otherFunction.getParameters();
-				const parameters = new Array;
-
-				if (greaterParameters.length < lesserParameters.length) {
-					[lesserParameters, greaterParameters] = [greaterParameters, lesserParameters];
-				}
-
-				for (let i = 0; i < lesserParameters.length; i++) {
-					parameters.push(TemplateType.createUnion(TypeQualifier.Pointer, lesserParameters[i], greaterParameters[i]));
-				}
-				
-				for (let i = lesserParameters.length; i < greaterParameters.length; i++) {
-					parameters.push(greaterParameters[i]);
-				}
-
-				thisParameters[i].setType(TemplateType.create(
-					FUNCTION_TYPE,
-					FunctionType.create(mergeReturn(thisFunction.getReturnType(), otherFunction.getReturnType()), ...parameters)
-				).constReference());
-
-				break;
+				parameters.push(mergeFunction(thisFunction, otherFunction));
+			} else {
+				// Parameter types are not compatible.
+				return false;
 			}
+		}
+
+		// At this point we know that the function declarations can be merged
+		// for sure. We can now safely modify the declaration.
+		this.type = mergeReturn(this.type, other.type);
+
+		for (let i = 0; i < parameters.length; i++) {
+			thisParameters[i].setType(parameters[i]);
 		}
 
 		return true;
 	}
 }
 
-function mergeReturn(self: Type, other: Type): Type;
-function mergeReturn(self?: Type, other?: Type): Type | undefined;
+// Merge `_Function` types. The return type is made using `mergeReturn`. Every
+// parameter is a `_Union` type of the parameter type from the first function
+// and the corresponding parameter type of the second function. If one function
+// has more parameters than the other, the excess parameters are added to the
+// returned function unmodified.
+function mergeFunction(self: FunctionType, other: FunctionType): Type {
+	const selfParameters = self.getParameters();
+	const otherParameters = other.getParameters();
 
+	if (otherParameters.length < selfParameters.length) {
+		return mergeFunction(other, self);
+	}
+
+	const parameters = selfParameters
+		.map((parameter, i) => TemplateType.createUnion(TypeQualifier.Pointer, parameter, otherParameters[i]))
+		.concat(otherParameters.slice(selfParameters.length));
+
+	return TemplateType.createFunction(
+		mergeReturn(self.getReturnType(), other.getReturnType())!,
+		...parameters
+	).constReference();
+}
+
+// Merge return types. If either type is undefined or void, return the other
+// type. Otherwise, return a `_Union` template of both types.
 function mergeReturn(self?: Type, other?: Type): Type | undefined {
 	if (self === undefined || self === VOID_TYPE) {
 		return other;

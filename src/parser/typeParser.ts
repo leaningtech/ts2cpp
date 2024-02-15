@@ -3,8 +3,9 @@ import { Type } from "../type/type.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
 import { QualifiedType } from "../type/qualifiedType.js";
 import { TemplateType } from "../type/templateType.js";
-import { NULLPTR_TYPE, FUNCTION_TYPE, ANY_TYPE, VOID_TYPE, DOUBLE_TYPE, BOOL_TYPE } from "../type/namedType.js";
+import { NULLPTR_TYPE, ANY_TYPE, VOID_TYPE, DOUBLE_TYPE, BOOL_TYPE } from "../type/namedType.js";
 import { FunctionType } from "../type/functionType.js";
+import { PlaceholderType } from "../type/placeholderType.js";
 import { isTypeReference } from "./generics.js";
 import { getName } from "./name.js";
 import * as ts from "typescript";
@@ -36,10 +37,13 @@ export class TypeParser {
 		this.overrides = overrides;
 	}
 
+	// For every call signature of a type with call signatures, we generate a
+	// `_Function<T>` overload, where T is a c-style function type that
+	// represents the call signature.
+	//
+	// The parameters and return type are both generated using
+	// `asCallbackType`.
 	private addCallInfo(info: TypeInfo, callSignatures: ReadonlyArray<ts.Signature>): void {
-		// Function calls.
-		//
-		// TODO: comment this after updating stuff.
 		for (const signature of callSignatures) {
 			const declaration = signature.getDeclaration();
 			const returnType = this.getNodeInfo(declaration.type).asCallbackType();
@@ -49,12 +53,7 @@ export class TypeParser {
 				.map(parameter => this.getNodeInfo(parameter.type))
 				.map(info => info.asCallbackType());
 
-			const functionType = TemplateType.create(
-				FUNCTION_TYPE,
-				FunctionType.create(returnType, ...parameterTypes)
-			);
-
-			info.addType(functionType, TypeKind.Class);
+			info.addType(TemplateType.createFunction(returnType, ...parameterTypes), TypeKind.Class);
 		}
 	}
 
@@ -116,33 +115,28 @@ export class TypeParser {
 			//
 			// To parse one of these, we parse all the type parameters and
 			// construct a `TemplateType` with the parsed type parameters.
-			//
-			// SAFETY: All of the `*Unsafe` calls are safe because we manually
-			// intern the type at the end.
-			const templateType = TemplateType.createUnsafe(genericClass);
-			this.visited.set(type, templateType);
+			const placeholder = new PlaceholderType();
+			this.visited.set(type, placeholder);
 
-			(type.typeParameters ?? [])
-				.map(typeParameter => this.getInfo(typeParameter).asTypeParameter())
-				.forEach(type => templateType.addTypeParameterUnsafe(type));
+			const templateType = TemplateType.create(
+				genericClass,
+				...(type.typeParameters ?? [])
+					.map(typeParameter => this.getInfo(typeParameter).asTypeParameter())
+			);
 
-			info.addType(templateType.internUnsafe(), TypeKind.Class);
+			info.addType(templateType.fix(placeholder, templateType), TypeKind.Class);
+			this.visited.delete(type);
 
 			// If the class has call signatures, we add those as well. This
-			// makes it so we can use `cheerp::Callback` without casting to the
+			// makes it so we can pass functions without casting to the
 			// class type because it will also generate overloads for
 			// `_Function`.
-			if (callSignatures.length > 0) {
-				this.addCallInfo(info, callSignatures);
-			}
+			this.addCallInfo(info, callSignatures);
 		} else if (basicClass && type.isClassOrInterface()) {
 			// A typescript class for which we have a basic (not generic)
 			// declaration. We simply add the class declaration to the info.
 			info.addType(basicClass, TypeKind.Class);
-
-			if (callSignatures.length > 0) {
-				this.addCallInfo(info, callSignatures);
-			}
+			this.addCallInfo(info, callSignatures);
 		} else if (callSignatures.length > 0) {
 			// For function types, add their call signatures.
 			this.addCallInfo(info, callSignatures);
@@ -173,15 +167,18 @@ export class TypeParser {
 				return;
 			}
 
-			const templateType = TemplateType.createUnsafe(genericTarget);
-			this.visited.set(type, templateType);
+			const placeholder = new PlaceholderType();
+			this.visited.set(type, placeholder);
 
-			this.parser.getTypeArguments(type)
-				.filter(typeArgument => !(typeArgument as any).isThisType)
-				.map(typeArgument => this.getInfo(typeArgument).asTypeParameter())
-				.forEach(type => templateType.addTypeParameterUnsafe(type));
+			const templateType = TemplateType.create(
+				genericTarget,
+				...this.parser.getTypeArguments(type)
+					.filter(typeArgument => !(typeArgument as any).isThisType)
+					.map(typeArgument => this.getInfo(typeArgument).asTypeParameter())
+			);
 
-			info.addType(templateType.internUnsafe(), TypeKind.Class);
+			info.addType(templateType.fix(placeholder, templateType), TypeKind.Class);
+			this.visited.delete(type);
 		} else if (type.isTypeParameter()) {
 			// A type parameter that was not in the `overrides` map. We have no
 			// idea what type this is so this should just be the same as `any`.

@@ -1,3 +1,5 @@
+// TODO: comment
+
 import { Parser } from "./parser.js";
 import { Node } from "./node.js";
 import { Namespace } from "../declaration/namespace.js";

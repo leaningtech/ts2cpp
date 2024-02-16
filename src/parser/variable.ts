@@ -43,7 +43,7 @@ export function parseVariable(parser: Parser, declaration: ts.VariableDeclaratio
 	}
 
 	// 6. Some post processing:
-	// - mark the type alias as coming from the declaration `declaration`.
+	// - Mark the variable as coming from the declaration `declaration`.
 	// - Add `static` to member variables and `extern` to global variables.
 	object.setDeclaration(declaration);
 	object.addFlags(isMember ? Flags.Static : Flags.Extern);

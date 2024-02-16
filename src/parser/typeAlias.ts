@@ -38,8 +38,8 @@ export function parseTypeAlias(parser: Parser, declaration: ts.TypeAliasDeclarat
 	}
 
 	// 4. Some post processing:
-	// - mark the type alias as coming from the declaration `declaration`.
-	// - remove unused type parameters.
+	// - Mark the type alias as coming from the declaration `declaration`.
+	// - Remove unused type parameters.
 	object.setDeclaration(declaration);
 	object.removeUnusedTypeParameters();
 

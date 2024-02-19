@@ -33,7 +33,7 @@ namespace [[cheerp::genericjs]] cheerp {
 	};
 	template<class From, class To, bool IsArithmetic = std::is_arithmetic_v<From> && std::is_arithmetic_v<To>>
 	struct CanCastImpl {
-		constexpr static bool value = std::is_same_v<From, client::_Any> || std::is_same_v<To, client::_Any> || std::is_base_of_v<To, From> || CanCastHelper<From, To>::value;
+		constexpr static bool value = std::is_void_v<To> || std::is_void_v<From> || std::is_same_v<From, client::_Any> || std::is_same_v<To, client::_Any> || std::is_base_of_v<To, From> || CanCastHelper<From, To>::value;
 	};
 	template<class From, class To>
 	struct CanCastImpl<From, To, true> {
@@ -62,7 +62,7 @@ namespace [[cheerp::genericjs]] cheerp {
 	};
 	template<class From, class To, class... Args>
 	struct CanCastHelper<client::_Function<From()>, client::_Function<To(Args...)>> {
-		constexpr static bool value = CanCast<From, To> || std::is_void_v<To>;
+		constexpr static bool value = CanCast<From, To>;
 	};
 	template<class From, class To, class FromFirstArg, class ToFirstArg, class... FromArgs, class... ToArgs>
 	struct CanCastHelper<client::_Function<From(FromFirstArg, FromArgs...)>, client::_Function<To(ToFirstArg, ToArgs...)>> {

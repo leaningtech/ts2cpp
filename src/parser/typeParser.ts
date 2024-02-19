@@ -5,7 +5,6 @@ import { QualifiedType } from "../type/qualifiedType.js";
 import { TemplateType } from "../type/templateType.js";
 import { NULLPTR_TYPE, ANY_TYPE, VOID_TYPE, DOUBLE_TYPE, BOOL_TYPE } from "../type/namedType.js";
 import { FunctionType } from "../type/functionType.js";
-import { PlaceholderType } from "../type/placeholderType.js";
 import { isTypeReference } from "./generics.js";
 import { getName } from "./name.js";
 import * as ts from "typescript";
@@ -21,16 +20,13 @@ export class TypeParser {
 	// arguments of generic types are stored in the `overrides` map.
 	private readonly overrides: ReadonlyMap<ts.Type, TypeInfo>;
 
-	// The `visited` map is used to prevent infinite recursion in recursive
+	// The `visited` set is used to prevent infinite recursion in recursive
 	// types. For example, to parse `type Foo = number | Array<Foo>;`, we must
 	// first parse `Foo`, which must first parse `Foo`, etc...
 	//
-	// In practice, this will usually cause the type to become `_Any`. Because
-	// most recursive type aliases are union types, and when a union type is
-	// used as a type parameter it becomes `_Any`.
-	//
-	// If the `overrides` map ever changes, `visited` must be invalidated.
-	private readonly visited: Map<ts.Type, Type> = new Map;
+	// Recursive types are not supported at the moment, and are always replaced
+	// with `_Any*`.
+	private readonly visited: Set<ts.Type> = new Set;
 
 	public constructor(parser: Parser, overrides: ReadonlyMap<ts.Type, TypeInfo>) {
 		this.parser = parser;
@@ -64,15 +60,15 @@ export class TypeParser {
 	// support recursively parsing all types in nested unions into the same
 	// `TypeInfo` instance.
 	private addInfo(info: TypeInfo, type: ts.Type): void {
-		const visitedType = this.visited.get(type);
 		const overrideType = this.overrides.get(type);
 		const basicClass = this.parser.getBasicDeclaredClass(type);
 		const genericClass = this.parser.getGenericDeclaredClass(type);
 		const callSignatures = type.getCallSignatures();
 
-		if (visitedType) {
-			// We've seen this type before, use the already parsed info.
-			info.addType(visitedType, TypeKind.Class);
+		if (this.visited.has(type)) {
+			// We've seen this type before, to prevent infinite recursing, use
+			// `_Any`.
+			info.addType(ANY_TYPE, TypeKind.Class);
 		} else if (overrideType) {
 			// This type is in the overrides map, add info from that map.
 			info.merge(overrideType);
@@ -115,8 +111,7 @@ export class TypeParser {
 			//
 			// To parse one of these, we parse all the type parameters and
 			// construct a `TemplateType` with the parsed type parameters.
-			const placeholder = new PlaceholderType();
-			this.visited.set(type, placeholder);
+			this.visited.add(type);
 
 			const templateType = TemplateType.create(
 				genericClass,
@@ -124,8 +119,8 @@ export class TypeParser {
 					.map(typeParameter => this.getInfo(typeParameter).asTypeParameter())
 			);
 
-			info.addType(templateType.fix(placeholder, templateType), TypeKind.Class);
 			this.visited.delete(type);
+			info.addType(templateType, TypeKind.Class);
 
 			// If the class has call signatures, we add those as well. This
 			// makes it so we can pass functions without casting to the
@@ -167,8 +162,7 @@ export class TypeParser {
 				return;
 			}
 
-			const placeholder = new PlaceholderType();
-			this.visited.set(type, placeholder);
+			this.visited.add(type);
 
 			const templateType = TemplateType.create(
 				genericTarget,
@@ -177,8 +171,8 @@ export class TypeParser {
 					.map(typeArgument => this.getInfo(typeArgument).asTypeParameter())
 			);
 
-			info.addType(templateType.fix(placeholder, templateType), TypeKind.Class);
 			this.visited.delete(type);
+			info.addType(templateType, TypeKind.Class);
 		} else if (type.isTypeParameter()) {
 			// A type parameter that was not in the `overrides` map. We have no
 			// idea what type this is so this should just be the same as `any`.

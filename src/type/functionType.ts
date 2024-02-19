@@ -1,6 +1,5 @@
 import { Expression } from "./expression.js";
 import { Type } from "./type.js";
-import { PlaceholderType } from "./placeholderType.js";
 import { Dependency, State, Dependencies } from "../target.js";
 import { Writer } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
@@ -69,13 +68,6 @@ export class FunctionType extends Type {
 		return `f${this.returnType.key()}${parameters};`;
 	}
 	
-	public fix(placeholder: PlaceholderType, type: Expression): any {
-		return FunctionType.create(
-			this.returnType.fix(placeholder, type),
-			...this.getParameters().map(parameter => parameter.fix(placeholder, type))
-		);
-	}
-
 	public static create(returnType: Type, ...parameters: ReadonlyArray<Type>): FunctionType {
 		const result = new FunctionType(returnType);
 		

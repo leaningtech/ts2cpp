@@ -1,6 +1,5 @@
 import { Expression } from "./expression.js";
 import { Type, UnqualifiedType } from "./type.js";
-import { PlaceholderType } from "./placeholderType.js";
 import { Dependency, State, Dependencies } from "../target.js";
 import { Writer } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
@@ -54,10 +53,6 @@ export class MemberType extends UnqualifiedType {
 
 	public key(): string {
 		return `Y${this.inner.key()}${this.name};`;
-	}
-	
-	public fix(placeholder: PlaceholderType, type: Expression): any {
-		return MemberType.create(this.inner.fix(placeholder, type), this.name);
 	}
 
 	public static create(inner: Type, name: string): MemberType {

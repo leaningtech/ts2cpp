@@ -81,11 +81,6 @@ export abstract class Expression {
 		return writer.getString();
 	}
 
-	// Replace all instances of `placeholder` with `type`.
-	public fix(placeholder: PlaceholderType, type: Expression): any {
-		return this as Expression === placeholder ? type : this;
-	}
-
 	protected intern(): this {
 		const key = this.key();
 		const value = EXPRESSIONS.get(key);
@@ -103,5 +98,3 @@ export abstract class Expression {
 export function removeDuplicateExpressions<T extends Expression>(expressions: ReadonlyArray<T>): Array<T> {
 	return [...new Set(expressions)];
 }
-
-import type { PlaceholderType } from "./placeholderType.js";

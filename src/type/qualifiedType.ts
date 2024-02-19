@@ -1,6 +1,5 @@
 import { Expression } from "./expression.js";
 import { Type } from "./type.js";
-import { PlaceholderType } from "./placeholderType.js";
 import { Dependency, State, Dependencies } from "../target.js";
 import { Writer } from "../writer.js";
 import { Namespace } from "../declaration/namespace.js";
@@ -115,10 +114,6 @@ export class QualifiedType extends Type {
 		} else {
 			return this;
 		}
-	}
-	
-	public fix(placeholder: PlaceholderType, type: Expression): any {
-		return QualifiedType.create(this.inner.fix(placeholder, type), this.qualifier);
 	}
 
 	public static create(inner: Type, qualifier: TypeQualifier): QualifiedType {

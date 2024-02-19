@@ -1,5 +1,4 @@
 import { Type, UnqualifiedType } from "./type.js";
-import { PlaceholderType } from "./placeholderType.js";
 import { TypeQualifier, QualifiedType } from "./qualifiedType.js";
 import { DeclaredType } from "./declaredType.js";
 import { Expression, removeDuplicateExpressions } from "./expression.js";
@@ -133,13 +132,6 @@ export class TemplateType extends Type {
 		}
 
 		return this;
-	}
-
-	public fix(placeholder: PlaceholderType, type: Expression): any {
-		return TemplateType.create(
-			this.inner.fix(placeholder, type),
-			...this.getTypeParameters().map(parameter => parameter.fix(placeholder, type))
-		);
 	}
 
 	public static create(inner: UnqualifiedType, ...typeParameters: ReadonlyArray<Expression>): TemplateType {

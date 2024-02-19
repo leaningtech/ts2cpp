@@ -251,6 +251,11 @@ export class TypeInfo {
 				overloadTypes.push(TemplateType.createFunction(VOID_TYPE).constReference());
 			} else if (inner.getName() === "String" || inner.getName() === "_Function" || inner.getName() === "_Any") {
 				overloadTypes.push(inner.constReference());
+			} else if (inner.getName() === "EventListener" || inner.getName() === "EventListenerObject") {
+				// EventListener is never put into `_Union` types, because very
+				// often there will also be an overload for `_Function`, and
+				// the conversion would be ambiguous.
+				overloadTypes.push(inner.pointer());
 			} else {
 				unionTypes.push(type);
 

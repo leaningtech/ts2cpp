@@ -20,7 +20,7 @@ export function parseTypeAlias(parser: Parser, declaration: ts.TypeAliasDeclarat
 		const [parameters, constraints] = generics.createParameters(parser, [declaration]);
 
 		// 2.2. Add the type parameters to the type alias.
-		parameters.forEach(parameter => object.addTypeParameter(parameter.getName()));
+		parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
 
 		// 2.3. Parse and set the aliased type of the type alias, possibly
 		// making an `std::enable_if_t` template using constraints returned

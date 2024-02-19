@@ -124,7 +124,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 		const object = new Function(name, type);
 
 		// 7. Add the type parameters to the function.
-		parameters.forEach(parameter => object.addTypeParameter(parameter.getName()));
+		parameters.forEach(([parameter, defaultType]) => object.addTypeParameter(parameter.getName(), defaultType));
 
 		// If this is a variadic function, `variadicConstraint` stores an
 		// expression that represent the constraint on variadic parameters. For

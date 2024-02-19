@@ -151,8 +151,8 @@ export class Generics {
 	//
 	// In the simplest case, we construct a `GenericType` for every type
 	// argument and add it to the map.
-	public createParameters(parser: Parser, declarations: ReadonlyArray<any>): [Array<GenericType>, Set<Expression>] {
-		const types = new Array<GenericType>;
+	public createParameters(parser: Parser, declarations: ReadonlyArray<any>): [Array<[GenericType, Type | undefined]>, Set<Expression>] {
+		const types = new Array<[GenericType, Type | undefined]>;
 		const constraints = new Set<Expression>;
 		const aliasTypes = new Set<ts.Type>;
 		const usedTypes = new Array<ts.Type>;
@@ -224,11 +224,13 @@ export class Generics {
 				// constraint to the type argument map, and we do not generate
 				// a type argument at all.
 				if (isClassLike(declaration) || usesType(parser, aliasTypes, type) > 0 || usesType(parser, usedTypes, type) > 1) {
-					types[i] ??= GenericType.create(`_T${this.nextId++}`);
-					this.addType(type, new TypeInfo(types[i], TypeKind.Generic));
+					const defaultInfo = typeParameter.default && parser.getTypeNodeInfo(typeParameter.default, this);
+
+					types[i] ??= [GenericType.create(`_T${this.nextId++}`), defaultInfo?.asTypeParameter()];
+					this.addType(type, new TypeInfo(types[i][0], TypeKind.Generic));
 
 					if (info && options.useConstraints) {
-						constraints.add(info.asTypeConstraint(types[i]));
+						constraints.add(info.asTypeConstraint(types[i][0]));
 					}
 				} else if (info) {
 					this.addType(type, info);

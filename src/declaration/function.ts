@@ -1,4 +1,5 @@
-import { Declaration, TemplateDeclaration } from "./declaration.js";
+import { Declaration } from "./declaration.js";
+import { TemplateDeclaration } from "./templateDeclaration.js";
 import { Namespace, Flags } from "./namespace.js";
 import { State, Dependency, Dependencies, ReasonKind, ResolverContext } from "../target.js";
 import { Writer } from "../writer.js";
@@ -158,7 +159,7 @@ export class Function extends TemplateDeclaration {
 
 	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		// 1. Write the template<...> line, if needed.
-		this.writeTemplate(writer);
+		this.writeTemplate(writer, namespace);
 
 		// 2. Write the interface name attribute, unless there is a body.
 		if (this.body === undefined) {

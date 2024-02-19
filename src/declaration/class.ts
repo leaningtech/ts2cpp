@@ -1,5 +1,6 @@
 import { Namespace, Flags } from "./namespace.js";
-import { Declaration, TemplateDeclaration, mergeDuplicateDeclarations } from "./declaration.js";
+import { Declaration, mergeDuplicateDeclarations } from "./declaration.js";
+import { TemplateDeclaration } from "./templateDeclaration.js";
 import { State, Target, Dependency, ReasonKind, Dependencies, ResolverContext, resolveDependencies } from "../target.js";
 import { Expression } from "../type/expression.js";
 import { Type } from "../type/type.js";
@@ -199,7 +200,7 @@ export class Class extends TemplateDeclaration {
 
 	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		// 1. Write the template<...> line, if needed.
-		this.writeTemplate(writer);
+		this.writeTemplate(writer, namespace);
 
 		// 2. Write the class keyword.
 		writer.write("class");

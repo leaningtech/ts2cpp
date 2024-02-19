@@ -165,7 +165,7 @@ export function parseClass(parser: Parser, node: Child, object: Class, generics:
 		const [parameters, constraints] = generics.createParameters(parser, declarations);
 
 		// 1.2. Add the type parameters and constraints to the class.
-		parameters.forEach(parameter => object.addTypeParameter(parameter.getName()));
+		parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
 		constraints.forEach(constraint => object.addConstraint(constraint));
 	} else {
 		// 2.1. If this is the basic version of this class, use

@@ -1,4 +1,5 @@
-import { Declaration, TemplateDeclaration } from "./declaration.js";
+import { Declaration } from "./declaration.js";
+import { TemplateDeclaration } from "./templateDeclaration.js";
 import { Namespace } from "./namespace.js";
 import { Type } from "../type/type.js";
 import { State, Dependencies, ReasonKind, Dependency, ResolverContext } from "../target.js";
@@ -39,7 +40,7 @@ export class TypeAlias extends TemplateDeclaration {
 	}
 
 	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
-		this.writeTemplate(writer);
+		this.writeTemplate(writer, namespace);
 		writer.write("using");
 		writer.writeSpace();
 		writer.write(this.getName());

@@ -4,7 +4,7 @@ import { Variable } from "./declaration/variable.js";
 import { Class, Visibility } from "./declaration/class.js";
 import { Type } from "./type/type.js";
 import { DeclaredType } from "./type/declaredType.js";
-import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE } from "./type/namedType.js";
+import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE, ENABLE_IF } from "./type/namedType.js";
 import { GenericType } from "./type/genericType.js";
 import { QualifiedType, TypeQualifier } from "./type/qualifiedType.js";
 import { TemplateType } from "./type/templateType.js";
@@ -316,6 +316,7 @@ function addDocumentExtensions(parser: Parser, documentClass: Class) {
 // - Set return type of some functions to `int`.
 // - Add `const` flag to some functions.
 // - Add `explicit` flag to some String constructors.
+// - Remove constraint on `String::concat`.
 //
 // This whole thing is pretty ugly but I don't see a way around it.
 function patchFunctions(parser: Parser) {
@@ -338,6 +339,7 @@ function patchFunctions(parser: Parser) {
 			case "indexOf":
 			case "lastIndexOf":
 			case "charCodeAt":
+				// Set return type to `int`.
 				funcObj.setType(INT_TYPE);
 			case "concat":
 			case "_concat":
@@ -345,15 +347,32 @@ function patchFunctions(parser: Parser) {
 			case "split":
 			case "replace":
 			case "substring":
+				// Add `const` flag.
 				funcObj.addFlags((funcObj.getFlags() & Flags.Static) ? 0 as Flags : Flags.Const);
 				break;
+			}
+
+			switch (classObj.getName()) {
 			case "String":
-				if (classObj.getName() === "String") {
+				switch (funcObj.getName()) {
+				case "String":
 					const params = funcObj.getParameters();
 
+					// Add `explicit` flag to some String constructors.
 					if (params.length === 1 && explicitStringConstructors.has(params[0].getType())) {
 						funcObj.addFlags(Flags.Explicit);
 					}
+
+					break;
+				case "concat":
+					const returnType = funcObj.getType();
+
+					// Remove constraint on `String::concat`.
+					if (returnType instanceof TemplateType && returnType.getInner() === ENABLE_IF) {
+						funcObj.setType(returnType.getTypeParameters()[1] as Type);
+					}
+
+					break;
 				}
 
 				break;

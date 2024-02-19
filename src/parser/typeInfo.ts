@@ -180,6 +180,18 @@ export class TypeInfo {
 		}
 	}
 
+	// Returns a _Union, or `anyType` if the union contains `_Any`.
+	public getUnion(anyType: Type): Type {
+		const types = this.getTypes();
+
+		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
+			return anyType;
+		} else {
+			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
+			return TemplateType.createUnion(TypeQualifier.Pointer, ...transformedTypes);
+		}
+	}
+
 	// Used to generate type constraints like `T extends Element`. This
 	// generates an expression of the form `IsAcceptableV<T, Element>` which
 	// can then be used in `std::enable_if_t` or `static_assert`.
@@ -221,14 +233,7 @@ export class TypeInfo {
 	// `getPointerOrPrimitive` is used to decide which types should be pointers
 	// and which shouldn't.
 	public asReturnType(parser: Parser): Type {
-		const types = this.getTypes();
-
-		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
-			return parser.getRootType("Object").pointer();
-		} else {
-			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
-			return TemplateType.createUnion(TypeQualifier.Pointer, ...transformedTypes);
-		}
+		return this.getUnion(parser.getRootType("Object").pointer());
 	}
 
 	// Used when generating function parameter types. This returns an array
@@ -281,19 +286,8 @@ export class TypeInfo {
 	// Used to generate the arguments and return values of callback types.
 	// Both `T` and `U` in `_Function<T(U...)>` are generated using this
 	// method.
-	//
-	// This is almost the same as `asReturnType`, except that we do not convert
-	// `_Any*` to `Object*`. Callback types are a new addition and
-	// compatibility is not a concern.
 	public asCallbackType(): Type {
-		const types = this.getTypes();
-
-		if (types.length === 0 || types.some(type => type.getType() === ANY_TYPE)) {
-			return ANY_TYPE.pointer();
-		} else {
-			const transformedTypes = types.map(type => type.getPointerOrPrimitive());
-			return TemplateType.createUnion(TypeQualifier.Pointer, ...transformedTypes);
-		}
+		return this.getUnion(ANY_TYPE.pointer());
 	}
 
 	// Used when generating the types of variables.

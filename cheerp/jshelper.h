@@ -31,10 +31,16 @@ namespace [[cheerp::genericjs]] cheerp {
 	struct CanCastHelper {
 		constexpr static bool value = false;
 	};
+	template<class From, class To, bool IsArithmetic = std::is_arithmetic_v<From> && std::is_arithmetic_v<To>>
+	struct CanCastImpl {
+		constexpr static bool value = std::is_same_v<From, client::_Any> || std::is_same_v<To, client::_Any> || std::is_base_of_v<To, From> || CanCastHelper<From, To>::value;
+	};
 	template<class From, class To>
-	constexpr bool CanCastImpl = std::is_same_v<From, client::_Any> || std::is_same_v<To, client::_Any> || (std::is_arithmetic_v<From> && std::is_arithmetic_v<To> && std::is_convertible_v<From, To>) || std::is_base_of_v<To, From> || CanCastHelper<From, To>::value;
+	struct CanCastImpl<From, To, true> {
+		constexpr static bool value = std::is_convertible_v<From, To>;
+	};
 	template<class From, class... To>
-	constexpr bool CanCast = (CanCastImpl<Normalize<From>, Normalize<To>> || ...);
+	constexpr bool CanCast = (CanCastImpl<Normalize<From>, Normalize<To>>::value || ...);
 	template<class From, class... To>
 	constexpr bool CanCastArgs = CanCast<From, To...> || (IsCharPointer<From> && (CanCast<client::String*, To> || ...));
 	template<class From, template<class...> class To, class... T>
@@ -123,7 +129,7 @@ namespace [[cheerp::genericjs]] client {
 			}
 		};
 	public:
-		template<class T, class = std::enable_if_t<cheerp::CanCast<T, Variants...>>>
+		template<class T, class = std::enable_if_t<cheerp::CanCast<T, _Union<Variants...>>>>
 		[[cheerp::client_transparent]]
 		_Union(T value);
 		template<class T, class = std::enable_if_t<(cheerp::CanCast<Variants, T> || ...)>>

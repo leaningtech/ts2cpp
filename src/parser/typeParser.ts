@@ -40,6 +40,11 @@ export class TypeParser {
 	// The parameters and return type are both generated using
 	// `asCallbackType`.
 	private addCallInfo(info: TypeInfo, callSignatures: ReadonlyArray<ts.Signature>): void {
+		// Also add EventListener overload for compatibility.
+		if (callSignatures.length > 0) {
+			info.addType(this.parser.getRootType("EventListener"), TypeKind.ClassOverload);
+		}
+
 		for (const signature of callSignatures) {
 			const declaration = signature.getDeclaration();
 			const returnType = this.getNodeInfo(declaration.type).asCallbackType();

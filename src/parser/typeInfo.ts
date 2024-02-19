@@ -21,6 +21,10 @@ export enum TypeKind {
 	Class,
 	Primitive,
 	Generic,
+
+	// `ClassOverload` is used when a type should only be generated in function
+	// overload. `TypeData` of this kind are ignored in any other context.
+	ClassOverload,
 }
 
 // `TypeData` stores a C++ type that has already been parsed from the
@@ -122,8 +126,12 @@ export class TypeInfo {
 		}
 	}
 
-	public getTypes(): ReadonlyArray<TypeData> {
+	public getAllTypes(): ReadonlyArray<TypeData> {
 		return this.types ?? [];
+	}
+
+	public getTypes(): ReadonlyArray<TypeData> {
+		return this.getAllTypes().filter(type => type.getKind() !== TypeKind.ClassOverload);
 	}
 
 	// In some cases, two different typescript types can convert to the same
@@ -247,8 +255,13 @@ export class TypeInfo {
 	public asParameterTypes(): ReadonlyArray<Type> {
 		const unionTypes = [];
 		const overloadTypes = [];
+		const types = this.getAllTypes();
 
-		for (const type of this.getPlural()) {
+		if (types.length === 0) {
+			return [ANY_TYPE.constReference()]
+		}
+
+		for (const type of types) {
 			const inner = type.getType();
 
 			if (inner.getName() === "Function") {

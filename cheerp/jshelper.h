@@ -27,6 +27,8 @@ namespace [[cheerp::genericjs]] cheerp {
 	using Normalize = std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<T>>>;
 	template<class T>
 	constexpr bool IsCharPointer = std::is_pointer_v<std::decay_t<T>> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>, char>;
+	template<class T>
+	constexpr bool IsConstReference = std::is_reference_v<T> && std::is_const_v<std::remove_reference_t<T>>;
 	template<class From, class To>
 	struct CanCastHelper {
 		constexpr static bool value = false;
@@ -155,9 +157,11 @@ namespace [[cheerp::genericjs]] cheerp {
 	inline client::String* makeString(const char* str);
 	template<class T>
 	[[gnu::always_inline]]
-	std::conditional_t<IsCharPointer<T>, client::String*, T&&> clientCast(T&& value) {
+	std::conditional_t<IsCharPointer<T>, client::String*, std::conditional_t<IsConstReference<T>, std::remove_reference_t<T>*, T&&>> clientCast(T&& value) {
 		if constexpr (IsCharPointer<T>)
 			return makeString(value);
+		else if constexpr (IsConstReference<T>)
+			return &value;
 		else
 			return value;
 	}

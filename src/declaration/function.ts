@@ -139,7 +139,7 @@ export class Function extends TemplateDeclaration {
 	// - partial for types used in function parameters.
 	// - partial for the return type.
 	// - extra dependencies added using `addExtraDependency`.
-	public getDirectDependencies(state: State): Dependencies {
+	protected getDirectDependencies(state: State): Dependencies {
 		const parameterReason = new Dependency(State.Partial, this, ReasonKind.ParameterType);
 		const returnReason = new Dependency(State.Partial, this, ReasonKind.ReturnType);
 
@@ -151,13 +151,13 @@ export class Function extends TemplateDeclaration {
 		);
 	}
 
-	public getDirectReferencedTypes(): ReadonlyArray<Type> {
+	protected getDirectReferencedTypes(): ReadonlyArray<Type> {
 		return this.getParameters()
 			.flatMap(parameter => [...parameter.getType().getReferencedTypes()])
 			.concat([...this.type?.getReferencedTypes() ?? []]);
 	}
 
-	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
+	protected writeImpl(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		// 1. Write the template<...> line, if needed.
 		this.writeTemplate(writer, namespace);
 

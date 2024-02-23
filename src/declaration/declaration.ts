@@ -55,6 +55,10 @@ export abstract class Declaration extends Namespace {
 	private id: number;
 	private file?: string;
 
+	// If `lean` is false, this declaration will be wrapped in an
+	// `#ifndef LEAN_CXX_LIB` block.
+	private lean: boolean = true;
+
 	private static count: number = 0;
 
 	public static getCount(): number {
@@ -80,6 +84,14 @@ export abstract class Declaration extends Namespace {
 
 	public setDeclaration(declaration: ts.Node): void {
 		this.file = declaration.getSourceFile().fileName;
+	}
+
+	public isLean(): boolean {
+		return this.lean;
+	}
+
+	public setLean(lean: boolean): void {
+		this.lean = lean;
 	}
 
 	// Return the first parent that is not a declaration.
@@ -206,6 +218,22 @@ export abstract class Declaration extends Namespace {
 		);
 	}
 
+	// Same as `writeImpl`, but also wraps the declaration in an
+	// `#ifndef LEAN_CXX_LIB` block, if needed.
+	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
+		if (!this.lean) {
+			writer.write("#ifndef LEAN_CXX_LIB", -Infinity);
+			writer.writeLine();
+		}
+
+		this.writeImpl(context, writer, state, namespace);
+
+		if (!this.lean) {
+			writer.write("#endif", -Infinity);
+			writer.writeLine();
+		}
+	}
+
 	// Returns the maximum state of a declaration, this is only Complete for
 	// class declarations, and Partial for every other declaration, where a
 	// forward declaration is all we ever generate.
@@ -217,12 +245,12 @@ export abstract class Declaration extends Namespace {
 	// The *direct* dependencies of a declaration do not include dependencies
 	// of its children, this function is called by `getDependencies` and should
 	// rarely be used otherwise.
-	public abstract getDirectDependencies(state: State): Dependencies;
+	protected abstract getDirectDependencies(state: State): Dependencies;
 
 	// The *direct* referenced types of a declaration do not include types
 	// referenced by its children, this function is called by
 	// `getReferencedTypes` and should rarely be used otherwise.
-	public abstract getDirectReferencedTypes(): ReadonlyArray<Type>;
+	protected abstract getDirectReferencedTypes(): ReadonlyArray<Type>;
 
 	// Write this declaration to a file. If `state` is Partial, only generate
 	// a forward declaration. The `namespace` is the namespace in which the
@@ -230,7 +258,7 @@ export abstract class Declaration extends Namespace {
 	// paths. The `context` is passed because class declarations need to
 	// construct a `DependencyResolver` to generate their members in the
 	// correct order.
-	public abstract write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void;
+	protected abstract writeImpl(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void;
 
 	// Merge this declaration with another declaration, this is used by
 	// `mergeDuplicateDeclarations` to remove duplicate declarations and avoid

@@ -9,7 +9,7 @@ import { Namespace } from "../declaration/namespace.js";
 import { LiteralExpression, TRUE } from "./literalExpression.js";
 import { CompoundExpression } from "./compoundExpression.js";
 import { FunctionType } from "./functionType.js";
-import { VOID_TYPE, UNION_TYPE, FUNCTION_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, IS_SAME, IS_CONVERTIBLE, CAN_CAST, CAN_CAST_ARGS } from "./namedType.js";
+import { VOID_TYPE, UNION_TYPE, FUNCTION_TYPE, ENABLE_IF, ANY_TYPE, ARRAY_ELEMENT_TYPE, IS_SAME, CAN_CAST, CAN_CAST_ARGS } from "./namedType.js";
 
 // A template type is a generic type with template arguments
 // (`TArray<String*>`).

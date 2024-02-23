@@ -56,7 +56,6 @@ export class Parser {
 		this.program = program;
 		this.typeChecker = program.getTypeChecker();
 		this.library = library;
-		this.library.addGlobalInclude("type_traits", true);
 		this.namespace = new Namespace("client");
 		this.namespace.addAttribute("cheerp::genericjs");
 	}

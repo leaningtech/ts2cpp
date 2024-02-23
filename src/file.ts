@@ -11,14 +11,19 @@ export class Include {
 	// If the `system` flag is set, we use <> instead of ""
 	private readonly system: boolean;
 
+	// If `lean` is false, this include will be wrapped in an
+	// `#ifndef LEAN_CXX_LIB` block.
+	private readonly lean: boolean;
+
 	// A reference to the `File` instance, only set if we are also generating
 	// this file. This is used to order the generation of declarations, see the
 	// comments on `LibraryWriter` for more info.
 	private readonly file?: File;
 
-	public constructor(name: string, system: boolean, file?: File) {
+	public constructor(name: string, system: boolean, lean: boolean, file?: File) {
 		this.name = name;
 		this.system = system;
+		this.lean = lean;
 		this.file = file;
 	}
 
@@ -28,6 +33,10 @@ export class Include {
 
 	public isSystem(): boolean {
 		return this.system;
+	}
+
+	public isLean(): boolean {
+		return this.lean;
 	}
 
 	public getFile(): File | undefined {
@@ -58,8 +67,8 @@ export class File {
 		return this.includes;
 	}
 
-	public addInclude(name: string, system: boolean, file?: File): void {
-		this.includes.push(new Include(name, system, file));
+	public addInclude(name: string, system: boolean, lean: boolean, file?: File): void {
+		this.includes.push(new Include(name, system, lean, file));
 	}
 
 	public getDeclarations(): ReadonlyArray<Declaration> {

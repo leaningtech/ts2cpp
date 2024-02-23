@@ -177,7 +177,7 @@ export class Class extends TemplateDeclaration {
 	// - complete for types used as base classes.
 	// This function does *not* include dependencies of class members, to get
 	// those as well, call `getDependencies`.
-	public getDirectDependencies(state: State): Dependencies {
+	protected getDirectDependencies(state: State): Dependencies {
 		if (state === State.Complete) {
 			const constraintReason = new Dependency(State.Partial, this, ReasonKind.Constraint);
 			const baseReason = new Dependency(State.Complete, this, ReasonKind.BaseClass);
@@ -192,13 +192,13 @@ export class Class extends TemplateDeclaration {
 		}
 	}
 
-	public getDirectReferencedTypes(): ReadonlyArray<Type> {
+	protected getDirectReferencedTypes(): ReadonlyArray<Type> {
 		return this.getConstraints()
 			.concat(this.getBases().map(base => base.getType()))
 			.flatMap(type => [...type.getReferencedTypes()]);
 	}
 
-	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
+	protected writeImpl(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		// 1. Write the template<...> line, if needed.
 		this.writeTemplate(writer, namespace);
 

@@ -266,6 +266,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 
 			if (overload.length === 1 && overload[0].type === DOUBLE_TYPE) {
 				const object = createFunction(overload, "operator[]", returnType!.reference());
+				object.setLean(false);
 				object.setBody(`return __builtin_cheerp_make_regular<${returnType!.toString()}>(this, 0)[static_cast<int>(${overload[0].name})];`);
 			}
 		} else if (isConstructorLike(declaration)) {

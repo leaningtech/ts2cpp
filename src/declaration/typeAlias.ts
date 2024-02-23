@@ -31,15 +31,15 @@ export class TypeAlias extends TemplateDeclaration {
 
 	// The dependencies of a type alias are:
 	// - partial for the target type.
-	public getDirectDependencies(state: State): Dependencies {
+	protected getDirectDependencies(state: State): Dependencies {
 		return this.type.getDependencies(new Dependency(State.Partial, this, ReasonKind.TypeAliasType));
 	}
 
-	public getDirectReferencedTypes(): ReadonlyArray<Type> {
+	protected getDirectReferencedTypes(): ReadonlyArray<Type> {
 		return this.type.getReferencedTypes();
 	}
 
-	public write(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
+	protected writeImpl(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		this.writeTemplate(writer, namespace);
 		writer.write("using");
 		writer.writeSpace();

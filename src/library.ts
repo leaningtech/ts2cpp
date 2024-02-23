@@ -111,8 +111,8 @@ export class Library {
 		return this.globalIncludes;
 	}
 
-	public addGlobalInclude(name: string, system: boolean, file?: File) {
-		this.globalIncludes.push(new Include(name, system, file));
+	public addGlobalInclude(name: string, system: boolean, lean: boolean, file?: File) {
+		this.globalIncludes.push(new Include(name, system, lean, file));
 	}
 
 	public hasFile(file: string): boolean {
@@ -298,6 +298,11 @@ export class LibraryWriter {
 			writer.writeLine();
 
 			for (const include of includes) {
+				if (!include.isLean()) {
+					writer.write("#ifndef LEAN_CXX_LIB");
+					writer.writeLine();
+				}
+
 				writer.write("#include");
 				writer.writeSpace(false);
 
@@ -312,6 +317,11 @@ export class LibraryWriter {
 				}
 
 				writer.writeLine();
+				
+				if (!include.isLean()) {
+					writer.write("#endif");
+					writer.writeLine();
+				}
 			}
 		}
 

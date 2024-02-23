@@ -79,7 +79,7 @@ const library = new Library(options.outputFile ?? "cheerp/clientlib.h", args);
 
 // 6. If this isn't "clientlib.h", add an include for "clientlib.h".
 if (!options.isDefaultLib) {
-	library.addGlobalInclude("cheerp/clientlib.h", true);
+	library.addGlobalInclude("cheerp/clientlib.h", true, true);
 }
 
 // 7. Convert the typescript AST into a C++ AST.

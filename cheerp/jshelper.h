@@ -1,6 +1,5 @@
 #ifndef CHEERP_JSHELPER_H
 #define CHEERP_JSHELPER_H
-#include <type_traits>
 namespace [[cheerp::genericjs]] client {
 	class _Any;
 	template<class... Variants>
@@ -13,6 +12,109 @@ namespace [[cheerp::genericjs]] client {
 	class TArray;
 }
 namespace [[cheerp::genericjs]] cheerp {
+	using Nullptr = decltype(nullptr);
+	struct FalseType {
+		constexpr static bool value = false;
+	};
+	struct TrueType {
+		constexpr static bool value = true;
+	};
+	template<class T, class U>
+	struct IsSameImpl : FalseType {};
+	template<class T>
+	struct IsSameImpl<T, T> : TrueType {};
+	template<bool B, class T = void>
+	struct EnableIfImpl {};
+	template<class T>
+	struct EnableIfImpl<true, T> {
+		using type = T;
+	};
+	template<bool B, class T, class F>
+	struct ConditionalImpl {
+		using type = T;
+	};
+	template<class T, class F>
+	struct ConditionalImpl<false, T, F> {
+		using type = F;
+	};
+	template<class T>
+	struct RemoveConstImpl {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveConstImpl<const T> {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveVolatileImpl {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveVolatileImpl<volatile T> {
+		using type = T;
+	};
+	template<class T>
+	struct RemovePointerImpl {
+		using type = T;
+	};
+	template<class T>
+	struct RemovePointerImpl<T*> {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveReferenceImpl {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveReferenceImpl<T&> {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveReferenceImpl<T&&> {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveExtent {
+		using type = T;
+	};
+	template<class T>
+	struct RemoveExtent<T[]> {
+		using type = T;
+	};
+	template<class T, unsigned N>
+	struct RemoveExtent<T[N]> {
+		using type = T;
+	};
+	template<class T, class U>
+	constexpr bool IsSame = IsSameImpl<T, U>::value;
+	template<bool B, class T = void>
+	using EnableIf = typename EnableIfImpl<B, T>::type;
+	template<bool B, class T, class F>
+	using Conditional = typename ConditionalImpl<B, T, F>::type;
+	template<class T>
+	using RemoveConst = typename RemoveConstImpl<T>::type;
+	template<class T>
+	using RemoveVolatile = typename RemoveVolatileImpl<T>::type;
+	template<class T>
+	using RemoveCv = RemoveVolatile<RemoveConst<T>>;
+	template<class T>
+	using RemovePointer = Conditional<IsSame<typename RemovePointerImpl<RemoveCv<T>>::type, RemoveCv<T>>, T, typename RemovePointerImpl<RemoveCv<T>>::type>;
+	template<class T>
+	using RemoveReference = typename RemoveReferenceImpl<T>::type;
+	template<class T, class U>
+	constexpr bool IsSimilar = IsSame<RemoveCv<T>, RemoveCv<U>>;
+	template<class T>
+	constexpr bool IsVoid = IsSimilar<T, void>;
+	template<class T>
+	constexpr bool IsConst = !IsSame<RemoveConst<T>, T>;
+	template<class T>
+	constexpr bool IsVolatile = !IsSame<RemoveVolatile<T>, T>;
+	template<class T>
+	constexpr bool IsPointer = !IsSame<RemovePointer<T>, T>;
+	template<class T>
+	constexpr bool IsReference = !IsSame<RemoveReference<T>, T>;
+	template<class T>
+	constexpr bool IsArray = !IsSame<RemoveExtent<T>, T>;
 	template<class T>
 	struct ArrayElementTypeImpl {
 		using type = client::_Any*;
@@ -24,22 +126,26 @@ namespace [[cheerp::genericjs]] cheerp {
 	template<class T>
 	using ArrayElementType = typename ArrayElementTypeImpl<T>::type;
 	template<class T>
-	using Normalize = std::remove_cv_t<std::remove_pointer_t<std::remove_reference_t<T>>>;
+	using Normalize = RemoveCv<RemovePointer<RemoveReference<T>>>;
 	template<class T>
-	constexpr bool IsCharPointer = std::is_pointer_v<std::decay_t<T>> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>, char>;
+	constexpr bool IsCharPointer = (IsPointer<T> && IsSimilar<RemovePointer<T>, char>) || (IsArray<T> && IsSimilar<RemoveExtent<T>, char>);
 	template<class T>
-	constexpr bool IsConstReference = std::is_reference_v<T> && std::is_const_v<std::remove_reference_t<T>>;
+	constexpr bool IsConstReference = IsReference<T> && IsConst<RemoveReference<T>>;
+	template<class T>
+	constexpr bool IsPrimitive = IsSame<T, bool> || IsSame<T, char> || IsSame<T, signed char> || IsSame<T, unsigned char> || IsSame<T, short> || IsSame<T, unsigned short> || IsSame<T, int> || IsSame<T, unsigned int> || IsSame<T, float> || IsSame<T, double>;
 	template<class From, class To>
-	struct CanCastHelper {
-		constexpr static bool value = false;
-	};
-	template<class From, class To, bool IsArithmetic = std::is_arithmetic_v<From> && std::is_arithmetic_v<To>>
+	struct CanCastHelper : FalseType {};
+	template<class From, class To, bool IsPrimitive = IsPrimitive<From> && IsPrimitive<To>>
 	struct CanCastImpl {
-		constexpr static bool value = std::is_void_v<To> || std::is_void_v<From> || std::is_same_v<From, client::_Any> || std::is_same_v<To, client::_Any> || std::is_base_of_v<To, From> || CanCastHelper<From, To>::value;
+		constexpr static TrueType test(To*);
+		constexpr static FalseType test(...);
+		constexpr static bool value = IsVoid<To> || IsVoid<From> || IsSame<From, client::_Any> || IsSame<To, client::_Any> || decltype(test((From*) nullptr))::value || CanCastHelper<From, To>::value;
 	};
 	template<class From, class To>
 	struct CanCastImpl<From, To, true> {
-		constexpr static bool value = std::is_convertible_v<From, To>;
+		constexpr static TrueType test(To);
+		constexpr static FalseType test(...);
+		constexpr static bool value = decltype(test(*(From*) nullptr))::value;
 	};
 	template<class From, class... To>
 	constexpr bool CanCast = (CanCastImpl<Normalize<From>, Normalize<To>>::value || ...);
@@ -49,7 +155,7 @@ namespace [[cheerp::genericjs]] cheerp {
 	struct CanCastHelper<From, To<T...>> {
 		template<class... U>
 		[[cheerp::genericjs]]
-		constexpr static bool test(To<U...>* x) {
+		constexpr static bool test(To<U...>*) {
 			return CanCast<To<U...>*, To<T...>*>;
 		}
 		[[cheerp::genericjs]]
@@ -122,7 +228,7 @@ namespace [[cheerp::genericjs]] client {
 	template<class... Variants>
 	class [[cheerp::client_layout]] _Union {
 		struct [[cheerp::client_layout]] Cast {
-			template<class T, class = std::enable_if_t<(cheerp::CanCast<Variants, T> || ...)>>
+			template<class T, class = cheerp::EnableIf<(cheerp::CanCast<Variants, T> || ...)>>
 			[[gnu::always_inline]]
 			operator T() const {
 				T out;
@@ -131,10 +237,10 @@ namespace [[cheerp::genericjs]] client {
 			}
 		};
 	public:
-		template<class T, class = std::enable_if_t<cheerp::CanCast<T, _Union<Variants...>>>>
+		template<class T, class = cheerp::EnableIf<cheerp::CanCast<T, _Union<Variants...>>>>
 		[[cheerp::client_transparent]]
 		_Union(T value);
-		template<class T, class = std::enable_if_t<(cheerp::CanCast<Variants, T> || ...)>>
+		template<class T, class = cheerp::EnableIf<(cheerp::CanCast<Variants, T> || ...)>>
 		[[gnu::always_inline]]
 		T cast() const {
 			T out;
@@ -145,7 +251,7 @@ namespace [[cheerp::genericjs]] client {
 		const Cast& cast() const {
 			return *reinterpret_cast<const Cast*>(this);
 		}
-		template<class T, class = std::enable_if_t<(cheerp::CanCast<Variants, T> || ...)>>
+		template<class T, class = cheerp::EnableIf<(cheerp::CanCast<Variants, T> || ...)>>
 		[[gnu::always_inline]]
 		explicit operator T() const {
 			return this->cast<T>();
@@ -157,7 +263,7 @@ namespace [[cheerp::genericjs]] cheerp {
 	inline client::String* makeString(const char* str);
 	template<class T>
 	[[gnu::always_inline]]
-	std::conditional_t<IsCharPointer<T>, client::String*, std::conditional_t<IsConstReference<T>, std::remove_reference_t<T>*, T&&>> clientCast(T&& value) {
+	Conditional<IsCharPointer<T>, client::String*, Conditional<IsConstReference<T>, RemoveReference<T>*, T&&>> clientCast(T&& value) {
 		if constexpr (IsCharPointer<T>)
 			return makeString(value);
 		else if constexpr (IsConstReference<T>)

@@ -4,7 +4,7 @@ import { Variable } from "./declaration/variable.js";
 import { Class, Visibility } from "./declaration/class.js";
 import { Type } from "./type/type.js";
 import { DeclaredType } from "./type/declaredType.js";
-import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, SIZE_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE, ENABLE_IF } from "./type/namedType.js";
+import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE, ENABLE_IF } from "./type/namedType.js";
 import { GenericType } from "./type/genericType.js";
 import { QualifiedType, TypeQualifier } from "./type/qualifiedType.js";
 import { TemplateType } from "./type/templateType.js";
@@ -73,11 +73,11 @@ function addStringExtensions(parser: Parser, stringClass: Class): void {
 	fromUtf8.addAttribute("gnu::always_inline");
 	fromUtf8.addFlags(Flags.Static);
 	fromUtf8.addParameter(CONST_CHAR_POINTER_TYPE, "in");
-	fromUtf8.addParameter(SIZE_TYPE, "len", "SIZE_MAX");
+	fromUtf8.addParameter(UNSIGNED_LONG_TYPE, "len", "SIZE_MAX");
 	fromUtf8.setBody(`
 client::String* out = new client::String();
 unsigned int cp;
-for (std::size_t i = 0; i < len && in[i];) {
+for (unsigned long i = 0; i < len && in[i];) {
 	unsigned char ch = in[i++];
 	cp =
 		ch < 0x80 ? ch :
@@ -98,11 +98,12 @@ return out;
 
 	const toUtf8 = new Function("toUtf8", STRING_TYPE);
 	toUtf8.addFlags(Flags.Const);
+	toUtf8.setLean(false);
 	toUtf8.setBody(`
 std::string out;
-std::size_t len = get_length();
+unsigned long len = get_length();
 unsigned int cp;
-for (std::size_t i = 0; i < len;) {
+for (unsigned long i = 0; i < len;) {
 	unsigned int ch = charCodeAt(i++);
 	cp =
 		ch < 0xd800 || ch > 0xdfff ? ch :
@@ -135,6 +136,7 @@ return out;
 	
 	const stringConversion = new Function("operator std::string");
 	stringConversion.addFlags(Flags.Const | Flags.Explicit);
+	stringConversion.setLean(false);
 	stringConversion.setBody(`
 return this->toUtf8();
 	`);
@@ -347,6 +349,8 @@ function patchFunctions(parser: Parser) {
 			case "split":
 			case "replace":
 			case "substring":
+			case "startsWith":
+			case "substr":
 				// Add `const` flag.
 				funcObj.addFlags((funcObj.getFlags() & Flags.Static) ? 0 as Flags : Flags.Const);
 				break;
@@ -398,15 +402,14 @@ export function addExtensions(parser: Parser): void {
 	const genericMapClass = parser.getGenericRootClass("Map");
 	const functionClass = parser.getRootClass("Function");
 	const documentClass = parser.getRootClass("Document");
+	const regExpMatchArrayClass = parser.getRootClass("RegExpMatchArray");
 
 	// 1. Add includes for types that are assumed to exist.
-	library.addGlobalInclude("jshelper.h", false);
-	typesFile.addInclude("string", true);
-	typesFile.addInclude("jsobject.h", false, jsobjectFile);
-	jsobjectFile.addInclude("cstddef", true);
-	jsobjectFile.addInclude("cstdint", true);
-	clientlibFile.addInclude("types.h", false, typesFile);
-	clientlibFile.addInclude("function.h", false);
+	library.addGlobalInclude("jshelper.h", false, true);
+	typesFile.addInclude("string", true, false);
+	typesFile.addInclude("jsobject.h", false, true, jsobjectFile);
+	clientlibFile.addInclude("types.h", false, true, typesFile);
+	clientlibFile.addInclude("function.h", false, true);
 	
 	// 2. For some declarations, set which file they should be written to.
 	objectClass && jsobjectFile.addDeclaration(objectClass);
@@ -417,6 +420,7 @@ export function addExtensions(parser: Parser): void {
 	mapClass && typesFile.addDeclaration(mapClass);
 	genericMapClass && typesFile.addDeclaration(genericMapClass);
 	functionClass && typesFile.addDeclaration(functionClass);
+	regExpMatchArrayClass && typesFile.addDeclaration(regExpMatchArrayClass);
 
 	// 3. Add extensions for specific classes.
 	objectClass && addObjectExtensions(parser, objectClass);

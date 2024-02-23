@@ -30,7 +30,7 @@ export abstract class Writer {
 	
 	public write(string: string, depth: number = 0): void {
 		if (this.line && this.options.pretty) {
-			this.writeStream(this.options.tab.repeat(this.depth + depth));
+			this.writeStream(this.options.tab.repeat(Math.max(0, this.depth + depth)));
 		}
 
 		this.writeStream(string);

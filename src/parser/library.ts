@@ -39,13 +39,9 @@ export function parseLibrary(parser: Parser, node: Node, parent?: Namespace): vo
 
 		const functionDeclarations = child.getFunctionDeclarations();
 
-		if (child.basicClass) {
+		if (child.classObject) {
 			// Classes are parsed using `parseClass`.
-			parseClass(parser, child, child.basicClass, EMPTY, parent);
-
-			if (child.genericClass) {
-				parseClass(parser, child, child.genericClass, EMPTY, parent);
-			}
+			parseClass(parser, child, child.classObject, EMPTY, parent);
 		} else if (functionDeclarations.length > 0 && child.getSize() === 0) {
 			// Functions are parsed using `parseFunction`.
 			for (const declaration of functionDeclarations) {
@@ -85,13 +81,9 @@ export function parseLibrary(parser: Parser, node: Node, parent?: Namespace): vo
 			if (child.getSize() > 0) {
 				parseLibrary(parser, child, new Namespace(`${child.getName()}_`, parent));
 			}
-		} else if (child.basicTypeAlias && child.typeAliasDeclaration) {
+		} else if (child.typeAliasObject && child.typeAliasDeclaration) {
 			// Type aliases are parsed using `parseTypeAlias`.
-			parseTypeAlias(parser, child.typeAliasDeclaration, child.basicTypeAlias, EMPTY, parent);
-
-			if (child.genericTypeAlias) {
-				parseTypeAlias(parser, child.typeAliasDeclaration, child.genericTypeAlias, EMPTY, parent);
-			}
+			parseTypeAlias(parser, child.typeAliasDeclaration, child.typeAliasObject, EMPTY, parent);
 		} else {
 			// No declarations for this node, this must be a namespace node.
 			parseLibrary(parser, child, new Namespace(child.getName(), parent));

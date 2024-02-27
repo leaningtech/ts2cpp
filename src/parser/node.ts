@@ -131,11 +131,10 @@ export class Node {
 				// referenced, but we still do it anyways.
 				const child = this.getOrInsert(node);
 				child.typeAliasDeclaration = node;
-				child.basicTypeAlias = new TypeAlias(child.getName(), VOID_TYPE);
+				child.typeAliasObject = new TypeAlias(child.getName(), VOID_TYPE);
 
 				if (node.typeParameters && node.typeParameters.length > 0) {
-					child.genericTypeAlias = new TypeAlias(`T${child.getName()}`, VOID_TYPE);
-					child.genericTypeAlias.setBasicVersion(child.basicTypeAlias);
+					child.typeAliasObject.setGeneric(true);
 				}
 			} else if (ts.isModuleDeclaration(node)) {
 				// For namespace declarations, add all child declarations of
@@ -217,10 +216,8 @@ export class Child extends Node {
 	public classDeclaration?: ts.ClassDeclaration;
 	public variableDeclaration?: ts.VariableDeclaration;
 	public typeAliasDeclaration?: ts.TypeAliasDeclaration;
-	public basicClass?: Class;
-	public genericClass?: Class;
-	public basicTypeAlias?: TypeAlias;
-	public genericTypeAlias?: TypeAlias;
+	public classObject?: Class;
+	public typeAliasObject?: TypeAlias;
 
 	public constructor(name: string) {
 		super();
@@ -252,17 +249,17 @@ export class Child extends Node {
 	// the comment above `discover`. If a class has already been instantiated,
 	// this function does nothing.
 	public discoverClass(parser: Parser, node: ts.Node): void {
-		if (!this.basicClass) {
+		if (!this.classObject) {
 			const type = parser.getTypeAtLocation(node) as ts.InterfaceType;
-			this.basicClass = new Class(this.name);
-			const basicType = DeclaredType.create(this.basicClass);
-			parser.addBasicDeclaredClass(type, basicType);
+			this.classObject = new Class(this.name === "Array" ? "TArray" : this.name);
+			parser.setDeclaredType(type, DeclaredType.create(this.classObject));
 
 			if (type.typeParameters && type.typeParameters.length > 0) {
-				this.genericClass = new Class(`T${this.name}`);
-				this.genericClass.setBasicVersion(this.basicClass);
-				this.genericClass.addBase(basicType, Visibility.Public);
-				parser.addGenericDeclaredClass(type, DeclaredType.create(this.genericClass));
+				this.classObject.setGeneric(true);
+
+				if (this.name === "Array") {
+					this.classObject.setBasicVersion(new Class("Array"));
+				}
 			}
 		}
 	}

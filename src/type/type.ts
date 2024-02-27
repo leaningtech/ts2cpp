@@ -57,13 +57,6 @@ export abstract class Type extends Expression {
 		return undefined;
 	}
 
-	// If this is a generic type and all type arguments are `_Any*`, return the
-	// basic version of this type. For example, this turns `TArray<_Any*>` into
-	// `Array`. `TemplateType` overrides this to provide this functionality.
-	public orBasic(): Type {
-		return this;
-	}
-
 	// Check recursively if the type references any type arguments of a
 	// template declaration.
 	public hasGenerics(): boolean {
@@ -73,7 +66,7 @@ export abstract class Type extends Expression {
 
 // A type to mark that this type has no qualifiers, this is used to restrict
 // what types are allowed in some functions for extra type safety. For example,
-// we can't create a `Array*<String>`, because `TemplateType` does not accept
+// we can't create a `TArray*<String>`, because `TemplateType` does not accept
 // qualified types.
 export abstract class UnqualifiedType extends Type {
 }

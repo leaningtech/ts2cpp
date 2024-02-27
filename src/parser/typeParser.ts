@@ -34,7 +34,7 @@ export class TypeParser {
 	}
 
 	// For every call signature of a type with call signatures, we generate a
-	// `_Function<T>` overload, where T is a c-style function type that
+	// `_Function<T>` overload, where T is a C-style function type that
 	// represents the call signature.
 	//
 	// The parameters and return type are both generated using
@@ -66,8 +66,7 @@ export class TypeParser {
 	// `TypeInfo` instance.
 	private addInfo(info: TypeInfo, type: ts.Type): void {
 		const overrideType = this.overrides.get(type);
-		const basicClass = this.parser.getBasicDeclaredClass(type);
-		const genericClass = this.parser.getGenericDeclaredClass(type);
+		const declaredType = this.parser.getDeclaredType(type);
 		const callSignatures = type.getCallSignatures();
 
 		if (this.visited.has(type)) {
@@ -107,35 +106,34 @@ export class TypeParser {
 		} else if (type.flags & ts.TypeFlags.ESSymbolLike) {
 			// Typescript `symbol` becomes C++ `client::Symbol`.
 			info.addType(this.parser.getRootType("Symbol"), TypeKind.Class);
-		} else if (genericClass && type.isClassOrInterface()) {
-			// A typescript class for which we have a generic declaration. This
-			// only seems to happen when a type inside of the declaration of a
-			// generic class references that same generic class directly with
-			// the same type parameters. Otherwise, we instead get a type
-			// reference.
-			//
-			// To parse one of these, we parse all the type parameters and
-			// construct a `TemplateType` with the parsed type parameters.
-			this.visited.add(type);
+		} else if (declaredType && type.isClassOrInterface()) {
+			// A typescript class for which we have a C++ declaration. This
+			// happens in two cases:
+			// - Basic (not generic) classes.
+			// - Reference to a generic class within the class itself with the
+			//   same type parameters. Otherwise, generic classes are parsed as
+			//   `ts.TypeReference` instead.
+			if (!declaredType.getDeclaration().isGeneric()) {
+				info.addType(declaredType, TypeKind.Class);
+			} else {
+				this.visited.add(type);
 
-			const templateType = TemplateType.create(
-				genericClass,
-				...(type.typeParameters ?? [])
-					.map(typeParameter => this.getInfo(typeParameter).asTypeParameter())
-			);
+				const templateType = TemplateType.create(
+					declaredType,
+					...(type.typeParameters ?? [])
+						.map(typeParameter => this.getInfo(typeParameter).asTypeParameter())
+				);
 
-			this.visited.delete(type);
-			info.addType(templateType, TypeKind.Class);
+				this.visited.delete(type);
+				info.addType(templateType, TypeKind.Class);
+			}
 
 			// If the class has call signatures, we add those as well. This
 			// makes it so we can pass functions without casting to the
 			// class type because it will also generate overloads for
 			// `_Function`.
-			this.addCallInfo(info, callSignatures);
-		} else if (basicClass && type.isClassOrInterface()) {
-			// A typescript class for which we have a basic (not generic)
-			// declaration. We simply add the class declaration to the info.
-			info.addType(basicClass, TypeKind.Class);
+			//
+			// TODO: use generic parameters of class
 			this.addCallInfo(info, callSignatures);
 		} else if (callSignatures.length > 0) {
 			// For function types, add their call signatures.
@@ -156,28 +154,25 @@ export class TypeParser {
 			//
 			// To parse type references, we parse all the type parameters and
 			// construct a `TemplateType` with the parsed type parameters.
-			//
-			// SAFETY: All of the `*Unsafe` calls are safe because we manually
-			// intern the type at the end.
-			const genericTarget = this.parser.getGenericDeclaredClass(type.target);
+			const target = this.parser.getDeclaredType(type.target);
 
-			if (!genericTarget) {
-				const basicTarget = this.parser.getBasicDeclaredClass(type.target);
-				info.addType(basicTarget ?? this.parser.getRootType("Object"), TypeKind.Class);
-				return;
+			if (!target) {
+				info.addType(this.parser.getRootType("Object"), TypeKind.Class);
+			} else if (!target.getDeclaration().isGeneric()) {
+				info.addType(target, TypeKind.Class);
+			} else {
+				this.visited.add(type);
+
+				const templateType = TemplateType.create(
+					target,
+					...this.parser.getTypeArguments(type)
+						.filter(typeArgument => !(typeArgument as any).isThisType)
+						.map(typeArgument => this.getInfo(typeArgument).asTypeParameter())
+				);
+
+				this.visited.delete(type);
+				info.addType(templateType, TypeKind.Class);
 			}
-
-			this.visited.add(type);
-
-			const templateType = TemplateType.create(
-				genericTarget,
-				...this.parser.getTypeArguments(type)
-					.filter(typeArgument => !(typeArgument as any).isThisType)
-					.map(typeArgument => this.getInfo(typeArgument).asTypeParameter())
-			);
-
-			this.visited.delete(type);
-			info.addType(templateType, TypeKind.Class);
 		} else if (type.isTypeParameter()) {
 			// A type parameter that was not in the `overrides` map. We have no
 			// idea what type this is so this should just be the same as `any`.

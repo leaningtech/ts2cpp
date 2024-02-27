@@ -85,7 +85,7 @@ function *parseOverloads(parser: Parser, declaration: ts.SignatureDeclarationBas
 
 export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarationBase, generics: Generics, isStatic: boolean, parent?: Namespace): void {
 	// 1. If we're not going to emit this declaration anyways, there's no point
-	// int parsing it.
+	// in parsing it.
 	if (!parser.includesDeclaration(declaration)) {
 		return;
 	}

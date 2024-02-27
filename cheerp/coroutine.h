@@ -2,7 +2,6 @@
 #define CHEERP_ASYNC_H
 
 #include "cheerp/clientlib.h"
-#include "cheerp/client.h"
 
 #include <coroutine>
 #include <exception>
@@ -10,12 +9,15 @@
 namespace cheerp [[cheerp::genericjs]] {
 	template<class T>
 	struct promise_base {
-		client::TPromise<T>* get_return_object() {
-			auto* func = cheerp::Callback([this](client::Function* resolve) {
+		client::Promise<T>* get_return_object() {
+			auto* func = new client::_Function<void(
+				client::_Function<void(client::_Union<client::_Any*, client::PromiseLike<client::_Any*>*>*)>*,
+				client::_Function<void(client::_Any*)>*
+			)>([this](client::Function* resolve) {
 				this->resolve = resolve;
 			});
 
-			return (new client::Promise(func))->cast();
+			return new client::Promise<T>(*func);
 		}
 
 		auto initial_suspend() const noexcept {
@@ -36,17 +38,17 @@ namespace cheerp [[cheerp::genericjs]] {
 		}
 
 	protected:
-		client::Promise* promise;
+		client::Promise<client::_Any*>* promise;
 	};
 
 	template<class T>
 	struct promise_awaiter : promise_awaiter_base {
-		promise_awaiter(client::Promise* promise) {
-			this->promise = promise;
+		promise_awaiter(client::Promise<T>* promise) {
+			this->promise = promise->cast();
 		}
 
 		void await_suspend(std::coroutine_handle<> handle) {
-			promise->then<void>([this, handle](client::_Any* value) {
+			promise->template then<void>([this, handle](client::_Any* value) {
 				this->value = value->cast();
 				handle.resume();
 			});
@@ -62,8 +64,8 @@ namespace cheerp [[cheerp::genericjs]] {
 
 	template<>
 	struct promise_awaiter<void> : promise_awaiter_base {
-		promise_awaiter(client::Promise* promise) {
-			this->promise = promise;
+		promise_awaiter(client::Promise<void>* promise) {
+			this->promise = reinterpret_cast<client::Promise<client::_Any*>*>(promise);
 		}
 
 		void await_suspend(std::coroutine_handle<> handle) {
@@ -78,16 +80,7 @@ namespace cheerp [[cheerp::genericjs]] {
 }
 
 template<class... Args>
-struct std::coroutine_traits<client::Promise*, Args...> {
-	struct [[cheerp::genericjs]] promise_type : cheerp::promise_base<client::_Any*> {
-		void return_value(const client::_Any& value) {
-			resolve->call(nullptr, &value);
-		}
-	};
-};
-
-template<class... Args>
-struct std::coroutine_traits<client::TPromise<void>*, Args...> {
+struct std::coroutine_traits<client::Promise<void>*, Args...> {
 	struct [[cheerp::genericjs]] promise_type : cheerp::promise_base<void> {
 		void return_void() {
 			resolve->call(nullptr);
@@ -96,7 +89,7 @@ struct std::coroutine_traits<client::TPromise<void>*, Args...> {
 };
 
 template<class T, class... Args>
-struct std::coroutine_traits<client::TPromise<T>*, Args...> {
+struct std::coroutine_traits<client::Promise<T>*, Args...> {
 	struct [[cheerp::genericjs]] promise_type : cheerp::promise_base<T> {
 		void return_value(T value) {
 			cheerp::promise_base<T>::resolve->call(nullptr, value);
@@ -104,14 +97,9 @@ struct std::coroutine_traits<client::TPromise<T>*, Args...> {
 	};
 };
 
-[[cheerp::genericjs]]
-cheerp::promise_awaiter<client::_Any*> operator co_await(client::Promise& promise) {
-	return &promise;
-}
-
 template<class T>
 [[cheerp::genericjs]]
-cheerp::promise_awaiter<T> operator co_await(client::TPromise<T>& promise) {
+cheerp::promise_awaiter<T> operator co_await(client::Promise<T>& promise) {
 	return &promise;
 }
 

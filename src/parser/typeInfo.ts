@@ -11,6 +11,7 @@
 import { Parser } from "./parser.js";
 import { Expression } from "../type/expression.js";
 import { Type } from "../type/type.js";
+import { TemplateDeclaration } from "../declaration/templateDeclaration.js";
 import { NamedType, ANY_TYPE, VOID_TYPE, NULLPTR_TYPE } from "../type/namedType.js";
 import { TemplateType } from "../type/templateType.js";
 import { TypeQualifier } from "../type/qualifiedType.js";
@@ -58,21 +59,22 @@ export class TypeData {
 	}
 
 	// Adds a pointer qualifier to a type only if it needs it, according to
-	// `needsPointer`.
-	public getPointerOrPrimitive(): Type {
+	// `needsPointer`. If `basic` is true, generic types that take `_Any*` are
+	// converted to their basic version. This conversion is useful for
+	// generating parameter types (see `asParameterTypes` on `TypeInfo`).
+	public getPointerOrPrimitive(basic: boolean = false): Type {
 		if (this.needsPointer()) {
-			return this.type.pointer();
-		} else {
-			return this.type;
-		}
-	}
+			if (basic && this.type instanceof TemplateType && this.type.getTypeParameters().every(type => type === ANY_TYPE.pointer())) {
+				const inner = this.type.getInner();
+				const declaration = inner instanceof DeclaredType && inner.getDeclaration();
+				const basicVersion = declaration instanceof TemplateDeclaration && declaration.getBasicVersion();
 
-	// Similar to `getPointerOrPrimitive`, but generic types that take `_Any*`
-	// are converted to their basic version. This is useful for generating
-	// parameter types (see `asParameterTypes` on `TypeInfo`).
-	public getBasicPointerOrPrimitive(): Type {
-		if (this.needsPointer()) {
-			return this.type.orBasic().pointer();
+				if (basicVersion) {
+					return DeclaredType.create(basicVersion).pointer();
+				}
+			}
+
+			return this.type.pointer();
 		} else {
 			return this.type;
 		}
@@ -81,11 +83,11 @@ export class TypeData {
 	// Same as `getPointerOrPrimitive`, except that if this type is void it is
 	// converted to `_Any*`. This is necessary because `void` cannot be used
 	// in many places in C++.
-	public getNonVoidPointerOrPrimitive(): Type {
+	public getNonVoidPointerOrPrimitive(basic: boolean = false): Type {
 		if (this.type === VOID_TYPE) {
 			return ANY_TYPE.pointer();
 		} else {
-			return this.getPointerOrPrimitive();
+			return this.getPointerOrPrimitive(basic);
 		}
 	}
 }
@@ -281,7 +283,7 @@ export class TypeInfo {
 				// overload for this type to help with template argument
 				// deduction.
 				if (inner.hasGenerics()) {
-					overloadTypes.push(type.getBasicPointerOrPrimitive());
+					overloadTypes.push(type.getPointerOrPrimitive(true));
 				}
 			}
 		}
@@ -289,7 +291,7 @@ export class TypeInfo {
 		if (unionTypes.some(type => type.getType() === ANY_TYPE)) {
 			overloadTypes.push(ANY_TYPE.constReference());
 		} else if (unionTypes.length >= 1) {
-			const transformedTypes = unionTypes.map(type => type.getBasicPointerOrPrimitive());
+			const transformedTypes = unionTypes.map(type => type.getPointerOrPrimitive(true));
 			overloadTypes.push(TemplateType.createUnion(TypeQualifier.ConstReference, ...transformedTypes));
 		}
 

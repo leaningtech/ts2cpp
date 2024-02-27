@@ -36,10 +36,10 @@ export class Parser {
 	// The root namespace.
 	private readonly namespace?: Namespace;
 
-	// A map of basic and generic declared types, used by `TypeParser` to look
-	// up type information when parsing, for example, function return types.
-	private readonly basicDeclaredTypes: Map<ts.Type, DeclaredType> = new Map;
-	private readonly genericDeclaredTypes: Map<ts.Type, DeclaredType> = new Map;
+	// A map of declared types. Types are added here when generating the node
+	// tree in "src/parser/node.ts". This map is used by TypeParser to get the
+	// C++ equivalent of a typescript type, if we have one.
+	private readonly declaredTypes: Map<ts.Type, DeclaredType> = new Map;
 
 	// Lists of all class and function declarations. These are used after the
 	// main parsing is done to run secondary passes on all classes and
@@ -138,23 +138,16 @@ export class Parser {
 		return this.namespace;
 	}
 
-	// A quick and dirty way to get the non-generic version of a class in
-	// global scope. This is mostly used in "src/extensions.ts", to modify
-	// specific classes that are known to exist.
+	// A quick and dirty way to get the a class in global scope. This is mostly
+	// used in "src/extensions.ts", to modify specific classes that are known
+	// to exist.
 	public getRootClass(name: string): Class | undefined {
-		return this.root.getChild(name)?.basicClass;
+		return this.root.getChild(name)?.classObject;
 	}
 
-	// A quick and dirty way to get the generic version of a class in
-	// global scope. This is mostly used in "src/extensions.ts", to modify
-	// specific classes that are known to exist.
-	public getGenericRootClass(name: string): Class | undefined {
-		return this.root.getChild(name)?.genericClass;
-	}
-
-	// A quick and dirty way to get a non-generic type in global scope. This is
-	// used in "src/extensions.ts" and "src/parser/typeParser.ts" to obtain a
-	// reference to a specific class type that is known to exist.
+	// A quick and dirty way to get a type in global scope. This is used in
+	// "src/extensions.ts" and "src/parser/typeParser.ts" to obtain a reference
+	// to a specific class type that is known to exist.
 	public getRootType(name: string): Type {
 		const declaration = this.getRootClass(name);
 
@@ -165,33 +158,12 @@ export class Parser {
 		}
 	}
 
-	// A quick and dirty way to get a generic type in global scope. This is
-	// used in "src/extensions.ts" and "src/parser/typeParser.ts" to obtain a
-	// reference to a specific class type that is known to exist.
-	public getGenericRootType(name: string): Type {
-		const declaration = this.getGenericRootClass(name);
-
-		if (declaration) {
-			return DeclaredType.create(declaration);
-		} else {
-			return NamedType.create(`client::T${name}`);
-		}
+	public setDeclaredType(type: ts.Type, declaredType: DeclaredType): void {
+		this.declaredTypes.set(type, declaredType);
 	}
 
-	public addBasicDeclaredClass(type: ts.Type, declaredType: DeclaredType): void {
-		this.basicDeclaredTypes.set(type, declaredType);
-	}
-
-	public addGenericDeclaredClass(type: ts.Type, declaredType: DeclaredType): void {
-		this.genericDeclaredTypes.set(type, declaredType);
-	}
-
-	public getBasicDeclaredClass(type: ts.Type): DeclaredType | undefined {
-		return this.basicDeclaredTypes.get(type);
-	}
-
-	public getGenericDeclaredClass(type: ts.Type): DeclaredType | undefined {
-		return this.genericDeclaredTypes.get(type);
+	public getDeclaredType(type: ts.Type): DeclaredType | undefined {
+		return this.declaredTypes.get(type);
 	}
 
 	// Check if a typescript node is to be included in the output file. This

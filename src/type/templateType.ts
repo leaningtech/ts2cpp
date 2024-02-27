@@ -115,25 +115,6 @@ export class TemplateType extends Type {
 		return this.inner.getName();
 	}
 
-	// See `Type.orBasic` in `src/type/type.ts`.
-	public orBasic(): Type {
-		if (this.getTypeParameters().every(type => type === ANY_TYPE.pointer())) {
-			if (this.inner instanceof DeclaredType) {
-				const declaration = this.inner.getDeclaration();
-
-				if (declaration instanceof Class) {
-					const basicClass = declaration.getBasicVersion();
-
-					if (basicClass) {
-						return DeclaredType.create(basicClass);
-					}
-				}
-			}
-		}
-
-		return this;
-	}
-
 	public static create(inner: UnqualifiedType, ...typeParameters: ReadonlyArray<Expression>): TemplateType {
 		const result = new TemplateType(inner);
 

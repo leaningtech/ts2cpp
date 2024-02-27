@@ -272,6 +272,10 @@ export abstract class Declaration extends Namespace {
 	public merge(other: Declaration): boolean {
 		return false;
 	}
+
+	public isGeneric(): boolean {
+		return false;
+	}
 }
 
 // For each declaration, try to merge it with every previous declaration with

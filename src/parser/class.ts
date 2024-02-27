@@ -8,6 +8,7 @@ import { parseFunction } from "./function.js";
 import { parseVariable } from "./variable.js";
 import { parseTypeAlias } from "./typeAlias.js";
 import { ANY_TYPE, VOID_TYPE } from "../type/namedType.js";
+import { DeclaredType } from "../type/declaredType.js";
 import { getName } from "./name.js";
 import * as ts from "typescript";
 
@@ -135,17 +136,14 @@ function parseConstructor(parser: Parser, node: Child, declaration: ts.VariableD
 				continue;
 			}
 
-			if (child && child.basicClass) {
+			if (child && child.classObject) {
+				const basicVersion = child.classObject.getBasicVersion();
+
 				// If there is an inner class with the same name as this
 				// property, parse the property as a constructor object for the
 				// inner class.
-				parseConstructor(parser, child, member, generics, child.basicClass);
-
-				// Also parse the constructor object for the generic version of
-				// this class.
-				if (child.genericClass) {
-					parseConstructor(parser, child, member, generics, child.genericClass);
-				}
+				basicVersion && parseConstructor(parser, child, member, generics, basicVersion);
+				parseConstructor(parser, child, member, generics, child.classObject);
 			} else {
 				// If there is no inner class with the same name, parse it as a
 				// regular property.
@@ -155,11 +153,12 @@ function parseConstructor(parser: Parser, node: Child, declaration: ts.VariableD
 	}
 }
 
-export function parseClass(parser: Parser, node: Child, object: Class, generics: Generics, parent?: Namespace): void {
+export function parseClass(parser: Parser, node: Child, object: Class, originalGenerics: Generics, parent?: Namespace): void {
+	const basicVersion = object.getBasicVersion();
 	const declarations = node.getClassDeclarations();
-	generics = generics.clone();
+	const generics = originalGenerics.clone();
 
-	if (object.isGenericVersion()) {
+	if (object.isGeneric()) {
 		// 1.1. If this is the generic version of this class, use
 		// `createParameters` to parse the type parameters.
 		const [parameters, constraints] = generics.createParameters(parser, declarations);
@@ -167,6 +166,13 @@ export function parseClass(parser: Parser, node: Child, object: Class, generics:
 		// 1.2. Add the type parameters and constraints to the class.
 		parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
 		constraints.forEach(constraint => object.addConstraint(constraint));
+
+		// 1.3. If this class also has a basic version, we parse it and add it
+		// as a base class of the generic version.
+		if (basicVersion) {
+			parseClass(parser, node, basicVersion, originalGenerics, parent);
+			object.addBase(DeclaredType.create(basicVersion), Visibility.Public);
+		}
 	} else {
 		// 2.1. If this is the basic version of this class, use
 		// `createConstraints` to parse the type parameters.
@@ -254,20 +260,10 @@ export function parseClass(parser: Parser, node: Child, object: Class, generics:
 	for (const child of node.getChildren()) {
 		const functionDeclarations = child.getFunctionDeclarations();
 
-		if (child.basicClass) {
+		if (child.classObject) {
 			// If the child is another class, it is parsed using `parseClass`
 			// as an inner class of this class.
-			//
-			// Inner classes are not generated for the generic version of the
-			// parent class. There is no `TParent<T>::InnerClass`, only
-			// `Parent::InnerClass`.
-			if (!object.isGenericVersion()) {
-				parseClass(parser, child, child.basicClass, generics, object);
-
-				if (child.genericClass) {
-					parseClass(parser, child, child.genericClass, generics, object);
-				}
-			}
+			parseClass(parser, child, child.classObject, generics, object);
 		} else if (functionDeclarations.length > 0) {
 			// If the child is a function declaration, it is parsed using
 			// `parseFunction` as a static method of this class.
@@ -278,29 +274,14 @@ export function parseClass(parser: Parser, node: Child, object: Class, generics:
 			// If the child is a variable declaration, it is parsed using
 			// `parseVariable` as a static member variable of this class.
 			parseVariable(parser, child.variableDeclaration, generics, object);
-		} else if (child.typeAliasDeclaration && child.basicTypeAlias) {
+		} else if (child.typeAliasDeclaration && child.typeAliasObject) {
 			// If the child is a type alias, it is parsed using
 			// `parseTypeAlias` as a member type of this class.
-			//
-			// Member types are not generated for the generic version of the
-			// parent class. There is no `TParent<T>::MemberType`, only
-			// `Parent::MemberType`.
-			if (!object.isGenericVersion()) {
-				parseTypeAlias(parser, child.typeAliasDeclaration, child.basicTypeAlias, generics, object);
-
-				if (child.genericTypeAlias) {
-					parseTypeAlias(parser, child.typeAliasDeclaration, child.genericTypeAlias, generics, object);
-				}
-			}
+			parseTypeAlias(parser, child.typeAliasDeclaration, child.typeAliasObject, generics, object);
+		} else {
+			child.classObject = new Class(child.getName());
+			parseClass(parser, child, child.classObject, generics, object);
 		}
-
-		// TODO: generate an inner class, but its members should be static.
-		/*
-		else if (!object.isGenericVersion()) {
-			child.basicClass = new Class(child.getName());
-			parseClass(parser, child, child.basicClass, generics, object);
-		}
-		*/
 	}
 
 	// 9. If there is a variable declaration with the same name as this class,

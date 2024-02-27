@@ -37,6 +37,12 @@ export abstract class TemplateDeclaration extends Declaration {
 	// `basicVersion` stores a reference to the basic version.
 	private basicVersion?: this;
 
+	// This is set for the generic version of a declaration after it is
+	// discovered, so that when we parse it we know that this is the generic
+	// version and we should add type parameters. The basic version will not
+	// have type parameters.
+	private generic: boolean = false;
+
 	public getTypeParameters(): ReadonlyArray<TypeParameter> {
 		return this.typeParameters ?? [];
 	}
@@ -56,16 +62,20 @@ export abstract class TemplateDeclaration extends Declaration {
 		return !!this.typeParameters && this.typeParameters.length > 0 && this.typeParameters[this.typeParameters.length - 1]?.isVariadic();
 	}
 
-	public setBasicVersion(declaration: this): void {
-		this.basicVersion = declaration;
-	}
-
 	public getBasicVersion(): this | undefined {
 		return this.basicVersion;
 	}
 
-	public isGenericVersion(): boolean {
-		return !!this.basicVersion;
+	public setBasicVersion(declaration: this): void {
+		this.basicVersion = declaration;
+	}
+
+	public isGeneric(): boolean {
+		return this.generic;
+	}
+
+	public setGeneric(generic: boolean): void {
+		this.generic = generic;
 	}
 
 	public static writeParameters(writer: Writer, parameters: ReadonlyArray<TypeParameter>, namespace?: Namespace): void {

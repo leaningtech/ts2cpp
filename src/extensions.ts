@@ -12,8 +12,6 @@ import { Parser } from "./parser/parser.js";
 import { Library } from "./library.js";
 import { State } from "./target.js";
 
-// TODO: add constraints for type parameters in this file
-
 // Utility function, adds an extern variable named `name` of a type with the
 // same name.
 function addExtern(parser: Parser, name: string) {
@@ -187,48 +185,6 @@ function addObjectExtensions(parser: Parser, objectClass: Class): void {
 	objectClass.addMember(indexFunc, Visibility.Public);
 }
 
-// Add Map extensions:
-// - `get`, `set`, `has`, and `delete` with template parameters.
-//
-// These functions are not used anywhere in cheerpx or cheerpj. They are only
-// used in one specific cheerp test case that explicitly lists the template
-// parameters, rather than calling the overloads generated from typescript that
-// are both nicer to use and more type safe.
-// TODO: it is probably better to just modify the test case and remove these.
-function addMapExtensions(parser: Parser, mapClass: Class): void {
-	const keyType = GenericType.create("K");
-	const valueType = GenericType.create("V");
-
-	const getFunc = new Function("get", valueType);
-	getFunc.addTypeParameter("K");
-	getFunc.addTypeParameter("V");
-	getFunc.addParameter(keyType, "k");
-	
-	const setFunc = new Function("set", VOID_TYPE);
-	setFunc.addTypeParameter("K");
-	setFunc.addTypeParameter("V");
-	setFunc.addParameter(keyType, "k");
-	setFunc.addParameter(valueType, "v");
-
-	const hasFunc = new Function("has", BOOL_TYPE);
-	hasFunc.addTypeParameter("K");
-	hasFunc.addParameter(keyType, "k");
-
-	const deleteFunc = new Function("delete_", BOOL_TYPE);
-	deleteFunc.addTypeParameter("K");
-	deleteFunc.addParameter(keyType, "k");
-	deleteFunc.setBody(`
-bool out;
-__asm__("%1.delete(%2)" : "=r"(out) : "r"(this), "r"(k));
-return out;
-	`);
-
-	mapClass.addMember(getFunc, Visibility.Public);
-	mapClass.addMember(setFunc, Visibility.Public);
-	mapClass.addMember(hasFunc, Visibility.Public);
-	mapClass.addMember(deleteFunc, Visibility.Public);
-}
-
 // Add function extensions:
 // - a conversion constructor from `EventListener*`, used by `_Function`.
 function addFunctionExtensions(parser: Parser, functionClass: Class): void {
@@ -291,7 +247,7 @@ return __builtin_cheerp_make_regular<${type}>(this, 0)[static_cast<int>(index)];
 // parser does not fully understand, so we manually set the correct type here.
 function addDocumentExtensions(parser: Parser, documentClass: Class) {
 	const htmlElementClass = parser.getRootClass("HTMLElement");
-	const htmlCollectionOfClass = parser.getGenericRootClass("HTMLCollectionOf");
+	const htmlCollectionOfClass = parser.getRootClass("HTMLCollectionOf");
 
 	if (htmlElementClass && htmlCollectionOfClass) {
 		const htmlElementType = DeclaredType.create(htmlElementClass).pointer();
@@ -397,9 +353,8 @@ export function addExtensions(parser: Parser): void {
 	const stringClass = parser.getRootClass("String");
 	const numberClass = parser.getRootClass("Number");
 	const arrayClass = parser.getRootClass("Array");
-	const genericArrayClass = parser.getGenericRootClass("Array");
+	const basicArrayClass = arrayClass?.getBasicVersion();
 	const mapClass = parser.getRootClass("Map");
-	const genericMapClass = parser.getGenericRootClass("Map");
 	const functionClass = parser.getRootClass("Function");
 	const documentClass = parser.getRootClass("Document");
 	const regExpMatchArrayClass = parser.getRootClass("RegExpMatchArray");
@@ -416,9 +371,8 @@ export function addExtensions(parser: Parser): void {
 	stringClass && typesFile.addDeclaration(stringClass);
 	numberClass && typesFile.addDeclaration(numberClass);
 	arrayClass && typesFile.addDeclaration(arrayClass);
-	genericArrayClass && typesFile.addDeclaration(genericArrayClass);
+	basicArrayClass && typesFile.addDeclaration(basicArrayClass);
 	mapClass && typesFile.addDeclaration(mapClass);
-	genericMapClass && typesFile.addDeclaration(genericMapClass);
 	functionClass && typesFile.addDeclaration(functionClass);
 	regExpMatchArrayClass && typesFile.addDeclaration(regExpMatchArrayClass);
 
@@ -426,7 +380,6 @@ export function addExtensions(parser: Parser): void {
 	objectClass && addObjectExtensions(parser, objectClass);
 	stringClass && addStringExtensions(parser, stringClass);
 	numberClass && addNumberExtensions(parser, numberClass);
-	mapClass && addMapExtensions(parser, mapClass);
 	functionClass && addFunctionExtensions(parser, functionClass);
 	documentClass && addDocumentExtensions(parser, documentClass);
 

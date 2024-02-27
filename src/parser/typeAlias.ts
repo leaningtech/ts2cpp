@@ -14,28 +14,16 @@ export function parseTypeAlias(parser: Parser, declaration: ts.TypeAliasDeclarat
 
 	generics = generics.clone();
 	
-	if (object.isGenericVersion()) {
-		// 2.1. If this is the generic version of this type alias, use
-		// `createParameters` to parse the type parameters.
-		const [parameters, constraints] = generics.createParameters(parser, [declaration]);
+	// 2. Parse the type parameters with `createParameters` and add them to the
+	// type alias.
+	const [parameters, constraints] = generics.createParameters(parser, [declaration]);
+	parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
 
-		// 2.2. Add the type parameters to the type alias.
-		parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
-
-		// 2.3. Parse and set the aliased type of the type alias, possibly
-		// making an `std::enable_if_t` template using constraints returned
-		// from `createParameters`.
-		const info = parser.getTypeNodeInfo(declaration.type, generics);
-		object.setType(TemplateType.makeConstraint(info.asTypeAlias(), constraints));
-	} else {
-		// 3.1. If this is the basic version of this type alias, use
-		// `createConstraints` to parse the type parameters.
-		generics.createConstraints(parser, [declaration]);
-
-		// 3.2. Parse and set the aliased type of the type alias.
-		const info = parser.getTypeNodeInfo(declaration.type, generics);
-		object.setType(info.asTypeAlias());
-	}
+	// 3. Parse and set the aliased type of the type alias, possibly
+	// making an `std::enable_if_t` template using constraints returned
+	// from `createParameters`.
+	const info = parser.getTypeNodeInfo(declaration.type, generics);
+	object.setType(TemplateType.makeConstraint(info.asTypeAlias(), constraints));
 
 	// 4. Some post processing:
 	// - Mark the type alias as coming from the declaration `declaration`.

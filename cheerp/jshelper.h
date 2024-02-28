@@ -74,15 +74,15 @@ namespace [[cheerp::genericjs]] cheerp {
 		using type = T;
 	};
 	template<class T>
-	struct RemoveExtent {
+	struct RemoveExtentImpl {
 		using type = T;
 	};
 	template<class T>
-	struct RemoveExtent<T[]> {
+	struct RemoveExtentImpl<T[]> {
 		using type = T;
 	};
 	template<class T, unsigned N>
-	struct RemoveExtent<T[N]> {
+	struct RemoveExtentImpl<T[N]> {
 		using type = T;
 	};
 	template<class T, class U>
@@ -101,6 +101,8 @@ namespace [[cheerp::genericjs]] cheerp {
 	using RemovePointer = Conditional<IsSame<typename RemovePointerImpl<RemoveCv<T>>::type, RemoveCv<T>>, T, typename RemovePointerImpl<RemoveCv<T>>::type>;
 	template<class T>
 	using RemoveReference = typename RemoveReferenceImpl<T>::type;
+	template<class T>
+	using RemoveExtent = typename RemoveExtentImpl<T>::type;
 	template<class T, class U>
 	constexpr bool IsSimilar = IsSame<RemoveCv<T>, RemoveCv<U>>;
 	template<class T>
@@ -263,8 +265,8 @@ namespace [[cheerp::genericjs]] cheerp {
 	inline client::String* makeString(const char* str);
 	template<class T>
 	[[gnu::always_inline]]
-	Conditional<IsCharPointer<T>, client::String*, Conditional<IsConstReference<T>, RemoveReference<T>*, T&&>> clientCast(T&& value) {
-		if constexpr (IsCharPointer<T>)
+	Conditional<IsCharPointer<RemoveReference<T>>, client::String*, Conditional<IsConstReference<T>, RemoveReference<T>*, T&&>> clientCast(T&& value) {
+		if constexpr (IsCharPointer<RemoveReference<T>>)
 			return makeString(value);
 		else if constexpr (IsConstReference<T>)
 			return &value;

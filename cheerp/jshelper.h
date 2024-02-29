@@ -134,7 +134,7 @@ namespace [[cheerp::genericjs]] cheerp {
 	template<class T>
 	constexpr bool IsConstReference = IsReference<T> && IsConst<RemoveReference<T>>;
 	template<class T>
-	constexpr bool IsPrimitive = IsSame<T, bool> || IsSame<T, char> || IsSame<T, signed char> || IsSame<T, unsigned char> || IsSame<T, short> || IsSame<T, unsigned short> || IsSame<T, int> || IsSame<T, unsigned int> || IsSame<T, float> || IsSame<T, double>;
+	constexpr bool IsPrimitive = IsSimilar<T, bool> || IsSimilar<T, char> || IsSimilar<T, signed char> || IsSimilar<T, unsigned char> || IsSimilar<T, short> || IsSimilar<T, unsigned short> || IsSimilar<T, int> || IsSimilar<T, unsigned int> || IsSimilar<T, float> || IsSimilar<T, double>;
 	template<class From, class To>
 	struct CanCastHelper : FalseType {};
 	template<class From, class To, bool IsPrimitive = IsPrimitive<From> && IsPrimitive<To>>
@@ -190,6 +190,8 @@ namespace [[cheerp::genericjs]] cheerp {
 	struct CanCastHelper<From, client::_Union<To...>> {
 		constexpr static bool value = (CanCast<From, To> || ...);
 	};
+	template<class... T>
+	constexpr bool CheckTemplate = ((IsPrimitive<T> || IsPointer<T>) && ...);
 }
 namespace [[cheerp::genericjs]] client {
 	class [[cheerp::client_layout]] _Any {

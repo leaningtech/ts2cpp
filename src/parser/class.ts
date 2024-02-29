@@ -7,10 +7,11 @@ import { Namespace } from "../declaration/namespace.js";
 import { parseFunction } from "./function.js";
 import { parseVariable } from "./variable.js";
 import { parseTypeAlias } from "./typeAlias.js";
-import { ANY_TYPE, VOID_TYPE } from "../type/namedType.js";
+import { ANY_TYPE, VOID_TYPE, CHECK_TEMPLATE } from "../type/namedType.js";
 import { DeclaredType } from "../type/declaredType.js";
 import { getName } from "./name.js";
 import * as ts from "typescript";
+import { TemplateType } from "../type/templateType.js";
 
 function isMethodLike(node: ts.Node): node is ts.SignatureDeclarationBase {
 	return ts.isMethodSignature(node) || ts.isMethodDeclaration(node) || ts.isConstructSignatureDeclaration(node);
@@ -166,6 +167,7 @@ export function parseClass(parser: Parser, node: Child, object: Class, originalG
 		// 1.2. Add the type parameters and constraints to the class.
 		parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
 		constraints.forEach(constraint => object.addConstraint(constraint));
+		object.addConstraint(TemplateType.create(CHECK_TEMPLATE, ...parameters.map(([parameter, _]) => parameter)));
 
 		// 1.3. If this class also has a basic version, we parse it and add it
 		// as a base class of the generic version.

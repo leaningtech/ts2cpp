@@ -57,6 +57,7 @@ export const ENABLE_IF = NamedType.create("cheerp::EnableIf");
 export const IS_SAME = NamedType.create("cheerp::IsSame");
 export const CAN_CAST = NamedType.create("cheerp::CanCast");
 export const CAN_CAST_ARGS = NamedType.create("cheerp::CanCastArgs");
+export const CHECK_TEMPLATE = NamedType.create("cheerp::CheckTemplate");
 export const ARRAY_ELEMENT_TYPE = NamedType.create("cheerp::ArrayElementType");
 export const ANY_TYPE = NamedType.create("_Any");
 export const UNION_TYPE = NamedType.create("_Union");

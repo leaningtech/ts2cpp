@@ -33,6 +33,10 @@ struct std::coroutine_traits<client::Promise<T>*, Args...> {
 			resolve->call(nullptr, value);
 		}
 
+		void unhandled_exception() {
+			// TODO
+		}
+
 	private:
 		client::Function* resolve;
 	};

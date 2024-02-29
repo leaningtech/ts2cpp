@@ -134,7 +134,7 @@ namespace [[cheerp::genericjs]] cheerp {
 	template<class T>
 	constexpr bool IsConstReference = IsReference<T> && IsConst<RemoveReference<T>>;
 	template<class T>
-	constexpr bool IsPrimitive = IsSimilar<T, bool> || IsSimilar<T, char> || IsSimilar<T, signed char> || IsSimilar<T, unsigned char> || IsSimilar<T, short> || IsSimilar<T, unsigned short> || IsSimilar<T, int> || IsSimilar<T, unsigned int> || IsSimilar<T, float> || IsSimilar<T, double>;
+	constexpr bool IsPrimitive = IsSimilar<T, bool> || IsSimilar<T, char> || IsSimilar<T, signed char> || IsSimilar<T, unsigned char> || IsSimilar<T, short> || IsSimilar<T, unsigned short> || IsSimilar<T, int> || IsSimilar<T, unsigned int> || IsSimilar<T, long> || IsSimilar<T, unsigned long> || IsSimilar<T, float> || IsSimilar<T, double>;
 	template<class From, class To>
 	struct CanCastHelper : FalseType {};
 	template<class From, class To, bool IsPrimitive = IsPrimitive<From> && IsPrimitive<To>>

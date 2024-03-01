@@ -106,6 +106,11 @@ export class TypeParser {
 		} else if (type.flags & ts.TypeFlags.ESSymbolLike) {
 			// Typescript `symbol` becomes C++ `client::Symbol`.
 			info.addType(this.parser.getRootType("Symbol"), TypeKind.Class);
+		} else if (callSignatures.length > 0) {
+			// For function types, add their call signatures.
+			//
+			// TODO: use geenric parameters
+			this.addCallInfo(info, callSignatures);
 		} else if (declaredType && type.isClassOrInterface()) {
 			// A typescript class for which we have a C++ declaration. This
 			// happens in two cases:
@@ -127,17 +132,6 @@ export class TypeParser {
 				this.visited.delete(type);
 				info.addType(templateType, TypeKind.Class);
 			}
-
-			// If the class has call signatures, we add those as well. This
-			// makes it so we can pass functions without casting to the
-			// class type because it will also generate overloads for
-			// `_Function`.
-			//
-			// TODO: use generic parameters of class
-			this.addCallInfo(info, callSignatures);
-		} else if (callSignatures.length > 0) {
-			// For function types, add their call signatures.
-			this.addCallInfo(info, callSignatures);
 		} else if (type.isIntersection()) {
 			// HACK: For intersection types, we only use the first variant.
 			this.addInfo(info, type.types[0]);

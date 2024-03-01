@@ -129,8 +129,10 @@ namespace [[cheerp::genericjs]] cheerp {
 	using ArrayElementType = typename ArrayElementTypeImpl<T>::type;
 	template<class T>
 	using Normalize = RemoveCv<RemovePointer<RemoveReference<T>>>;
+	template<class T, class U>
+	constexpr bool IsPointerOrArrayOf = (IsPointer<T> && IsSimilar<RemovePointer<T>, U>) || (IsArray<T> && IsSimilar<RemoveExtent<T>, U>);
 	template<class T>
-	constexpr bool IsCharPointer = (IsPointer<T> && IsSimilar<RemovePointer<T>, char>) || (IsArray<T> && IsSimilar<RemoveExtent<T>, char>);
+	constexpr bool IsCharPointer = IsPointerOrArrayOf<T, char> || IsPointerOrArrayOf<T, wchar_t>;
 	template<class T>
 	constexpr bool IsConstReference = IsReference<T> && IsConst<RemoveReference<T>>;
 	template<class T>
@@ -265,6 +267,8 @@ namespace [[cheerp::genericjs]] client {
 namespace [[cheerp::genericjs]] cheerp {
 	[[gnu::always_inline]]
 	inline client::String* makeString(const char* str);
+	[[gnu::always_inline]]
+	inline client::String* makeString(const wchar_t* str);
 	template<class T>
 	[[gnu::always_inline]]
 	Conditional<IsCharPointer<RemoveReference<T>>, client::String*, Conditional<IsConstReference<T>, RemoveReference<T>*, T&&>> clientCast(T&& value) {

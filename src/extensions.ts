@@ -4,7 +4,7 @@ import { Variable } from "./declaration/variable.js";
 import { Class, Visibility } from "./declaration/class.js";
 import { Type } from "./type/type.js";
 import { DeclaredType } from "./type/declaredType.js";
-import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE, ENABLE_IF } from "./type/namedType.js";
+import { NamedType, LONG_TYPE, UNSIGNED_LONG_TYPE, INT_TYPE, UNSIGNED_INT_TYPE, CONST_CHAR_POINTER_TYPE, CONST_WCHAR_POINTER_TYPE, STRING_TYPE, DOUBLE_TYPE, VOID_TYPE, BOOL_TYPE, ANY_TYPE, ENABLE_IF } from "./type/namedType.js";
 import { GenericType } from "./type/genericType.js";
 import { QualifiedType, TypeQualifier } from "./type/qualifiedType.js";
 import { TemplateType } from "./type/templateType.js";
@@ -53,6 +53,7 @@ function addObjectInitializerConstructor(classObj: Class, type: Type): Function 
 
 // Add String extensions:
 // - conversion from a variety of different types.
+// - conversion from `const wchar_t*`.
 // - `fromUtf8`, and a `const char*` constructor that calls it.
 // - `toUtf8`, and an `operator std::string` that calls it.
 // - `makeString` implementation, forward declared in "cheerp/jshelper.h"
@@ -71,7 +72,7 @@ function addStringExtensions(parser: Parser, stringClass: Class): void {
 	fromUtf8.addAttribute("gnu::always_inline");
 	fromUtf8.addFlags(Flags.Static);
 	fromUtf8.addParameter(CONST_CHAR_POINTER_TYPE, "in");
-	fromUtf8.addParameter(UNSIGNED_LONG_TYPE, "len", "SIZE_MAX");
+	fromUtf8.addParameter(UNSIGNED_LONG_TYPE, "len", "4294967295");
 	fromUtf8.setBody(`
 client::String* out = new client::String();
 unsigned int cp;
@@ -90,6 +91,19 @@ for (unsigned long i = 0; i < len && in[i];) {
 			out = out->concat(fromCharCode((cp & 0x3ff) | 0xdc00));
 		}
 	}
+}
+return out;
+	`);
+
+	const fromWide = new Function("fromWide", stringType.pointer());
+	fromWide.addAttribute("gnu::always_inline");
+	fromWide.addFlags(Flags.Static);
+	fromWide.addParameter(CONST_WCHAR_POINTER_TYPE, "in");
+	fromWide.addParameter(UNSIGNED_LONG_TYPE, "len", "4294967295");
+	fromWide.setBody(`
+client::String* out = new client::String();
+for (unsigned long i = 0; i < len && in[i]; i++) {
+	out = out->concat(fromCharCode(in[i]));
 }
 return out;
 	`);
@@ -131,6 +145,11 @@ return out;
 	charConstructor.addParameter(CONST_CHAR_POINTER_TYPE, "x");
 	charConstructor.addInitializer(stringClass.getName(), "fromUtf8(x)");
 	charConstructor.setBody(``);
+
+	const wcharConstructor = new Function(stringClass.getName());
+	wcharConstructor.addParameter(CONST_WCHAR_POINTER_TYPE, "x");
+	wcharConstructor.addInitializer(stringClass.getName(), "fromWide(x)");
+	wcharConstructor.setBody(``);
 	
 	const stringConversion = new Function("operator std::string");
 	stringConversion.addFlags(Flags.Const | Flags.Explicit);
@@ -140,8 +159,10 @@ return this->toUtf8();
 	`);
 
 	stringClass.addMember(fromUtf8, Visibility.Public);
+	stringClass.addMember(fromWide, Visibility.Public);
 	stringClass.addMember(toUtf8, Visibility.Public);
 	stringClass.addMember(charConstructor, Visibility.Public);
+	stringClass.addMember(wcharConstructor, Visibility.Public);
 	stringClass.addMember(stringConversion, Visibility.Public);
 
 	const cheerpNamespace = new Namespace("cheerp");
@@ -150,9 +171,15 @@ return this->toUtf8();
 	const makeStringFunc = new Function("makeString", stringType.pointer(), cheerpNamespace);
 	makeStringFunc.addParameter(CONST_CHAR_POINTER_TYPE, "str");
 	makeStringFunc.setBody(`return new client::String(str);`);
+	
+	const makeStringWideFunc = new Function("makeString", stringType.pointer(), cheerpNamespace);
+	makeStringWideFunc.addParameter(CONST_WCHAR_POINTER_TYPE, "str");
+	makeStringWideFunc.setBody(`return new client::String(str);`);
 
+	parser.getLibrary().addGlobal(makeStringWideFunc);
 	parser.getLibrary().addGlobal(makeStringFunc);
 	parser.getLibrary().getFile("cheerp/types.h")!.addDeclaration(makeStringFunc);
+	parser.getLibrary().getFile("cheerp/types.h")!.addDeclaration(makeStringWideFunc);
 }
 
 // Add Number extensions:

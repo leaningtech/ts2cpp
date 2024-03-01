@@ -35,6 +35,7 @@ function addExtern(parser: Parser, name: string) {
 // from the type `type`.
 function addConversionConstructor(classObj: Class, type: Type): void {
 	const funcObj = new Function(classObj.getName());
+	funcObj.addFlags(Flags.Noexcept);
 	funcObj.addParameter(type, "x");
 	classObj.addMember(funcObj, Visibility.Public);
 }
@@ -220,9 +221,11 @@ function addFunctionExtensions(parser: Parser, functionClass: Class): void {
 	const constEventListenerConstructor = new Function(functionClass.getName());
 
 	eventListenerConstructor.addParameter(eventListenerType.pointer(), "listener");
+	eventListenerConstructor.addFlags(Flags.Noexcept);
 	eventListenerConstructor.addAttribute("cheerp::client_transparent");
 
 	constEventListenerConstructor.addParameter(eventListenerType.constPointer(), "listener");
+	constEventListenerConstructor.addFlags(Flags.Noexcept);
 	constEventListenerConstructor.addAttribute("cheerp::client_transparent");
 
 	functionClass.addMember(eventListenerConstructor, Visibility.Protected);

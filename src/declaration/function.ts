@@ -172,7 +172,7 @@ export class Function extends TemplateDeclaration {
 			writer.writeLine(false);
 		}
 
-		// 4. Write modifiers, except const.
+		// 4. Write leading modifiers.
 		const flags = this.getFlags();
 
 		if (flags & Flags.Explicit) {
@@ -226,11 +226,19 @@ export class Function extends TemplateDeclaration {
 		}
 
 		writer.write(")");
+		first = true;
 
-		// 8. Write const modifier.
+		// 8. Write trailing modifiers.
 		if (flags & Flags.Const) {
-			writer.writeSpace(false);
+			writer.writeSpace(!first);
 			writer.write("const");
+			first = false;
+		}
+
+		if (flags & Flags.Noexcept) {
+			writer.writeSpace(!first);
+			writer.write("noexcept");
+			first = false;
 		}
 
 		first = true;

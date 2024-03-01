@@ -7,6 +7,7 @@ export enum Flags {
 	Explicit = 4,
 	Const = 8,
 	Inline = 16,
+	Noexcept = 32,
 }
 
 // A `Namespace` is anything that has a name, it is the root base class of all

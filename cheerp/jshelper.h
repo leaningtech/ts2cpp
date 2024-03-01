@@ -209,7 +209,7 @@ namespace [[cheerp::genericjs]] client {
 	public:
 		template<class T>
 		[[cheerp::client_transparent]]
-		_Any(T value);
+		_Any(T value) noexcept;
 		template<class T>
 		[[gnu::always_inline]]
 		T cast() const {
@@ -245,7 +245,7 @@ namespace [[cheerp::genericjs]] client {
 	public:
 		template<class T, class = cheerp::EnableIf<cheerp::CanCast<T, _Union<Variants...>>>>
 		[[cheerp::client_transparent]]
-		_Union(T value);
+		_Union(T value) noexcept;
 		template<class T, class = cheerp::EnableIf<(cheerp::CanCast<Variants, T> || ...)>>
 		[[gnu::always_inline]]
 		T cast() const {

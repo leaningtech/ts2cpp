@@ -16,7 +16,7 @@ namespace [[cheerp::genericjs]] cheerp {
 		using type = R(Args...);
 	};
 	template<class T>
-	using FunctionType = typename FunctionTypeImpl<decltype(&std::remove_reference_t<T>::operator())>::type;
+	using FunctionType = typename FunctionTypeImpl<decltype(&RemoveReference<T>::operator())>::type;
 	template<class T>
 	client::EventListener* Callback(T&& func);
 	template<class R, class... Args>
@@ -26,10 +26,10 @@ namespace [[cheerp::genericjs]] client {
 	template<class F>
 	class _Function : public Function {
 	public:
-		template<class T, class = std::enable_if_t<cheerp::CanCast<_Function<cheerp::FunctionType<T>>, _Function<F>>>>
+		template<class T, class = cheerp::EnableIf<cheerp::CanCast<_Function<cheerp::FunctionType<T>>, _Function<F>>>>
 		_Function(T&& func) : Function(cheerp::Callback(func)) {
 		}
-		template<class R, class... Args, class = std::enable_if_t<cheerp::CanCast<_Function<R(Args...)>, _Function<F>>>>
+		template<class R, class... Args, class = cheerp::EnableIf<cheerp::CanCast<_Function<R(Args...)>, _Function<F>>>>
 		_Function(R(*func)(Args...)) : Function(cheerp::Callback(func)) {
 		}
 		[[gnu::always_inline]]

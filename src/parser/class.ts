@@ -18,7 +18,7 @@ function isMethodLike(node: ts.Node): node is ts.SignatureDeclarationBase {
 }
 
 function isFunctionLike(node: ts.Node): node is ts.SignatureDeclarationBase {
-	return ts.isMethodSignature(node) || ts.isMethodDeclaration(node) || ts.isConstructorDeclaration(node) || ts.isIndexSignatureDeclaration(node);
+	return ts.isMethodSignature(node) || ts.isMethodDeclaration(node) || ts.isConstructorDeclaration(node) || ts.isIndexSignatureDeclaration(node) || ts.isAccessor(node);
 }
 
 function isPropertyLike(node: ts.Node): node is ts.PropertySignature | ts.PropertyDeclaration {

@@ -111,9 +111,18 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 
 		// 4. Get the name of the declaration, unless this is a constructor or
 		// index signature (`operator[]`). Constructors and index signatures
-		// do not have names.
+		// do not have names. Get and set accessors get the `get_` or `set_`
+		// prefix, respectively.
 		if (!isIndexLike(declaration)) {
 			[interfaceName, escapedName] = getName(declaration);
+
+			if (ts.isGetAccessor(declaration)) {
+				interfaceName = `get_${interfaceName}`;
+				escapedName = `get_${escapedName}`;
+			} else if (ts.isSetAccessor(declaration)) {
+				interfaceName = `set_${interfaceName}`;
+				escapedName = `set_${escapedName}`;
+			}
 		}
 	}
 

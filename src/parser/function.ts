@@ -10,6 +10,7 @@ import { Function } from "../declaration/function.js";
 import { DOUBLE_TYPE, ANY_TYPE, ENABLE_IF } from "../type/namedType.js";
 import { ARGS } from "../type/genericType.js"
 import { ELLIPSES } from "../type/literalExpression.js";
+import { DeclaredType } from "../type/declaredType.js";
 import { options } from "../utility.js";
 import * as ts from "typescript";
 
@@ -223,7 +224,7 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 		// - The function is inside of a class.
 		// - The function is variadic.
 		// - The function is not a constructor.
-		if (parent instanceof Class && object.isVariadic() && !isConstructorLike(declaration)) {
+		if (parentClass && object.isVariadic() && !isConstructorLike(declaration)) {
 			// 14.1. Create the helper function object.
 			const helper = new Function(`_${name}`, ANY_TYPE.pointer());
 
@@ -255,7 +256,52 @@ export function parseFunction(parser: Parser, declaration: ts.SignatureDeclarati
 			parser.registerDeclaration(helper);
 
 			// 14.4. Add the helper as a private member to the parent class.
-			parent.addMember(helper, Visibility.Private);
+			parentClass.addMember(helper, Visibility.Private);
+		}
+
+		// 15. Generate a constructor helper. Type arguments of template
+		// constructors cannot be explicitly specified, and in some cases they
+		// cannot be inferred either. This makes it impossible to call the
+		// constructor normally. The constructor helper is a static method
+		// where the type arguments can be explicitly specified. For
+		// consistency, the helper is generated even for non-template
+		// constructors.
+		if (parentClass && isConstructorLike(declaration)) {
+			// 15.1 Create the helper function object.
+			const helper = new Function(`_New`, DeclaredType.create(parentClass).pointer());
+
+			// 15.2. Copy type parameters from the constructor.
+			for (const typeParameter of object.getTypeParameters()) {
+				if (typeParameter.isVariadic()) {
+					helper.addVariadicTypeParameter(typeParameter.getName());
+				} else {
+					helper.addTypeParameter(typeParameter.getName(), typeParameter.getDefaultType());
+				}
+			}
+
+			// 15.3. Copy parameters from the constructor.
+			for (const parameter of object.getParameters()) {
+				helper.addParameter(parameter.getType(), parameter.getName(), parameter.getDefaultValue());
+			}
+
+			// 15.4. Set body of the helper. All we need to do is just call the
+			// actual constructor.
+			helper.setBody(`return new ${name}(${forwardParameters.join(", ")});`);
+
+			// 15.5. Some post processing:
+			// - Add the `gnu::always_inline` attribute to the helper.
+			// - Mark the helper as coming from the declaration `declaration`.
+			// - Add the `Static` flag to the helper.
+			// - Set the parent of the helper.
+			// - Register the declaration with the parser.
+			helper.addAttribute("gnu::always_inline");
+			helper.setDeclaration(declaration);
+			helper.addFlags(Flags.Static);
+			helper.setParent(parent);
+			parser.registerDeclaration(helper);
+
+			// 15.6. Add the helper as a public member to the parent class.
+			parentClass.addMember(helper, Visibility.Public);
 		}
 
 		return object;

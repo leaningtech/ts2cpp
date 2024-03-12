@@ -3,6 +3,7 @@ import { Declaration } from "./declaration.js";
 import { Writer } from "../writer.js";
 import { GenericType } from "../type/genericType.js";
 import { Type } from "../type/type.js";
+import { State } from "../target.js";
 
 export class TypeParameter {
 	private readonly name: string;
@@ -78,11 +79,11 @@ export abstract class TemplateDeclaration extends Declaration {
 		this.generic = generic;
 	}
 
-	public static writeParameters(writer: Writer, parameters: ReadonlyArray<TypeParameter>, namespace?: Namespace): void {
+	private writeParameters(writer: Writer, state: State, namespace?: Namespace): void {
 		let first = true;
 		writer.write("<");
 
-		for (const typeParameter of parameters) {
+		for (const typeParameter of this.getTypeParameters()) {
 			if (!first) {
 				writer.write(",");
 				writer.writeSpace(false);
@@ -99,7 +100,7 @@ export abstract class TemplateDeclaration extends Declaration {
 
 			const defaultType = typeParameter.getDefaultType();
 
-			if (defaultType) {
+			if (defaultType && state >= this.maxState()) {
 				writer.writeSpace(false);
 				writer.write("=");
 				writer.writeSpace(false);
@@ -112,10 +113,10 @@ export abstract class TemplateDeclaration extends Declaration {
 		writer.write(">");
 	}
 
-	public writeTemplate(writer: Writer, namespace?: Namespace): void {
+	public writeTemplate(writer: Writer, state: State, namespace?: Namespace): void {
 		if (this.getTypeParameters().length > 0) {
 			writer.write("template");
-			TemplateDeclaration.writeParameters(writer, this.getTypeParameters(), namespace);
+			this.writeParameters(writer, state, namespace);
 			writer.writeLine(false);
 		}
 	}

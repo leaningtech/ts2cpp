@@ -1,6 +1,6 @@
 import { Parser } from "./parser.js";
 import { TypeAlias } from "../declaration/typeAlias.js";
-import { Generics } from "./generics.js";
+import { Generics, DefaultResolve } from "./generics.js";
 import { Namespace } from "../declaration/namespace.js";
 import { TemplateType } from "../type/templateType.js";
 import * as ts from "typescript";
@@ -16,8 +16,8 @@ export function parseTypeAlias(parser: Parser, declaration: ts.TypeAliasDeclarat
 	
 	// 2. Parse the type parameters with `createParameters` and add them to the
 	// type alias.
-	const [parameters, constraints] = generics.createParameters(parser, [declaration]);
-	parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
+	const [parameters, constraints] = generics.createParameters(parser, [declaration], DefaultResolve.None);
+	parameters.forEach(({ type, defaultType }) => object.addTypeParameter(type.getName(), defaultType));
 
 	// 3. Parse and set the aliased type of the type alias, possibly
 	// making an `std::enable_if_t` template using constraints returned

@@ -159,7 +159,7 @@ export class Function extends TemplateDeclaration {
 
 	protected writeImpl(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		// 1. Write the template<...> line, if needed.
-		this.writeTemplate(writer, namespace);
+		this.writeTemplate(writer, state, namespace);
 
 		// 2. Write the interface name attribute, unless there is a body.
 		if (this.body === undefined) {

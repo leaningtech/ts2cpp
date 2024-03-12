@@ -2,7 +2,7 @@ import { Parser } from "./parser.js";
 import { Child } from "./node.js";
 import { Class, Visibility } from "../declaration/class.js";
 import { Function } from "../declaration/function.js";
-import { Generics } from "./generics.js";
+import { Generics, DefaultResolve } from "./generics.js";
 import { Namespace } from "../declaration/namespace.js";
 import { parseFunction } from "./function.js";
 import { parseVariable } from "./variable.js";
@@ -162,12 +162,12 @@ export function parseClass(parser: Parser, node: Child, object: Class, originalG
 	if (object.isGeneric()) {
 		// 1.1. If this is the generic version of this class, use
 		// `createParameters` to parse the type parameters.
-		const [parameters, constraints] = generics.createParameters(parser, declarations);
+		const [parameters, constraints] = generics.createParameters(parser, declarations, DefaultResolve.Any);
 
 		// 1.2. Add the type parameters and constraints to the class.
-		parameters.forEach(([parameter, _]) => object.addTypeParameter(parameter.getName()));
+		parameters.forEach(({ type, defaultType }) => object.addTypeParameter(type.getName(), defaultType));
 		constraints.forEach(constraint => object.addConstraint(constraint));
-		object.addConstraint(TemplateType.create(CHECK_TEMPLATE, ...parameters.map(([parameter, _]) => parameter)));
+		object.addConstraint(TemplateType.create(CHECK_TEMPLATE, ...parameters.map(({ type }) => type)));
 
 		// 1.3. If this class also has a basic version, we parse it and add it
 		// as a base class of the generic version.

@@ -200,7 +200,7 @@ export class Class extends TemplateDeclaration {
 
 	protected writeImpl(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
 		// 1. Write the template<...> line, if needed.
-		this.writeTemplate(writer, namespace);
+		this.writeTemplate(writer, state, namespace);
 
 		// 2. Write the class keyword.
 		writer.write("class");

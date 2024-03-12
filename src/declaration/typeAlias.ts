@@ -40,7 +40,7 @@ export class TypeAlias extends TemplateDeclaration {
 	}
 
 	protected writeImpl(context: ResolverContext, writer: Writer, state: State, namespace?: Namespace): void {
-		this.writeTemplate(writer, namespace);
+		this.writeTemplate(writer, state, namespace);
 		writer.write("using");
 		writer.writeSpace();
 		writer.write(this.getName());

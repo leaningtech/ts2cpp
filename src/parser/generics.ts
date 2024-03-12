@@ -6,6 +6,7 @@ import { GenericType } from "../type/genericType.js";
 import { Expression } from "../type/expression.js";
 import { options } from "../utility.js";
 import { TypeInfo, TypeKind } from "./typeInfo.js";
+import { ANY_TYPE } from "../type/namedType.js";
 import * as ts from "typescript";
 
 export function isObjectType(type: ts.Type): type is ts.ObjectType {
@@ -80,6 +81,18 @@ function isClassLike(node: ts.Node): node is ts.ClassDeclaration | ts.InterfaceD
 	return ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node);
 }
 
+export enum DefaultResolve {
+	None,
+	Explicit,
+	Constraint,
+	Any,
+}
+
+export interface Generic {
+	readonly type: GenericType;
+	readonly defaultType?: Type;
+}
+
 // This class stores a map of generic arguments and the C++ types we have made
 // for them. When parsing a declaration that may have generic arguments, the
 // parser calls either `createParameters` or `createConstraints`. See the
@@ -151,8 +164,8 @@ export class Generics {
 	//
 	// In the simplest case, we construct a `GenericType` for every type
 	// argument and add it to the map.
-	public createParameters(parser: Parser, declarations: ReadonlyArray<any>): [Array<[GenericType, Type | undefined]>, Set<Expression>] {
-		const types = new Array<[GenericType, Type | undefined]>;
+	public createParameters(parser: Parser, declarations: ReadonlyArray<any>, defaultResolve: DefaultResolve = DefaultResolve.Explicit): [Array<Generic>, Set<Expression>] {
+		const types = new Array<Generic>;
 		const constraints = new Set<Expression>;
 		const aliasTypes = new Set<ts.Type>;
 		const usedTypes = new Array<ts.Type>;
@@ -224,13 +237,27 @@ export class Generics {
 				// constraint to the type argument map, and we do not generate
 				// a type argument at all.
 				if (isClassLike(declaration) || usesType(parser, aliasTypes, type) > 0 || usesType(parser, usedTypes, type) > 1) {
-					const defaultInfo = typeParameter.default && parser.getTypeNodeInfo(typeParameter.default, this);
+					let defaultInfo;
 
-					types[i] ??= [GenericType.create(`_T${this.nextId++}`), defaultInfo?.asTypeParameter()];
-					this.addType(type, new TypeInfo(types[i][0], TypeKind.Generic));
+					if (defaultResolve >= DefaultResolve.Explicit) {
+						defaultInfo = typeParameter.default && parser.getTypeNodeInfo(typeParameter.default, this);
+					}
+
+					if (defaultResolve >= DefaultResolve.Constraint) {
+						defaultInfo ||= info;
+					}
+
+					let defaultType = defaultInfo?.asTypeParameter();
+
+					if (defaultResolve >= DefaultResolve.Any) {
+						defaultType ??= ANY_TYPE.pointer();
+					}
+
+					types[i] ??= { type: GenericType.create(`_T${this.nextId++}`), defaultType };
+					this.addType(type, new TypeInfo(types[i].type, TypeKind.Generic));
 
 					if (info && options.useConstraints) {
-						constraints.add(info.asTypeConstraint(types[i][0]));
+						constraints.add(info.asTypeConstraint(types[i].type));
 					}
 				} else if (info) {
 					this.addType(type, info);

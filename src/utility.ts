@@ -21,16 +21,16 @@ export interface Options {
 
 export function parseOptions(): Array<string> {
 	program
-		.option("--pretty")
-		.option("--default-lib")
-		.option("--out, -o <file>")
-		.option("--ignore-errors")
-		.option("--list-files")
-		.option("--verbose, -v")
-		.option("--verbose-progress")
-		.option("--namespace <namespace>")
-		.option("--no-constraints")
-		.option("--full-names");
+		.option("--pretty", "format output files")
+		.option("--default-lib", "generate headers for the default library")
+		.option("--out, -o <file>", "path to output file")
+		.option("--ignore-errors", "ignore errors")
+		.option("--list-files", "write a list of all included .d.ts files")
+		.option("--verbose, -v", "verbose output")
+		.option("--verbose-progress", "verbose progress")
+		.option("--namespace <namespace>", "wrap output in a namespace")
+		.option("--no-constraints", "do not use std::enable_if or static_asserts")
+		.option("--full-names", "always use fully qualified names");
 
 	program.parse();
 

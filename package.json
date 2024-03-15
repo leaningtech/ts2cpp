@@ -1,14 +1,32 @@
 {
-  "name": "ts2cpp",
+  "name": "@leaningtech/ts2cpp",
   "version": "1.0.0",
-  "description": "",
-  "main": "build/index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "description": "TypeScript declaration to C++ header transpiler for Cheerp",
+  "bin": {
+    "ts2cpp": "ts2cpp.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "scripts": {
+    "build": "npx tsc"
+  },
+  "main": "build/index.js",
+  "files": [
+    "build",
+    "ts2cpp.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leaningtech/ts2cpp.git"
+  },
+  "keywords": [
+    "c++",
+    "c",
+    "typescript",
+    "compiler",
+    "cheerp",
+    "leaningtech"
+  ],
+  "author": "Leaning Technologies",
+  "license": "Apache-2.0",
   "dependencies": {
     "@types/node": "^20.8.2",
     "commander": "^11.1.0",

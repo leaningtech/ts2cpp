@@ -1,6 +1,6 @@
 {
   "name": "@leaningtech/ts2cpp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TypeScript declaration to C++ header transpiler for Cheerp",
   "bin": {
     "ts2cpp": "ts2cpp.js"

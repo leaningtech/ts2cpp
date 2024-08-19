@@ -113,7 +113,7 @@ export class Node {
 				if (parser.includesDeclaration(node)) {
 					for (const declaration of node.declarationList.declarations) {
 						const child = this.getOrInsert(declaration);
-						child.variableDeclaration = declaration;
+						child.variableDeclaration ??= declaration;
 					}
 				}
 			} else if (ts.isTypeAliasDeclaration(node)) {

@@ -33,11 +33,12 @@ function addExtern(parser: Parser, name: string) {
 
 // Utility function, adds a conversion constructor to `classObj` to convert
 // from the type `type`.
-function addConversionConstructor(classObj: Class, type: Type): void {
+function addConversionConstructor(classObj: Class, type: Type): Function {
 	const funcObj = new Function(classObj.getName());
 	funcObj.addFlags(Flags.Noexcept);
 	funcObj.addParameter(type, "x");
 	classObj.addMember(funcObj, Visibility.Public);
+	return funcObj;
 }
 
 // Utility function, adds a conversion constructor to `classObj` to convert
@@ -61,13 +62,16 @@ function addObjectInitializerConstructor(classObj: Class, type: Type): Function 
 function addStringExtensions(parser: Parser, stringClass: Class): void {
 	const stringType = DeclaredType.create(stringClass);
 
-	addConversionConstructor(stringClass, stringType.constPointer());
-	addConversionConstructor(stringClass, stringType.constReference());
+	const stringPointerConstructor = addConversionConstructor(stringClass, stringType.constPointer());
+	const stringReferenceConstructor = addConversionConstructor(stringClass, stringType.constReference());
 	addConversionConstructor(stringClass, LONG_TYPE);
 	addConversionConstructor(stringClass, UNSIGNED_LONG_TYPE);
 	addConversionConstructor(stringClass, INT_TYPE);
 	addConversionConstructor(stringClass, UNSIGNED_INT_TYPE);
 	addConversionConstructor(stringClass, DOUBLE_TYPE);
+
+	stringPointerConstructor.addAttribute("cheerp::client_transparent");
+	stringReferenceConstructor.addAttribute("cheerp::client_transparent");
 
 	const fromUtf8 = new Function("fromUtf8", stringType.pointer());
 	fromUtf8.addAttribute("gnu::always_inline");
